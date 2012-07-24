@@ -22,11 +22,21 @@ case class Renaming(vector: Vector[Int]) {
 
 
 
-case class Edge(node: Node, renaming: Renaming, tick: Boolean = false)
+case class Edge(node: Node, renaming: Renaming, tick: Boolean = false) {
+  def arity: Int = renaming.vector.max
+}
 
 case class Hyperedge(label: Label, source: Node, dests: List[Edge]) {
+  def arity: Int = label match {
+    case Let() => (dests(0).arity - 1) max dests(1).arity
+    case Scrutinize(cases) => 
+      (dests(0).arity :: (dests.tail zip cases).map{case (l,r) => l.arity - r._2}).max
+    case _ => dests.map(_.arity).max
+  }
+  
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
+  
   def replace(old: Node, n: Node): Hyperedge = {
     val newsrc = if(source == old) n else source
     val newdst = 
@@ -36,7 +46,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Edge]) {
   }
 }
 
-class Node {
+class Node(val arity: Int) {
   val outs = collection.mutable.Set[Hyperedge]()
   val ins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
@@ -65,7 +75,7 @@ class TheHypergraph extends Hypergraph {
   
   override def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     if(h.source == null) {
-      val n = new Node
+      val n = new Node(h.arity)
       nodes += n
       val res = h.from(n)
       n.outs += res
@@ -125,6 +135,7 @@ class TheHypergraph extends Hypergraph {
       // But maybe we should return null here, I'm not sure
   }
   
+  // glue parents recursively
   def afterGlue(n: Node) {
     val groups = n.ins.groupBy(h => (h.label, h.dests)).filter(_._2.size > 1)
     for((_, g) <- groups)
