@@ -5,31 +5,62 @@ sealed trait Label
 case class Construct(name: String)
   extends Label
 
-case class Scrutinize(cases: List[(String, Int)])
+case class CaseOf(cases: List[(String, Int)])
   extends Label
 
 case class Let
+  extends Label
+
+case class Tick
   extends Label
   
 case class Id
   extends Label
 
-// It is actually a permutation, it shouldn't glue variables
-case class Renaming(vector: Vector[Int]) {
-  def comp(other: Renaming): Renaming =
-    Renaming(other.vector.map(vector(_)))
+case class Var
+  extends Label
+
+// Negative numbers represent bound variables
+case class Renaming(vector: Array[Int]) {
+  def comp(other: Renaming): Renaming = {
+    val boundshift = (0 :: vector.filter(_ < 0).toList).min
+    Renaming(other.vector.map(x =>
+        if(x < 0) x + boundshift else vector(x)))
+  }
+  
+  def comp(e: Edge): Edge = e match {
+    case Edge(n, r) => Edge(n, this comp r)
+  }
+  
+  def this(arity: Int) = this((0 until arity).toArray)
+  def this(m: Map[Int, Int]) = this((0 to m.keys.max).toArray.map(i => m.getOrElse(i, i)))
+  def this(i: Iterable[Int]) = this(i.toArray)
+  
+  def arity: Int = vector.max + 1
+  
+  def apply(i: Int): Int = vector(i)
+  
+  // Split the renaming into a simple binding renaming (bind first n variable)
+  // and the rest part which doesn't perform binding.
+  def splitBound: (Renaming, Renaming) = {
+    val boundshift = (0 :: vector.filter(_ < 0).toList).min
+    val binder = Renaming(boundshift until arity)
+    val tail = Renaming(vector.map(_ - boundshift))
+    (binder, tail)
+  }
+    
 }
 
 
 
-case class Edge(node: Node, renaming: Renaming, tick: Boolean = false) {
-  def arity: Int = renaming.vector.max
+case class Edge(node: Node, renaming: Renaming) {
+  def arity: Int = renaming.arity
 }
 
 case class Hyperedge(label: Label, source: Node, dests: List[Edge]) {
   def arity: Int = label match {
     case Let() => (dests(0).arity - 1) max dests(1).arity
-    case Scrutinize(cases) => 
+    case CaseOf(cases) => 
       (dests(0).arity :: (dests.tail zip cases).map{case (l,r) => l.arity - r._2}).max
     case _ => dests.map(_.arity).max
   }
@@ -41,7 +72,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Edge]) {
     val newsrc = if(source == old) n else source
     val newdst = 
       for(e <- dests)
-        yield Edge(if(e.node == old) n else e.node , e.renaming, e.tick)
+        yield Edge(if(e.node == old) n else e.node , e.renaming)
     Hyperedge(label, newsrc, newdst)
   }
 }
@@ -56,6 +87,9 @@ class Node(val arity: Int) {
   def getRealNode: Node =
     if(gluedTo == null) this
     else gluedTo.getRealNode
+    
+  def toEdge =
+    Edge(getRealNode, new Renaming(arity))
 }
 
 trait Hypergraph {
@@ -99,7 +133,11 @@ class TheHypergraph extends Hypergraph {
         case None => addHyperedgeSimple(h)
       }
     else
-      addHyperedgeSimple(h)
+      nodes.find(_.outs.exists(_.label == h.label)) match {
+        case Some(n) if h.source == null => h.from(n)
+        case Some(n) => glueNodes(h.source, n); h
+        case None => addHyperedgeSimple(h)
+      }
   }
   
   override def removeNode(n: Node) {
@@ -143,5 +181,43 @@ class TheHypergraph extends Hypergraph {
   }
 }
 
-object Hypergraph { 
+object Transformations {
+  // let e in (a + b) -> (let e in a) + (let e in b)
+  // let x = e in x -> e
+  def letDown(g: Hypergraph, let: Hyperedge): Boolean = let match {
+    case Hyperedge(Let(), src, List(ab, e)) =>
+      val theta = ab.renaming
+      for(h <- ab.node.outs) {
+        if(h.label == Var() && theta(0) == -1)
+          g.addHyperedge(Hyperedge(Id(), src, List(e)))
+        else {
+          val newdests = 
+            h.dests.map(d => 
+              g.addHyperedge(Hyperedge(let.label, null, List(theta comp d, e))).source.toEdge)
+          g.addHyperedge(Hyperedge(h.label, src, newdests))
+        }
+      }
+      true
+    case _ => false
+  }
+  
+  // case x of { S y -> d }  ->  case x of { S y -> let x = S y in d } 
+  def propagate(g: Hypergraph, cas: Hyperedge): Boolean = cas match {
+    case Hyperedge(CaseOf(cases), src, (x@Edge(xnode, xren)) :: dests)
+      if xnode.outs.exists(_.label == Var()) =>
+        val xnum = xren(0)
+        val newdests = dests zip cases map {
+          case (d, (c, n)) =>
+            d.renaming.back(xnum) match {
+              case None => d // the variable x is not used by this case
+              case Some(_) =>
+                val (bnd, tl) = d.renaming.splitBound
+                // xnum in d.renaming is xnum + n in tl
+                // bnd should bind exactly n variables
+                // I know, it's all vague crazyness and should be controlled by types
+                val underlet = Renaming(Map(xnum + n -> -1)) comp d
+                g.addHyperedge(Hyperedge(Let(), null, List(newd, )))
+            }
+        }
+  }
 }
