@@ -7,11 +7,11 @@ sealed trait Label {
 case class Construct(name: String)
   extends Label
 
-case class CaseOf(cases: List[(String, Int)])
+case class CaseOf(cases: List[(String, List[Int])])
   extends Label{
   override def bound(destnum: Int): Set[Int] = 
     if(destnum >= 1 && destnum <= cases.length)
-      (0 until cases(destnum - 1)._2).toSet
+      cases(destnum - 1)._2.toSet
     else
       Set()
 }
@@ -58,7 +58,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       else
         (dests(0).arity - 1) max dests(1).arity
     case CaseOf(cases) => 
-      (dests(0).arity :: (dests.tail zip cases).map{case (l,r) => l.arity - r._2}).max
+      (dests(0).arity :: (dests.tail zip cases).map{case (l,r) => l.arity}).max
     case _ => dests.map(_.arity).max
   }
   
@@ -191,8 +191,41 @@ object Transformations {
             g.addHyperedge(Hyperedge(ren, src, List(newlet)))
           }
         case lab =>
-          
+          val dests =
+            for((d, i) <- h.dests.zipWithIndex) yield {
+              if(lab.bound(i).contains(x) || x >= d.arity)
+                d
+              else
+                g.addHyperedge(Hyperedge(Let(x), null, List(d, e))).source
+            }
+          g.addHyperedge(Hyperedge(lab, src, dests))
       }
+    case _ =>
+  }
+  
+  // propagate positive information
+  def propagate(g: Hypergraph, cas: Hyperedge) = cas match {
+    case Hyperedge(CaseOf(cases), src, x :: dests)
+      if x.outs.exists(_.label == Var) =>
+        // Var returns the zeroth variable
+        val v = g.addHyperedge(Hyperedge(Var(), null, List())).source
+        val newdests = 
+          for(((d, i_1), (name,varnums)) <- dests.zipWithIndex zip cases) yield 
+            if(CaseOf(cases).bound(i_1 + 1).contains(0)) {
+              d
+            } else {              
+              val vars = 
+                v :: varnums.map { j => 
+                  g.addHyperedge(
+                      Hyperedge(new Renaming(Map(0 -> j)), null, List(v))
+                    ).source
+                }
+                  
+              val newe = g.addHyperedge(Hyperedge(Construct(name), null, vars)).source
+              g.addHyperedge(Hyperedge(Let(0), null, List(d, newe))).source
+            }
+        
+        g.addHyperedge(Hyperedge(CaseOf(cases), src, x :: newdests))
     case _ =>
   }
 }
