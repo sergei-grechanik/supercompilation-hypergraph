@@ -29,7 +29,7 @@ case class Tick
   extends Label
 
 // Should be a permutation
-case class Renaming(vector: Array[Int])
+case class Renaming(vector: Vector[Int])
   extends Label {
   
   def comp(other: Renaming): Renaming =
@@ -37,14 +37,14 @@ case class Renaming(vector: Array[Int])
   
   def inv: Renaming = {
     val m = Map(vector.zipWithIndex : _*)
-    Renaming((0 to m.keys.max).toArray.map(i => m.getOrElse(i, -1)))
+    Renaming(Vector() ++ (0 to m.keys.max).map((i:Int) => m.getOrElse(i, -1)))
   }
     
-  def this(arity: Int) = this((0 until arity).toArray)
+  def this(arity: Int) = this(Vector() ++ (0 until arity))
   def this(p: (Int, Int)) = 
-    this((0 to (p._1 max p._2)).toArray.map(i => 
+    this(Vector() ++ (0 to (p._1 max p._2)).toArray.map(i => 
       if(i == p._1) p._2 else if(i == p._2) p._1 else i ))
-  def this(i: Iterable[Int]) = this(i.toArray)
+  def this(i: Iterable[Int]) = this(Vector() ++ i)
   
   def arity: Int = vector.max + 1
   
@@ -56,16 +56,14 @@ case class Var
 
   
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
-  def arity: Int = label match {
-    case Let(x) =>
-      if(x >= dests(0).arity)
-        dests(0).arity max dests(1).arity
-      else
-        (dests(0).arity - 1) max dests(1).arity
-    case CaseOf(cases) => 
-      (dests(0).arity :: (dests.tail zip cases).map{case (l,r) => l.arity}).max
-    case _ => dests.map(_.arity).max
-  }
+  def arity: Int = 
+    if(dests.nonEmpty)
+      dests.map(_.arity).max
+    else if(label.isInstanceOf[Var])
+      1
+    else
+      0
+      
   
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
@@ -97,6 +95,8 @@ trait Hypergraph {
   def addHyperedge(h: Hyperedge): Hyperedge
   
   def addHyperedgeSimple(h: Hyperedge): Hyperedge
+  
+  def addNode(arity: Int): Node
   
   def removeNode(n: Node)
   
@@ -139,6 +139,12 @@ class TheHypergraph extends Hypergraph {
       }
   }
   
+  override def addNode(arity: Int): Node = {
+    val n = new Node(arity)
+    nodes.add(n)
+    n
+  }
+  
   override def removeNode(n: Node) {
     nodes -= n
     // we should leave n.outs and n.ins intact
@@ -177,5 +183,21 @@ class TheHypergraph extends Hypergraph {
     val groups = n.ins.groupBy(h => (h.label, h.dests)).filter(_._2.size > 1)
     for((_, g) <- groups)
       g.toList.map(_.source).reduce(glueNodes)
+  }
+  
+  def toDot: String = {
+    val sb = new StringBuilder()
+    sb.append("digraph Hyper {\n")
+    for(n <- nodes) {
+      for(h <- n.outs) {
+        sb.append("node \"" + h.toString + "\"[label=\"" + h.label.toString + "\"];\n")
+        sb.append("\"" + n.toString + "\" -> \"" + h.toString + "\";\n")
+        for(d <- h.dests)
+          sb.append("\"" + h.toString + "\" -> \"" + d.toString + "\";\n")
+      }
+      sb.append("\n")
+    }
+    sb.append("}\n")
+    sb.toString
   }
 }
