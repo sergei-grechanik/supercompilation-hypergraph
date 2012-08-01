@@ -7,10 +7,10 @@ class ExprParser(graph: HypergraphWithNamedNodes) extends JavaTokenParsers {
     parseAll(prog, s)
   }
   
-  def prog: Parser[Any] = rep(definition)
+  def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
   
   def definition: Parser[Node] = 
-    (sign <~ "=") ~ (expr <~ ";") ^^
+    (sign <~ "=") ~ expr ^^
     { case n~e => graph.glueNodes(n, e) }
   
   def sign: Parser[Node] =
@@ -69,8 +69,9 @@ class HypergraphWithNamedNodes extends TheHypergraph {
   def apply(n: String): Node = namedNodes(n)
   
   def addNode(n: String, a: Int): Node = 
-    if(namedNodes.contains(n))
+    if(namedNodes.contains(n)) {
       namedNodes(n)
+    }
     else {
       val node = addNode(a)
       namedNodes += n -> node
@@ -82,9 +83,18 @@ object Test {
   def main(args: Array[String]) {
     val g = new HypergraphWithNamedNodes
     val p = new ExprParser(g)
-    p("""
-        add/2 = case 0 of { Z -> 1; S 0 -> add 0 1 }
-        """)
+    p("add/2 = case 0 of { Z -> 1; S 0 -> add 0 1 }")
+    
+    for(i <- 0 to 5) {
+      println("nodes: " + g.nodes.size)
+      for(n <- g.nodes; h <- n.outs) {
+        Transformations.caseCase(g, h)
+        Transformations.caseReduce(g, h)
+        Transformations.letDown(g, h)
+        Transformations.propagate(g, h)
+        Transformations.throughRenaming(g, h)
+      }
+    }
     
     println(g.toDot)
   }

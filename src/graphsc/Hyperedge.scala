@@ -8,7 +8,7 @@ case class Construct(name: String)
   extends Label
 
 case class CaseOf(cases: List[(String, List[Int])])
-  extends Label{
+  extends Label {
   override def bound(destnum: Int): Set[Int] = 
     if(destnum >= 1 && destnum <= cases.length)
       cases(destnum - 1)._2.toSet
@@ -17,7 +17,9 @@ case class CaseOf(cases: List[(String, List[Int])])
 }
 
 case class Let(variable: Int)
-  extends Label{
+  extends Label {
+  assert(variable >= 0)
+  
   override def bound(destnum: Int): Set[Int] =
     if(destnum == 0)
       Set(variable)
@@ -31,15 +33,23 @@ case class Tick
 // Should be a permutation
 case class Renaming(vector: Vector[Int])
   extends Label {
+  assert(vector.toSet == (0 until vector.length).toSet)
   
-  def comp(other: Renaming): Renaming =
-    Renaming(other.vector.map(vector(_)))
+  def comp(other: Renaming): Renaming = {
+    val w = arity max other.arity
+    val t1 = this.widen(w)
+    val o1 = other.widen(w)
+    Renaming(o1.vector.map(t1(_)))
+  }
   
   def inv: Renaming = {
     val m = Map(vector.zipWithIndex : _*)
-    Renaming(Vector() ++ (0 to m.keys.max).map((i:Int) => m.getOrElse(i, -1)))
+    Renaming(Vector() ++ (0 to m.keys.max).map(i => m.getOrElse(i, -1)))
   }
-    
+  
+  def isId: Boolean =
+    vector.zipWithIndex.forall{case (a,b) => a == b}
+  
   def this(arity: Int) = this(Vector() ++ (0 until arity))
   def this(p: (Int, Int)) = 
     this(Vector() ++ (0 to (p._1 max p._2)).toArray.map(i => 
@@ -47,6 +57,9 @@ case class Renaming(vector: Vector[Int])
   def this(i: Iterable[Int]) = this(Vector() ++ i)
   
   def arity: Int = vector.max + 1
+  
+  def widen(a: Int): Renaming =
+    Renaming(Vector() ++ (0 to a).map(i => if(i < vector.length) vector(i) else i))
   
   def apply(i: Int): Int = vector(i)
 }
@@ -56,6 +69,12 @@ case class Var
 
   
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
+  label match {
+    case r: Renaming =>
+      assert(r.arity >= dests(0).arity)
+    case _ =>
+  }
+  
   def arity: Int = 
     if(dests.nonEmpty)
       dests.map(_.arity).max
@@ -155,7 +174,6 @@ class TheHypergraph extends Hypergraph {
   }
   
   override def glueNodes(l1: Node, r1: Node): Node = {
-    // Don't know if we should allow this
     val l = l1.getRealNode
     val r = r1.getRealNode
     if(nodes.contains(l) && nodes.contains(r) && l != r) {

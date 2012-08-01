@@ -4,7 +4,7 @@ object Transformations {
   // let e in (a + b) -> (let e in a) + (let e in b)
   // let x = e in x -> e
   def letDown(g: Hypergraph, let: Hyperedge) = let match {
-    case Hyperedge(Let(x), src, List(f, e)) =>
+    case Hyperedge(Let(x), src, List(f, e)) if x < f.arity =>
       for(h <- f.outs) h.label match {
         case ren : Renaming =>
           val ner = ren.inv
@@ -25,6 +25,8 @@ object Transformations {
             }
           g.addHyperedge(Hyperedge(lab, src, dests))
       }
+    case Hyperedge(Let(x), src, List(f, e)) if x >= f.arity =>
+      g.glueNodes(f, src)
     case _ =>
   }
   
@@ -88,11 +90,13 @@ object Transformations {
   }
   
   def throughRenaming(g: Hypergraph, h: Hyperedge) = h match {
+    case Hyperedge(r@Renaming(_), src, List(d)) if r.isId =>
+      g.glueNodes(src, d)
     case Hyperedge(r1@Renaming(_), src, List(d1)) =>
       for(Hyperedge(r2@Renaming(_), _, List(d2)) <- d1.outs) {
         g.addHyperedge(Hyperedge(r1 comp r2, src, List(d2)))
       }
-    case Hyperedge(Let(x), src, List(d, e)) =>
+    case Hyperedge(Let(x), src, List(d, e)) if x < d.arity =>
       for(Hyperedge(r@Renaming(_), _, List(d2)) <- d.outs) {
         val rinv = r.inv
         val y = rinv(x)
@@ -106,12 +110,12 @@ object Transformations {
         val newvarsdests =
           for(((name, vars), d) <- cases zip dests) yield {
             ((name, vars.map(rinv(_))), 
-                g.addHyperedge(Hyperedge(rinv, null, List(d))).source)
+                g.addHyperedge(Hyperedge(rinv.widen(d.arity), null, List(d))).source)
           }
         val newcases = newvarsdests.map(_._1)
         val newdests = newvarsdests.map(_._2)
         val newcase = g.addHyperedge(Hyperedge(CaseOf(newcases), null, e2 :: newdests)).source
-        g.addHyperedge(Hyperedge(r, src, List(newcase)))
+        g.addHyperedge(Hyperedge(r.widen(newcase.arity), src, List(newcase)))
       }
     case Hyperedge(l, src, e :: dests) =>
       for(Hyperedge(r@Renaming(_), _, List(e2)) <- e.outs) {
