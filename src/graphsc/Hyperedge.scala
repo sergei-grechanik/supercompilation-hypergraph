@@ -1,5 +1,9 @@
 package graphsc
 
+case class Value(constructor: String, args: List[Value]) {
+  override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
+}
+
 sealed trait Label {
   def bound(destnum: Int): Set[Int] = Set()
 }
@@ -93,6 +97,40 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       for(d <- dests)
         yield if(d == old) n else d
     Hyperedge(label, newsrc, newdst)
+  }
+  
+  // Why do I use lists here? mb replace with vectors?
+  def run(args: List[Value], nodeRunner: (Node, List[Value]) => Value): Value = label match {
+    case Construct(name) =>
+      Value(name, dests.map(nodeRunner(_, args)))
+    case CaseOf(cases) =>
+      val victim = nodeRunner(dests(0), args)
+      val Some(((_, vars), expr)) = (cases zip dests.tail).find(_._1._1 == victim.constructor)
+      val newargs =
+        for((v,i) <- args.zipWithIndex) yield {
+          val j = vars.indexWhere(_ == i)
+          if(j >= 0)
+            victim.args(j)
+          else
+            v
+        }
+      nodeRunner(expr, newargs)
+    case Let(x) =>
+      // Well, it's not lazy yet, but I don't know how to do laziness right in scala
+      val newargs =
+        for((v,i) <- args.zipWithIndex) yield {
+          if(i == x)
+            nodeRunner(dests(1), args)
+          else
+            v
+        }
+      nodeRunner(dests(0), newargs)
+    case Tick() =>
+      nodeRunner(dests(0), args)
+    case r@Renaming(_) =>
+      val newargs = (0 until args.length).map(i => args(r(i))).toList
+      nodeRunner(dests(0), newargs)
+    case Var() => args(0)
   }
 }
 

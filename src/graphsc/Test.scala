@@ -2,9 +2,10 @@ package graphsc
 
 import scala.util.parsing.combinator._
 
-class ExprParser(graph: HypergraphWithNamedNodes) extends JavaTokenParsers {
+class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def apply(s: String) {
-    parseAll(prog, s)
+    val success = parseAll(prog, s).successful
+    assert(success) // We've modified the graph even if the parsing wasn't successful
   }
   
   def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
@@ -63,7 +64,8 @@ class ExprParser(graph: HypergraphWithNamedNodes) extends JavaTokenParsers {
     
 }
 
-class HypergraphWithNamedNodes extends TheHypergraph {
+// Just supports named nodes
+trait NamedNodes extends Hypergraph {
   val namedNodes = collection.mutable.Map[String, Node]()
   
   def apply(n: String): Node = namedNodes(n)
@@ -79,9 +81,17 @@ class HypergraphWithNamedNodes extends TheHypergraph {
     }
 }
 
+
+
+trait HyperTester extends Hypergraph {
+  def runNode(n: Node, args: List[Value]): Value = {
+    null
+  }
+}
+
 object Test {
   def main(args: Array[String]) {
-    val g = new HypergraphWithNamedNodes
+    val g = new TheHypergraph with NamedNodes
     val p = new ExprParser(g)
     p("add/2 = case 0 of { Z -> 1; S 0 -> add 0 1 }")
     
