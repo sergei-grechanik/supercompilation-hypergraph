@@ -22,7 +22,7 @@ case class CaseOf(cases: List[(String, List[Int])])
 
 case class Let(variable: Int)
   extends Label {
-  assert(variable >= 0)
+  require(variable >= 0)
   
   override def bound(destnum: Int): Set[Int] =
     if(destnum == 0)
@@ -37,7 +37,7 @@ case class Tick
 // Should be a permutation
 case class Renaming(vector: Vector[Int])
   extends Label {
-  assert(vector.toSet == (0 until vector.length).toSet)
+  require(vector.toSet == (0 until vector.length).toSet)
   
   def comp(other: Renaming): Renaming = {
     val w = arity max other.arity
@@ -75,7 +75,7 @@ case class Var
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   label match {
     case r: Renaming =>
-      assert(r.arity >= dests(0).arity)
+      require(r.arity >= dests(0).arity)
     case _ =>
   }
   
@@ -128,7 +128,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     case Tick() =>
       nodeRunner(dests(0), args)
     case r@Renaming(_) =>
-      val newargs = (0 until args.length).map(i => args(r(i))).toList
+      val newargs = (0 until arity).map(i => args(r(i))).toList
       nodeRunner(dests(0), newargs)
     case Var() => args(0)
   }
@@ -144,116 +144,4 @@ class Node(val arity: Int) {
   def getRealNode: Node =
     if(gluedTo == null) this
     else gluedTo.getRealNode
-}
-
-trait Hypergraph {
-  // h should be with known dests and null source
-  // if source is not null then perform gluing
-  def addHyperedge(h: Hyperedge): Hyperedge
-  
-  def addHyperedgeSimple(h: Hyperedge): Hyperedge
-  
-  def addNode(arity: Int): Node
-  
-  def removeNode(n: Node)
-  
-  def glueNodes(l: Node, r: Node): Node
-}
-
-class TheHypergraph extends Hypergraph {
-  val nodes = collection.mutable.Set[Node]()
-  
-  override def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
-    if(h.source == null) {
-      val n = new Node(h.arity)
-      nodes += n
-      val res = h.from(n)
-      n.outs += res
-      h.dests.foreach(_.ins.add(res))
-      res
-    }
-    else {
-      nodes += h.source
-      h.source.outs += h
-      h.dests.foreach(_.ins.add(h))
-      h
-    }
-  }
-  
-  override def addHyperedge(h: Hyperedge): Hyperedge = {
-    if(h.dests.nonEmpty)
-      h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
-        case Some(x) if h.source == null => x
-        case Some(x) if h.source == x.source => x
-        case Some(x) => glueNodes(h.source, x.source); h
-        case None => addHyperedgeSimple(h)
-      }
-    else
-      nodes.find(_.outs.exists(_.label == h.label)) match {
-        case Some(n) if h.source == null => h.from(n)
-        case Some(n) => glueNodes(h.source, n); h
-        case None => addHyperedgeSimple(h)
-      }
-  }
-  
-  override def addNode(arity: Int): Node = {
-    val n = new Node(arity)
-    nodes.add(n)
-    n
-  }
-  
-  override def removeNode(n: Node) {
-    nodes -= n
-    // we should leave n.outs and n.ins intact
-    for(h <- n.ins if h.source != n)
-      h.source.outs -= h
-    for(h <- n.outs; d <- h.dests if d != n)
-      d.ins -= h
-  }
-  
-  override def glueNodes(l1: Node, r1: Node): Node = {
-    val l = l1.getRealNode
-    val r = r1.getRealNode
-    if(nodes.contains(l) && nodes.contains(r) && l != r) {
-      removeNode(r)
-      r.gluedTo = l
-      for(h <- r.outs)
-        addHyperedgeSimple(h.replace(r, l))
-      for(h <- r.ins)
-        addHyperedgeSimple(h.replace(r, l))
-      // maybe there appeared some more nodes to glue 
-      afterGlue(l)
-      // Now l may be glued to something else
-      l.getRealNode
-    }
-    else if(l == r)
-      l // Nodes are already glued
-    else
-      // Well, you shouldn't do this, they don't belong to this graph
-      throw new IllegalArgumentException("Cannot glue nodes which aren't in this graph")
-      // But maybe we should return null here, I'm not sure
-  }
-  
-  // glue parents recursively
-  def afterGlue(n: Node) {
-    val groups = n.ins.groupBy(h => (h.label, h.dests)).filter(_._2.size > 1)
-    for((_, g) <- groups)
-      g.toList.map(_.source).reduce(glueNodes)
-  }
-  
-  def toDot: String = {
-    val sb = new StringBuilder()
-    sb.append("digraph Hyper {\n")
-    for(n <- nodes) {
-      for(h <- n.outs) {
-        sb.append("node \"" + h.toString + "\"[label=\"" + h.label.toString + "\"];\n")
-        sb.append("\"" + n.toString + "\" -> \"" + h.toString + "\";\n")
-        for(d <- h.dests)
-          sb.append("\"" + h.toString + "\" -> \"" + d.toString + "\";\n")
-      }
-      sb.append("\n")
-    }
-    sb.append("}\n")
-    sb.toString
-  }
 }

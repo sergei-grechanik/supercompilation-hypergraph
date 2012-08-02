@@ -64,36 +64,18 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     
 }
 
-// Just supports named nodes
-trait NamedNodes extends Hypergraph {
-  val namedNodes = collection.mutable.Map[String, Node]()
-  
-  def apply(n: String): Node = namedNodes(n)
-  
-  def addNode(n: String, a: Int): Node = 
-    if(namedNodes.contains(n)) {
-      namedNodes(n)
-    }
-    else {
-      val node = addNode(a)
-      namedNodes += n -> node
-      node
-    }
-}
-
-
-
-trait HyperTester extends Hypergraph {
-  def runNode(n: Node, args: List[Value]): Value = {
-    null
-  }
-}
-
 object Test {
   def main(args: Array[String]) {
-    val g = new TheHypergraph with NamedNodes
+    val g = new TheHypergraph with NamedNodes with HyperTester
     val p = new ExprParser(g)
-    p("add/2 = case 0 of { Z -> 1; S 0 -> add 0 1 }")
+    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
+    
+    val zero = Value("Z", List())
+    val one = Value("S", List(zero))
+    val two = Value("S", List(one))
+    val three = Value("S", List(two))
+    
+    println(g.runNode(g("add"), List(two, three)))
     
     for(i <- 0 to 5) {
       println("nodes: " + g.nodes.size)
