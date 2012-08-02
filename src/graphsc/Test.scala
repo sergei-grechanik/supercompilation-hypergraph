@@ -88,6 +88,6 @@ object Test {
       }
     }
     
-    println(g.toDot)
+    //println(g.toDot)
   }
 }

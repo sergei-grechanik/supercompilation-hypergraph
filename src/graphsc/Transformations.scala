@@ -1,6 +1,19 @@
 package graphsc
 
 object Transformations {
+  
+  // glue or create a renaming hyperedge
+  def glueIfPossible(g: Hypergraph, l: Node, r: Node) {
+    if(l.arity == r.arity)
+      g.glueNodes(l, r)
+    else if(l.arity < r.arity)
+      glueIfPossible(g, r, l)
+    else {
+      g.addHyperedge(Hyperedge(new Renaming(l.arity), l, List(r)))
+    }
+    
+  }
+  
   // let e in (a + b) -> (let e in a) + (let e in b)
   // let x = e in x -> e
   def letDown(g: Hypergraph, let: Hyperedge) = let match {
@@ -26,7 +39,7 @@ object Transformations {
           g.addHyperedge(Hyperedge(lab, src, dests))
       }
     case Hyperedge(Let(x), src, List(f, e)) if x >= f.arity =>
-      g.glueNodes(f, src)
+      glueIfPossible(g, f, src)
     case _ =>
   }
   
@@ -91,7 +104,7 @@ object Transformations {
   
   def throughRenaming(g: Hypergraph, h: Hyperedge) = h match {
     case Hyperedge(r@Renaming(_), src, List(d)) if r.isId =>
-      g.glueNodes(src, d)
+      glueIfPossible(g, src, d)
     case Hyperedge(r1@Renaming(_), src, List(d1)) =>
       for(Hyperedge(r2@Renaming(_), _, List(d2)) <- d1.outs) {
         g.addHyperedge(Hyperedge(r1 comp r2, src, List(d2)))

@@ -5,7 +5,7 @@ trait Hypergraph {
   // if source is not null then perform gluing
   def addHyperedge(h: Hyperedge): Hyperedge
   
-  def addHyperedgeSimple(h: Hyperedge): Hyperedge
+  //def addHyperedgeSimple(h: Hyperedge): Hyperedge
   def addNode(arity: Int): Node
   def removeNode(n: Node)
   def glueNodes(l: Node, r: Node): Node
@@ -19,43 +19,43 @@ trait Hypergraph {
 class TheHypergraph extends Hypergraph {
   val nodes = collection.mutable.Set[Node]()
   
-  override def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
+  def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     if(h.source == null) {
       val n = new Node(h.arity)
       nodes += n
       val res = h.from(n)
       n.outs += res
       h.dests.foreach(_.ins.add(res))
-      onNewHyperedge(res)
       res
     }
     else {
       nodes += h.source
       h.source.outs += h
       h.dests.foreach(_.ins.add(h))
-      onNewHyperedge(h)
       h
     }
   }
   
-  override def addHyperedge(h: Hyperedge): Hyperedge = {
-    // If this exception happens, try to perform actual gluing 
-    // when no one works with the hypergraph
-    if((h.source != null && h.source.gluedTo != null) || h.dests.exists(_.gluedTo != null))
-      throw new Exception("Adding a hyperedge with glued nodes, may be a bug")
-    
+  override def addHyperedge(h1: Hyperedge): Hyperedge = {
+    val h = h1.derefGlued
     if(h.dests.nonEmpty)
       h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
         case Some(x) if h.source == null => x
         case Some(x) if h.source == x.source => x
         case Some(x) => glueNodes(h.source, x.source); h
-        case None => addHyperedgeSimple(h)
+        case None => 
+          val newh = addHyperedgeSimple(h)
+          onNewHyperedge(newh)
+          newh
       }
     else
       nodes.find(_.outs.exists(_.label == h.label)) match {
         case Some(n) if h.source == null => h.from(n)
         case Some(n) => glueNodes(h.source, n); h
-        case None => addHyperedgeSimple(h)
+        case None => 
+          val newh = addHyperedgeSimple(h)
+          onNewHyperedge(newh)
+          newh
       }
   }
   
@@ -76,9 +76,15 @@ class TheHypergraph extends Hypergraph {
   }
   
   override def glueNodes(l1: Node, r1: Node): Node = {
+    //if(l1.arity > r1.arity)
+    //  return glueNodes(r1, l1)
+    require(l1.arity == r1.arity)
+    
     val l = l1.getRealNode
     val r = r1.getRealNode
-    if(nodes.contains(l) && nodes.contains(r) && l != r) {
+    require(nodes.contains(l) && nodes.contains(r))
+    
+    if(l != r) {
       onGlue(l, r)
       removeNode(r)
       r.gluedTo = l
@@ -91,12 +97,8 @@ class TheHypergraph extends Hypergraph {
       // Now l may be glued to something else
       l.getRealNode
     }
-    else if(l == r)
+    else //if(l == r)
       l // Nodes are already glued
-    else
-      // Well, you shouldn't do this, they don't belong to this graph
-      throw new IllegalArgumentException("Cannot glue nodes which aren't in this graph")
-      // But maybe we should return null here, I'm not sure
   }
   
   // glue parents recursively
@@ -140,22 +142,38 @@ trait NamedNodes extends Hypergraph {
     }
 }
 
+class NonTerminationException(s: String) extends Exception(s)
 
 trait HyperTester extends Hypergraph {
   val runCache = collection.mutable.Map[(Node, List[Value]), Value]()
   
-  def runNode(n: Node, args: List[Value]): Value = 
-    runCache.getOrElseUpdate((n, args), runNodeUncached(n, args))
-  
+  def runNode(n: Node, args: List[Value]): Value = runCache.get((n,args)) match {
+    case Some(null) => throw new NonTerminationException("Nontermination detected")
+    case Some(v) => v
+    case None => runNodeUncached(n, args)
+  }
+    
   def runNodeUncached(n: Node, args: List[Value]): Value = {
+    runCache += (n,args) -> null
     var v: Value = null
-    for(h <- n.outs) {
-      val newv = runHyperedgeUncached(h, args)
-      if(v != null && v != newv)
-        throw new Exception("Test failed: a node has nonequal outgoing hyperedges")
-      else if(v == null)
-        v = newv
-    }
+    for(h <- n.outs)
+      try {
+        val newv = runHyperedgeUncached(h, args)
+        if(v != null && v != newv)
+          throw new Exception("Test failed: a node has nonequal outgoing hyperedges")
+        else if(v == null) {
+          runCache += (n,args) -> newv
+          v = newv
+        }
+      } catch {
+        case _: NonTerminationException =>
+          // We don't crash here, vacuous path are ok if there are non-vacuous ones
+      }
+    
+    // Make sure that vacuous hyperedges don't crash anymore 
+    for(h <- n.outs)
+      assert(v == runHyperedgeUncached(h, args))
+      
     v
   }
   

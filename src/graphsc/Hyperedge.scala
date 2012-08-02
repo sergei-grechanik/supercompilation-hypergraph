@@ -63,7 +63,7 @@ case class Renaming(vector: Vector[Int])
   def arity: Int = vector.max + 1
   
   def widen(a: Int): Renaming =
-    Renaming(Vector() ++ (0 to a).map(i => if(i < vector.length) vector(i) else i))
+    Renaming(Vector() ++ (0 until a).map(i => if(i < vector.length) vector(i) else i))
   
   def apply(i: Int): Int = vector(i)
 }
@@ -78,15 +78,17 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       require(r.arity >= dests(0).arity)
     case _ =>
   }
+  require(source == null || source.arity == arity)
   
-  def arity: Int = 
-    if(dests.nonEmpty)
-      dests.map(_.arity).max
-    else if(label.isInstanceOf[Var])
-      1
-    else
-      0
-      
+  def arity: Int = label match {
+    case r: Renaming => r.arity
+    case v: Var => 1
+    case _ =>
+      if(dests.nonEmpty)
+        dests.map(_.arity).max
+      else
+        0
+  }
   
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
@@ -98,6 +100,12 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
         yield if(d == old) n else d
     Hyperedge(label, newsrc, newdst)
   }
+  
+  def derefGlued: Hyperedge = {
+    val s = if(source == null) null else source.getRealNode
+    Hyperedge(label, s, dests.map(_.getRealNode))
+  }
+      
   
   // Why do I use lists here? mb replace with vectors?
   def run(args: List[Value], nodeRunner: (Node, List[Value]) => Value): Value = label match {
@@ -128,16 +136,21 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     case Tick() =>
       nodeRunner(dests(0), args)
     case r@Renaming(_) =>
-      val newargs = (0 until arity).map(i => args(r(i))).toList
+      val newargs = (0 until dests(0).arity).map(i => args(r(i))).toList
       nodeRunner(dests(0), newargs)
     case Var() => args(0)
   }
 }
 
 class Node(val arity: Int) {
-  val outs = collection.mutable.Set[Hyperedge]()
-  val ins = collection.mutable.Set[Hyperedge]()
+  private val mouts = collection.mutable.Set[Hyperedge]()
+  private val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
+  
+  def outs: collection.mutable.Set[Hyperedge] = 
+    if(gluedTo == null) mouts else getRealNode.outs
+  def ins: collection.mutable.Set[Hyperedge] = 
+    if(gluedTo == null) mins else getRealNode.ins
   
   // Sometimes the node was glued to some other node...
   // Imperative programming sucks, I know
