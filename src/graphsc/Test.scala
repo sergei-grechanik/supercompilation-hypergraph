@@ -77,7 +77,7 @@ object Test {
     
     println(g.runNode(g("add"), Vector(two, three)))
     
-    for(i <- 0 to 1) {
+    for(i <- 0 to 3) {
       println("nodes: " + g.nodes.size)
       for(n <- g.nodes; h <- n.outs) {
         Transformations.caseCase(g, h)
@@ -88,6 +88,7 @@ object Test {
       }
     }
     
-    println(g.toDot)
+    println("**********************************************")
+    //println(g.toDot)
   }
 }

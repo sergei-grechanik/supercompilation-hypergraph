@@ -100,6 +100,9 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     val s = if(source == null) null else source.getRealNode
     Hyperedge(label, s, dests.map(_.getRealNode))
   }
+  
+  override def toString =
+    source.uniqueName + " -> " + label + " -> " + dests.map(_.uniqueName).mkString(" ")
       
   def run(args: Vector[Value], runNode: (Node, Vector[Value]) => Value): Value = {
     def nodeRunner(n: Node, args: Vector[Value]): Value = {

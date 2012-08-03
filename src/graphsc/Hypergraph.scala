@@ -141,21 +141,36 @@ trait NamedNodes extends Hypergraph {
 
 class NonTerminationException(s: String) extends Exception(s)
 
+class RunningContext {
+  val visited = collection.mutable.Set[(Node, Vector[Value])]()
+  val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
+}
+
 trait HyperTester extends Hypergraph {
   val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
   
-  def runNode(n: Node, args: Vector[Value]): Value = runCache.get((n,args)) match {
-    case Some(null) => throw new NonTerminationException("Nontermination detected")
-    case Some(v) => v
-    case None => runNodeUncached(n, args)
+  def runNode(n: Node, args: Vector[Value]): Value = {
+    val ctx = new RunningContext
+    val res = runNode(new RunningContext, n, args)
+    checkFailed(ctx)
+    res
   }
+  
+  def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = 
+    runCache.get((n,args)) match {
+      case Some(v) => v
+      case None => runNodeUncached(ctx, n, args)
+    }
     
-  def runNodeUncached(n: Node, args: Vector[Value]): Value = {
-    runCache += (n,args) -> null
+  def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
+    if(ctx.visited((n,args)))
+      throw new NonTerminationException("Nontermination detected")
+    
+    ctx.visited.add((n,args))
     var v: Value = null
     for(h <- n.outs)
       try {
-        val newv = runHyperedgeUncached(h, args)
+        val newv = runHyperedgeUncached(ctx, h, args)
         if(v != null && v != newv)
           throw new Exception("Test failed: a node has nonequal outgoing hyperedges")
         else if(v == null) {
@@ -165,28 +180,47 @@ trait HyperTester extends Hypergraph {
       } catch {
         case e: NonTerminationException =>
           // We don't crash here, vacuous path are ok if there are non-vacuous ones
+          // just test this hyperedge later
+          ctx.failed.add((h, args))
       }
     
-    if(v == null)
-      throw new Exception("All hyperedges failed to produce anything")
+    ctx.visited.remove((n, args))
       
-    // Make sure that vacuous hyperedges don't crash anymore 
-    for(h <- n.outs)
-      assert(v == runHyperedgeUncached(h, args))
+    // None of the hyperedges has terminated, rollback
+    if(v == null)
+      throw new NonTerminationException("None of the hyperedges has terminated")
       
     v
   }
   
-  def runHyperedgeUncached(h: Hyperedge, args: Vector[Value]): Value =
-    h.run(args, this.runNode _)
+  def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, args: Vector[Value]): Value = {
+    val res = h.run(args, this.runNode(ctx, _, _))
+    ctx.failed.remove((h, args))
+    res
+  }
+  
+  def checkFailed(ctx: RunningContext) {
+    ctx.visited.clear()
+    if(ctx.failed.nonEmpty) {
+      for((h, a) <- ctx.failed) {
+        assert(runNode(ctx, h.source, a) == runHyperedgeUncached(ctx, h, a))
+      }
+      checkFailed(ctx)
+    }
+  }
     
   override def onNewHyperedge(h: Hyperedge) {
+    println("new " + h)
+    val ctx = new RunningContext
     for(((n, a), r) <- runCache if h.source == n) {
-      assert(runHyperedgeUncached(h, a) == r)
+      assert(runHyperedgeUncached(ctx, h, a) == r)
     }
+    checkFailed(ctx)
+    super.onNewHyperedge(h)
   }
   
   override def onGlue(l: Node, r: Node) {
+    val ctx = new RunningContext
     val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
     val used = l.used & r.used
     for((n,a) <- data) {
@@ -198,7 +232,9 @@ trait HyperTester extends Hypergraph {
       if(newa != a)
         runCache.remove((n,a))
         
-      assert(runNode(l, newa) == runNode(r, newa))
+      assert(runNode(ctx, l, newa) == runNode(ctx, r, newa))
     }
+    checkFailed(ctx)
+    super.onGlue(l, r)
   }
 }
