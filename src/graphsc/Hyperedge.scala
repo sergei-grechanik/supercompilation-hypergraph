@@ -35,37 +35,40 @@ case class Tick
   extends Label
 
 // Should be a permutation
-case class Renaming(vector: Vector[Int])
+case class Renaming private(vector: Vector[Int])
   extends Label {
   require(vector.toSet == (0 until vector.length).toSet)
   
-  def comp(other: Renaming): Renaming = {
-    val w = arity max other.arity
-    val t1 = this.widen(w)
-    val o1 = other.widen(w)
-    Renaming(o1.vector.map(t1(_)))
-  }
+  override def toString =
+    "Renaming(" + vector.mkString(" ") + ")"
+  
+  def comp(other: Renaming): Renaming =
+    Renaming(Vector() ++ 
+        (0 until (vector.length max other.vector.length)).map
+          (i => this(other(i)))).normalize
   
   def inv: Renaming = {
     val m = Map(vector.zipWithIndex : _*)
-    Renaming(Vector() ++ (0 to m.keys.max).map(i => m.getOrElse(i, -1)))
+    Renaming(Vector() ++ (0 until vector.length).map(i => m(i))).normalize
   }
   
   def isId: Boolean =
-    vector.zipWithIndex.forall{case (a,b) => a == b}
+    vector.length == 0
   
-  def this(arity: Int) = this(Vector() ++ (0 until arity))
-  def this(p: (Int, Int)) = 
-    this(Vector() ++ (0 to (p._1 max p._2)).toArray.map(i => 
-      if(i == p._1) p._2 else if(i == p._2) p._1 else i ))
-  def this(i: Iterable[Int]) = this(Vector() ++ i)
+  def normalize: Renaming =
+    Renaming(Vector() ++ 
+        vector.zipWithIndex.reverse.dropWhile{case (a,b) => a == b}.map(_._1).reverse)
+    
+  def apply(i: Int): Int = 
+    if(i < vector.length) vector(i) else i
+}
+
+object Renaming {
+  def apply(): Renaming = Renaming(Vector())
   
-  def arity: Int = vector.max + 1
-  
-  def widen(a: Int): Renaming =
-    Renaming(Vector() ++ (0 until a).map(i => if(i < vector.length) vector(i) else i))
-  
-  def apply(i: Int): Int = vector(i)
+  def apply(p: (Int, Int)): Renaming = 
+    Renaming(Vector() ++ (0 to (p._1 max p._2)).toArray.map(i => 
+      if(i == p._1) p._2 else if(i == p._2) p._1 else i )).normalize
 }
 
 case class Var
@@ -73,22 +76,14 @@ case class Var
 
   
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
-  label match {
-    case r: Renaming =>
-      require(r.arity >= dests(0).arity)
-    case _ =>
-  }
-  require(source == null || source.arity == arity)
+  require(source == null || used.subsetOf(source.used))
   
-  def arity: Int = label match {
-    case r: Renaming => r.arity
-    case v: Var => 1
-    case _ =>
-      if(dests.nonEmpty)
-        dests.map(_.arity).max
-      else
-        0
-  }
+  // we should also take into account bound variables
+  def used: Set[Int] = label match {
+    case Var() => Set(0)
+    case r: Renaming => dests(0).used.map(r(_))
+    case _ => (Set[Int]() /: dests.map(_.used))(_ | _)
+  } 
   
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
@@ -106,47 +101,67 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     Hyperedge(label, s, dests.map(_.getRealNode))
   }
       
-  
-  // Why do I use lists here? mb replace with vectors?
-  def run(args: List[Value], nodeRunner: (Node, List[Value]) => Value): Value = label match {
-    case Construct(name) =>
-      Value(name, dests.map(nodeRunner(_, args)))
-    case CaseOf(cases) =>
-      val victim = nodeRunner(dests(0), args)
-      val Some(((_, vars), expr)) = (cases zip dests.tail).find(_._1._1 == victim.constructor)
-      val newargs =
-        for((v,i) <- args.zipWithIndex) yield {
-          val j = vars.indexWhere(_ == i)
-          if(j >= 0)
-            victim.args(j)
-          else
-            v
+  def run(args: Vector[Value], runNode: (Node, Vector[Value]) => Value): Value = {
+    def nodeRunner(n: Node, args: Vector[Value]): Value = {
+      // we replace unused variables with nulls to 
+      // normalize our argument list
+      // should we move this code to HyperTester?
+      val newargs = Vector() ++
+        (0 to n.used.max).map { i =>
+          if(n.used(i)) {
+            require(i < args.length && args(i) != null)
+            args(i)
+          } else
+            null
         }
-      nodeRunner(expr, newargs)
-    case Let(x) =>
-      // Well, it's not lazy yet, but I don't know how to do laziness right in scala
-      val newargs =
-        for((v,i) <- args.zipWithIndex) yield {
-          if(i == x)
-            nodeRunner(dests(1), args)
-          else
-            v
-        }
-      nodeRunner(dests(0), newargs)
-    case Tick() =>
-      nodeRunner(dests(0), args)
-    case r@Renaming(_) =>
-      val newargs = (0 until dests(0).arity).map(i => args(r(i))).toList
-      nodeRunner(dests(0), newargs)
-    case Var() => args(0)
+      runNode(n, newargs)
+    }
+    
+    label match {
+      case Construct(name) =>
+        Value(name, dests.map(nodeRunner(_, args)))
+      case CaseOf(cases) =>
+        val victim = nodeRunner(dests(0), args)
+        val Some(((_, vars), expr)) = (cases zip dests.tail).find(_._1._1 == victim.constructor)
+        val newargs =
+          for((v,i) <- args.zipWithIndex) yield {
+            val j = vars.indexWhere(_ == i)
+            if(j >= 0)
+              victim.args(j)
+            else
+              v
+          }
+        nodeRunner(expr, newargs)
+      case Let(x) =>
+        // Well, it's not lazy yet, but I don't know how to do laziness right in scala
+        val newargs =
+          for((v,i) <- args.zipWithIndex) yield {
+            if(i == x)
+              nodeRunner(dests(1), args)
+            else
+              v
+          }
+        nodeRunner(dests(0), newargs)
+      case Tick() =>
+        nodeRunner(dests(0), args)
+      case r: Renaming =>
+        val newargs = Vector() ++
+          (0 until (args.length max r.vector.length)).map { i => 
+            if(r(i) < args.length) args(r(i)) else null
+          }
+        nodeRunner(dests(0), newargs)
+      case Var() => args(0)
+    }
   }
 }
 
-class Node(val arity: Int) {
-  private val mouts = collection.mutable.Set[Hyperedge]()
-  private val mins = collection.mutable.Set[Hyperedge]()
+class Node(var mused: Set[Int]) {
+  val mouts = collection.mutable.Set[Hyperedge]()
+  val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
   
+  def used: Set[Int] = 
+    if(gluedTo == null) mused else getRealNode.used
   def outs: collection.mutable.Set[Hyperedge] = 
     if(gluedTo == null) mouts else getRealNode.outs
   def ins: collection.mutable.Set[Hyperedge] = 
@@ -157,4 +172,15 @@ class Node(val arity: Int) {
   def getRealNode: Node =
     if(gluedTo == null) this
     else gluedTo.getRealNode
+    
+  def uniqueName: String = super.toString
+  
+  override def toString =
+    uniqueName +
+    (if(gluedTo != null) 
+      " gluedTo\n" + gluedTo.toString
+     else
+      "\n\nuses: " + used.mkString(" ") +
+      "\n\nouts:\n" + outs.mkString("\n") +
+      "\n\nins:\n" + ins.mkString("\n"))
 }

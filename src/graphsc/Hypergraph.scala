@@ -6,7 +6,7 @@ trait Hypergraph {
   def addHyperedge(h: Hyperedge): Hyperedge
   
   //def addHyperedgeSimple(h: Hyperedge): Hyperedge
-  def addNode(arity: Int): Node
+  def addNode(used: Set[Int]): Node
   def removeNode(n: Node)
   def glueNodes(l: Node, r: Node): Node
   
@@ -21,7 +21,7 @@ class TheHypergraph extends Hypergraph {
   
   def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     if(h.source == null) {
-      val n = new Node(h.arity)
+      val n = new Node(h.used)
       nodes += n
       val res = h.from(n)
       n.outs += res
@@ -59,8 +59,8 @@ class TheHypergraph extends Hypergraph {
       }
   }
   
-  override def addNode(arity: Int): Node = {
-    val n = new Node(arity)
+  override def addNode(used: Set[Int]): Node = {
+    val n = new Node(used)
     nodes.add(n)
     onNewNode(n)
     n
@@ -76,10 +76,6 @@ class TheHypergraph extends Hypergraph {
   }
   
   override def glueNodes(l1: Node, r1: Node): Node = {
-    //if(l1.arity > r1.arity)
-    //  return glueNodes(r1, l1)
-    require(l1.arity == r1.arity)
-    
     val l = l1.getRealNode
     val r = r1.getRealNode
     require(nodes.contains(l) && nodes.contains(r))
@@ -88,9 +84,10 @@ class TheHypergraph extends Hypergraph {
       onGlue(l, r)
       removeNode(r)
       r.gluedTo = l
-      for(h <- r.outs)
+      l.mused = l.used & r.used
+      for(h <- r.mouts)
         addHyperedgeSimple(h.replace(r, l))
-      for(h <- r.ins)
+      for(h <- r.mins)
         addHyperedgeSimple(h.replace(r, l))
       // maybe there appeared some more nodes to glue 
       afterGlue(l)
@@ -113,7 +110,7 @@ class TheHypergraph extends Hypergraph {
     sb.append("digraph Hyper {\n")
     for(n <- nodes) {
       for(h <- n.outs) {
-        sb.append("node \"" + h.toString + "\"[label=\"" + h.label.toString + "\"];\n")
+        sb.append("\"" + h.toString + "\"[label=\"" + h.label.toString + "\"];\n")
         sb.append("\"" + n.toString + "\" -> \"" + h.toString + "\";\n")
         for(d <- h.dests)
           sb.append("\"" + h.toString + "\" -> \"" + d.toString + "\";\n")
@@ -131,12 +128,12 @@ trait NamedNodes extends Hypergraph {
   
   def apply(n: String): Node = namedNodes(n)
   
-  def addNode(n: String, a: Int): Node = 
+  def addNode(n: String, arity: Int): Node = 
     if(namedNodes.contains(n)) {
       namedNodes(n)
     }
     else {
-      val node = addNode(a)
+      val node = addNode((0 until arity).toSet)
       namedNodes += n -> node
       node
     }
@@ -145,15 +142,15 @@ trait NamedNodes extends Hypergraph {
 class NonTerminationException(s: String) extends Exception(s)
 
 trait HyperTester extends Hypergraph {
-  val runCache = collection.mutable.Map[(Node, List[Value]), Value]()
+  val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
   
-  def runNode(n: Node, args: List[Value]): Value = runCache.get((n,args)) match {
+  def runNode(n: Node, args: Vector[Value]): Value = runCache.get((n,args)) match {
     case Some(null) => throw new NonTerminationException("Nontermination detected")
     case Some(v) => v
     case None => runNodeUncached(n, args)
   }
     
-  def runNodeUncached(n: Node, args: List[Value]): Value = {
+  def runNodeUncached(n: Node, args: Vector[Value]): Value = {
     runCache += (n,args) -> null
     var v: Value = null
     for(h <- n.outs)
@@ -166,10 +163,13 @@ trait HyperTester extends Hypergraph {
           v = newv
         }
       } catch {
-        case _: NonTerminationException =>
+        case e: NonTerminationException =>
           // We don't crash here, vacuous path are ok if there are non-vacuous ones
       }
     
+    if(v == null)
+      throw new Exception("All hyperedges failed to produce anything")
+      
     // Make sure that vacuous hyperedges don't crash anymore 
     for(h <- n.outs)
       assert(v == runHyperedgeUncached(h, args))
@@ -177,7 +177,7 @@ trait HyperTester extends Hypergraph {
     v
   }
   
-  def runHyperedgeUncached(h: Hyperedge, args: List[Value]): Value =
+  def runHyperedgeUncached(h: Hyperedge, args: Vector[Value]): Value =
     h.run(args, this.runNode _)
     
   override def onNewHyperedge(h: Hyperedge) {
@@ -187,8 +187,18 @@ trait HyperTester extends Hypergraph {
   }
   
   override def onGlue(l: Node, r: Node) {
-    val data = for(((n, a), _) <- runCache if n == l || n == r) yield a
-    for(a <- data)
-      assert(runNode(l,a) == runNode(r,a))
+    val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
+    val used = l.used & r.used
+    for((n,a) <- data) {
+      val newa = Vector() ++
+        (0 to used.max).map { i =>
+          if(used(i)) a(i) else null
+        }
+      
+      if(newa != a)
+        runCache.remove((n,a))
+        
+      assert(runNode(l, newa) == runNode(r, newa))
+    }
   }
 }

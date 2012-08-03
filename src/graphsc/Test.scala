@@ -26,7 +26,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     wholeNumber ^^
     { case i => 
         graph.addHyperedge(
-            Hyperedge(new Renaming(0 -> i.toInt), null, List(theVar))).source }
+            Hyperedge(Renaming(0 -> i.toInt), null, List(theVar))).source }
   
   def onecase: Parser[((String, List[Int]), Node)] =
     cname ~ rep(wholeNumber) ~ "->" ~ expr ^^
@@ -75,9 +75,9 @@ object Test {
     val two = Value("S", List(one))
     val three = Value("S", List(two))
     
-    println(g.runNode(g("add"), List(two, three)))
+    println(g.runNode(g("add"), Vector(two, three)))
     
-    for(i <- 0 to 5) {
+    for(i <- 0 to 1) {
       println("nodes: " + g.nodes.size)
       for(n <- g.nodes; h <- n.outs) {
         Transformations.caseCase(g, h)
@@ -88,6 +88,6 @@ object Test {
       }
     }
     
-    //println(g.toDot)
+    println(g.toDot)
   }
 }
