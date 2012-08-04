@@ -68,15 +68,17 @@ object Test {
   def main(args: Array[String]) {
     val g = new TheHypergraph with NamedNodes with HyperTester
     val p = new ExprParser(g)
-    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
+    //p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
+    p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
     
     val zero = Value("Z", List())
     val one = Value("S", List(zero))
     val two = Value("S", List(one))
     val three = Value("S", List(two))
     
-    println(g.runNode(g("add"), Vector(two, three)))
-    
+    //println(g.runNode(g("add"), Vector(two, three)))
+    println(g.runNode(g("z"), Vector(two)))
+    try {
     for(i <- 0 to 3) {
       println("nodes: " + g.nodes.size)
       for(n <- g.nodes; h <- n.outs) {
@@ -87,8 +89,11 @@ object Test {
         Transformations.throughRenaming(g, h)
       }
     }
+    }catch {case _:TooManyNodesException => println("aborted")}
     
     println("**********************************************")
-    //println(g.toDot)
+    val out = new java.io.FileWriter("test.dot")
+    out.write(g.toDot)
+    out.close
   }
 }

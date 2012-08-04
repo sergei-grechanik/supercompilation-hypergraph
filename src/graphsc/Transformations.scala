@@ -44,7 +44,7 @@ object Transformations {
         val v = g.addHyperedge(Hyperedge(Var(), null, List())).source
         val newdests = 
           for(((d, i_1), (name,varnums)) <- dests.zipWithIndex zip cases) yield 
-            if(CaseOf(cases).bound(i_1 + 1).contains(0)) {
+            if(CaseOf(cases).bound(i_1 + 1).contains(0) || !d.used(0)) {
               d
             } else {              
               val vars = 
@@ -103,7 +103,7 @@ object Transformations {
         g.addHyperedge(Hyperedge(r1 comp r2, src, List(d2)))
       }
     case Hyperedge(Let(x), src, List(d, e)) if d.used(x) =>
-      for(Hyperedge(r@Renaming(_), _, List(d2)) <- d.outs) {
+      for(h1@Hyperedge(r@Renaming(_), _, List(d2)) <- d.outs) {
         val rinv = r.inv
         val y = rinv(x)
         val newe = g.addHyperedge(Hyperedge(rinv, null, List(e))).source

@@ -78,16 +78,23 @@ case class Var
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   require(source == null || used.subsetOf(source.used))
   
-  // we should also take into account bound variables
+  // Set of used variables
   def used: Set[Int] = label match {
     case Var() => Set(0)
     case r: Renaming => dests(0).used.map(r(_))
-    case _ => (Set[Int]() /: dests.map(_.used))(_ | _)
+    case _ =>
+      // remove bound variables from the dests' used sets
+      val destused =
+        for((d,i) <- dests.zipWithIndex) yield
+          d.used &~ label.bound(i) 
+      (Set[Int]() /: destused)(_ | _)
   } 
   
+  // Returns the same hyperedge but with different source
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
   
+  // Replace a node in source and destination nodes
   def replace(old: Node, n: Node): Hyperedge = {
     val newsrc = if(source == old) n else source
     val newdst = 
@@ -96,6 +103,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     Hyperedge(label, newsrc, newdst)
   }
   
+  // Dereference all glued nodes
   def derefGlued: Hyperedge = {
     val s = if(source == null) null else source.getRealNode
     Hyperedge(label, s, dests.map(_.getRealNode))
@@ -109,14 +117,18 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       // we replace unused variables with nulls to 
       // normalize our argument list
       // should we move this code to HyperTester?
-      val newargs = Vector() ++
-        (0 to n.used.max).map { i =>
-          if(n.used(i)) {
-            require(i < args.length && args(i) != null)
-            args(i)
-          } else
-            null
-        }
+      val newargs =
+        if(n.used.nonEmpty)
+          Vector() ++
+          (0 to n.used.max).map { i =>
+            if(n.used(i)) {
+              require(i < args.length && args(i) != null)
+              args(i)
+            } else
+              null
+          }
+        else
+          Vector()
       runNode(n, newargs)
     }
     
@@ -176,7 +188,11 @@ class Node(var mused: Set[Int]) {
     if(gluedTo == null) this
     else gluedTo.getRealNode
     
-  def uniqueName: String = super.toString
+  def uniqueName: String =
+    if(gluedTo == null)
+      super.toString
+    else
+      super.toString + "(" + getRealNode.uniqueName + ")"
   
   override def toString =
     uniqueName +
