@@ -20,13 +20,13 @@ case class CaseOf(cases: List[(String, List[Int])])
       Set()
 }
 
-case class Let(variable: Int)
+case class Let(vars: List[Int])
   extends Label {
-  require(variable >= 0)
+  require(vars.length > 0 && vars.forall(_ >= 0) && vars.toSet.size == vars.size)
   
   override def bound(destnum: Int): Set[Int] =
     if(destnum == 0)
-      Set(variable)
+      vars.toSet
     else
       Set()
 }
@@ -147,12 +147,13 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
               v
           }
         nodeRunner(expr, newargs)
-      case Let(x) =>
+      case Let(vars) =>
         // Well, it's not lazy yet, but I don't know how to do laziness right in scala
         val newargs =
           for((v,i) <- args.zipWithIndex) yield {
-            if(i == x)
-              nodeRunner(dests(1), args)
+            val j = vars.indexWhere(_ == i)
+            if(j != -1)
+              nodeRunner(dests(j + 1), args)
             else
               v
           }

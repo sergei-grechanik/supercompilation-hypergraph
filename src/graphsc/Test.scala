@@ -21,7 +21,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
-  private lazy val theVar = graph.addHyperedge(Hyperedge(Var(), null, List())).source
+  private lazy val theVar = graph.addHyperedge(Var(), List())
   def variable: Parser[Node] =
     wholeNumber ^^
     { case i => 
@@ -36,21 +36,19 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     ("case" ~> expr <~ "of") ~ ("{" ~> repsep(onecase, ";") <~ "}") ^^
     { case e~lst => 
         graph.addHyperedge(
-            Hyperedge(CaseOf(lst.map(_._1)), null, e :: lst.map(_._2))).source }
+            CaseOf(lst.map(_._1)), e :: lst.map(_._2)) }
   
   def call: Parser[Node] =
     fname ~ rep(argexpr) ^^
     { case f~as =>
-        var res = graph.addNode(f, as.length)
-        for((a,i) <- as.zipWithIndex)
-          res = graph.addHyperedge(Hyperedge(Let(i), null, List(res, a))).source
-        res
+        val fun = graph.addNode(f, as.length)
+        graph.addHyperedge(Let(0 until as.length toList), fun :: as)
     }
     
   def cons: Parser[Node] =
     cname ~ rep(argexpr) ^^
     { case c~as =>
-        graph.addHyperedge(Hyperedge(Construct(c), null, as)).source }
+        graph.addHyperedge(Construct(c), as) }
   
   def expr: Parser[Node] =
     argexpr |
@@ -64,34 +62,186 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     
 }
 
+class TooManyNodesException(s: String = "") extends Exception(s)
+
+trait Visualizer extends TheHypergraph {
+  val dotObjects = collection.mutable.Map[String, String]()
+  
+  var frames: List[Set[String]] = Nil
+  
+  var cnt = 0
+  def save(e: Any = null) {
+    cnt += 1
+    if(cnt > 300)
+      throw new TooManyNodesException
+    frames ::= dotVisible
+  }
+  
+  def writeDotFrames() {
+    for((s,i) <- frames.reverse.zipWithIndex) {
+      val out = new java.io.FileWriter("test" + i + ".dot")
+      out.write(dotVisualize(s))
+      out.close
+    }
+  }
+  
+  override def onNewHyperedge(h: Hyperedge) {
+    dotHyperedge(h)
+    save()
+    super.onNewHyperedge(h)
+  }
+  
+  override def afterGlue(n: Node) {
+    for(h <- n.ins ++ n.outs)
+      dotHyperedge(h)
+    save()
+    super.afterGlue(n)
+  }
+  
+  def dotHyperedge(h: Hyperedge) {
+    dotObjects += ("\"" + h.source.uniqueName + "\"") -> "label=\"\",shape=circle"
+    dotObjects += ("\"" + h + "\"") -> 
+      ("shape=record,label=\"{" + h.label.toString + "|{" + 
+            (0 until h.dests.length).map("<" + _ + ">").mkString("|") + "}}\"")
+    dotObjects += ("\"" + h.source.uniqueName + "\" -> \"" + h + "\"") -> "label=\"\""
+    for((d,i) <- h.dests.zipWithIndex)
+          dotObjects += ("\"" + h + "\":" + i + " -> \"" + d.uniqueName + "\"") -> "label=\"\""
+  }
+  
+  def dotVisible: Set[String] = {
+    val s = collection.mutable.Set[String]()
+    for(n <- nodes) {
+      s += "\"" + n.uniqueName + "\""
+      for(h <- n.ins ++ n.outs) {
+        s += "\"" + h + "\""
+        s += "\"" + h.source.uniqueName + "\" -> \"" + h + "\""
+        for((d,i) <- h.dests.zipWithIndex)
+          s += "\"" + h + "\":" + i + " -> \"" + d.uniqueName + "\""
+      }
+    }
+    s.toSet
+  }
+  
+  def dotVisualize(objs: Set[String]): String = {
+    val s = new StringBuilder
+    s.append("digraph Hyper {\n")
+    for((n,p) <- dotObjects) {
+      val c =
+        if(objs(n))
+          ",color=black"
+        else
+          ",color=white,fontcolor=white"
+      s.append(n + "[" + p + c + "];\n")
+    }
+    s.append("}")
+    s.toString
+  }
+}
+
+trait HyperLogger extends Hypergraph {
+  override def transforming(hs: Hyperedge*) {
+    println("transforming:")
+    for(h <- hs)
+      println("    " + h)
+  }
+  
+  override def onNewHyperedge(h: Hyperedge) {
+    println("new " + h)
+    super.onNewHyperedge(h)
+  }
+  
+  override def onNewNode(n: Node) {
+    println("new node " + n.uniqueName)
+    super.onNewNode(n)
+  }
+  
+  override def beforeGlue(l: Node, r: Node) {
+    println("glue " + l.uniqueName + " " + r.uniqueName)
+    super.beforeGlue(l, r)
+  }
+}
+
+trait Transformer extends TheHypergraph with HyperTester {
+  val updatedNodes = collection.mutable.Set[Node]()
+  
+  override def onNewHyperedge(h: Hyperedge) {
+    updatedNodes += h.source
+    super.onNewHyperedge(h)
+  }
+  
+  override def afterGlue(n: Node) {
+    updatedNodes += n
+    super.afterGlue(n)
+  }
+  
+  def transform() {
+    val set = updatedNodes.map(n => n.outs ++ n.ins).flatten
+    val g = this
+    println("***********************")
+    println("*** updnodes: " + updatedNodes.size + " hyp: " + set.size)
+    println("***********************")
+    updatedNodes.clear()
+    for(h <- set) {
+        println("letdown")
+        Transformations.letDown(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+        println("reverseRenaming")
+        Transformations.reverseRenaming(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+        println("throughRenaming")
+        Transformations.throughRenaming(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+        println("casecase")
+        Transformations.caseCase(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+        println("casereduce")
+        Transformations.caseReduce(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+        println("propagate")
+        Transformations.propagate(g, h)
+        Transformations.glueAll(g)
+        g.statistics()
+    }
+  }
+}
+
 object Test {
   def main(args: Array[String]) {
-    val g = new TheHypergraph with NamedNodes with HyperTester
-    val p = new ExprParser(g)
-    //p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
-    p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
+    val g = new TheHypergraph 
+        with NamedNodes 
+        with HyperTester 
+        with Visualizer 
+        with HyperLogger
+        with Transformer
     
     val zero = Value("Z", List())
     val one = Value("S", List(zero))
     val two = Value("S", List(one))
     val three = Value("S", List(two))
     
-    //println(g.runNode(g("add"), Vector(two, three)))
-    println(g.runNode(g("z"), Vector(two)))
+    val p = new ExprParser(g)
+    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
+    println(g.runNode(g("add"), Vector(two, three)))
+    p("mul/2 = case 0 of { Z -> Z; S 0 -> add 1 (mul 0 1) }")
+    println(g.runNode(g("mul"), Vector(two, three)))
+    //p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
+    //println(g.runNode(g("z"), Vector(two)))
+    Transformations.glueAll(g)
     try {
-    for(i <- 0 to 3) {
+    for(i <- 0 to 50) {
       println("nodes: " + g.nodes.size)
-      for(n <- g.nodes; h <- n.outs) {
-        Transformations.caseCase(g, h)
-        Transformations.caseReduce(g, h)
-        Transformations.letDown(g, h)
-        Transformations.propagate(g, h)
-        Transformations.throughRenaming(g, h)
-      }
+      g.transform()
     }
     }catch {case _:TooManyNodesException => println("aborted")}
     
     println("**********************************************")
+    //g.writeDotFrames
+    
     val out = new java.io.FileWriter("test.dot")
     out.write(g.toDot)
     out.close

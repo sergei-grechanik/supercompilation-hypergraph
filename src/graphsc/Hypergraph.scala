@@ -5,15 +5,21 @@ trait Hypergraph {
   // if source is not null then perform gluing
   def addHyperedge(h: Hyperedge): Hyperedge
   
-  //def addHyperedgeSimple(h: Hyperedge): Hyperedge
+  def addHyperedge(l: Label, ds: List[Node]): Node =
+    addHyperedge(Hyperedge(l, null, ds)).source
+  
   def addNode(used: Set[Int]): Node
   def removeNode(n: Node)
   def glueNodes(l: Node, r: Node): Node
   
   def onNewHyperedge(h: Hyperedge) {}
   def onNewNode(n: Node) {}
-  // this function should be called before gluing
-  def onGlue(l: Node, r: Node) {}
+  def beforeGlue(l: Node, r: Node) {}
+  def afterGlue(l: Node) {}
+  
+  // Transformations should call this function before performing transformations
+  // they should pass a list of hyperedges being transformed
+  def transforming(h: Hyperedge*) {}
 }
 
 class TheHypergraph extends Hypergraph {
@@ -90,7 +96,7 @@ class TheHypergraph extends Hypergraph {
     require(nodes.contains(l) && nodes.contains(r))
     
     if(l != r) {
-      onGlue(l, r)
+      beforeGlue(l, r)
       removeNode(r)
       l.mused = l.used & r.used
       r.gluedTo = l
@@ -99,8 +105,9 @@ class TheHypergraph extends Hypergraph {
         addHyperedgeSimple(h.derefGlued)
       for(h <- r.mins)
         addHyperedgeSimple(h.derefGlued)
-      // maybe there appeared some more nodes to glue 
       afterGlue(l)
+      // maybe there appeared some more nodes to glue 
+      glueParents(l)
       // Now l may be glued to something else
       l.getRealNode
     }
@@ -109,7 +116,7 @@ class TheHypergraph extends Hypergraph {
   }
   
   // glue parents recursively
-  def afterGlue(n: Node) {
+  def glueParents(n: Node) {
     val groups = n.ins.groupBy(h => (h.label, h.dests)).filter(_._2.size > 1)
     for((_, g) <- groups)
       g.toList.map(_.source).reduce(glueNodes)
@@ -121,10 +128,12 @@ class TheHypergraph extends Hypergraph {
     for(n <- nodes) {
       sb.append("\"" + n.uniqueName + "\"[label=\"" + n.uniqueName + "\"];\n")
       for(h <- n.outs) {
-        sb.append("\"" + h.toString + "\"[label=\"" + h.toString + "\"];\n")
+        val lab = "{" + h.label.toString + "|{" + 
+            (0 until h.dests.length).map("<" + _ + ">").mkString("|") + "}}"
+        sb.append("\"" + h.toString + "\"[label=\"" + lab + "\", shape=record];\n")
         sb.append("\"" + n.uniqueName + "\" -> \"" + h.toString + "\";\n")
-        for(d <- h.dests)
-          sb.append("\"" + h.toString + "\" -> \"" + d.uniqueName + "\";\n")
+        for((d,i) <- h.dests.zipWithIndex)
+          sb.append("\"" + h.toString + "\":" + i + " -> \"" + d.uniqueName + "\";\n")
       }
       sb.append("\n")
     }
@@ -164,27 +173,31 @@ trait NamedNodes extends Hypergraph {
 }
 
 class NonTerminationException(s: String = "") extends Exception(s)
-class TooManyNodesException(s: String = "") extends Exception(s)
 
 class RunningContext {
   val visited = collection.mutable.Set[(Node, Vector[Value])]()
   val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
 }
 
-trait HyperTester extends Hypergraph {
+trait HyperTester extends TheHypergraph {
   val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
   
   def runNode(n: Node, args: Vector[Value]): Value = {
     val ctx = new RunningContext
-    val res = runNode(new RunningContext, n, args)
+    val res = runNode(ctx, n, args)
     checkFailed(ctx)
     res
   }
   
   def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = 
     runCache.get((n,args)) match {
-      case Some(v) => v
-      case None => runNodeUncached(ctx, n, args)
+      case Some(v) =>
+        println(n.uniqueName + "(" + args + ") = " + v)
+        v
+      case None => 
+        val res = runNodeUncached(ctx, n, args)
+        println(n.uniqueName + "(" + args + ") = " + res)
+        res
     }
     
   def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
@@ -234,11 +247,7 @@ trait HyperTester extends Hypergraph {
     }
   }
   
-  var cnt = 0
   override def onNewHyperedge(h: Hyperedge) {
-    cnt += 1
-    if(cnt > 300)
-      throw new TooManyNodesException
     val ctx = new RunningContext
     for(((n, a), r) <- runCache if h.source == n) {
       assert(runHyperedgeUncached(ctx, h, a) == r)
@@ -247,7 +256,7 @@ trait HyperTester extends Hypergraph {
     super.onNewHyperedge(h)
   }
   
-  override def onGlue(l: Node, r: Node) {
+  override def beforeGlue(l: Node, r: Node) {
     val ctx = new RunningContext
     val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
     val used = l.used & r.used
@@ -267,6 +276,26 @@ trait HyperTester extends Hypergraph {
       assert(runNode(ctx, l, newa) == runNode(ctx, r, newa))
     }
     checkFailed(ctx)
-    super.onGlue(l, r)
+    super.beforeGlue(l, r)
+  }
+  
+  def statistics() {
+    val nv =
+      for(n <- nodes) yield
+        (n, runCache.filter(_._1._1 == n).map(x => (x._1._2, x._2)).toMap)
+    println("statistics: " + nodes.size + " should be " + fun(Set(), nv.toList).size)
+    
+    def fun(s: Set[(Node, Map[Vector[Value], Value])], 
+            l: List[(Node, Map[Vector[Value], Value])]): Set[(Node, Map[Vector[Value], Value])] = {
+      l match {
+        case (n1, m1) :: tl =>
+          for((n, m) <- s) {
+            if(m == m1)
+              return fun(s, tl)
+          }
+          fun(s + (n1 -> m1), tl)
+        case Nil => s
+      }
+    }
   }
 }
