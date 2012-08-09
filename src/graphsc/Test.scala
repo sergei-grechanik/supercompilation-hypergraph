@@ -13,48 +13,58 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   
   def definition: Parser[Node] = 
     (sign <~ "=") ~ expr ^^
-    { case n~e => graph.glueNodes(n, e) }
+    { case (n,table)~e => graph.glueNodes(n, e(table)) }
   
-  def sign: Parser[Node] =
-    (fname <~ "/") ~ wholeNumber ^^
-    { case i~a => graph.addNode(i, a.toInt) }
+  def sign: Parser[(Node, Map[String,Int])] =
+    fname ~ rep(fname) ^^
+    { case i~vs => (graph.addNode(i, vs.length.toInt), vs.zipWithIndex.toMap) }
   
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
   private lazy val theVar = graph.addNode(Var(), List())
-  def variable: Parser[Node] =
-    wholeNumber ^^
-    { case i => 
-        graph.addNode(Renaming(0 -> i.toInt), List(theVar)) }
   
-  def onecase: Parser[((String, List[Int]), Node)] =
-    cname ~ rep(wholeNumber) ~ "->" ~ expr ^^
-    {case n~l~"->"~e => ((n, l.map(_.toInt)), e)}
+  def onecase: Parser[Map[String,Int] => ((String, List[Int]), Node)] =
+    cname ~ rep(fname) ~ "->" ~ expr ^^
+    {case n~l~"->"~e => table =>
+      val lsize = l.size
+      val newtable = table.mapValues(_ + lsize) ++ l.zipWithIndex
+      ((n, 0 until lsize toList), e(newtable))}
   
-  def caseof: Parser[Node] =
-    ("case" ~> expr <~ "of") ~ ("{" ~> repsep(onecase, ";") <~ "}") ^^
-    { case e~lst => 
-        graph.addNode(CaseOf(lst.map(_._1)), e :: lst.map(_._2)) }
+  def caseof: Parser[Map[String,Int] => Node] =
+    ("case" ~> argexpr <~ "of") ~ ("{" ~> repsep(onecase, ";") <~ "}") ^^
+    { case e~lst => table =>
+        val cases = lst.map(_(table))
+        graph.addNode(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2)) }
   
-  def call: Parser[Node] =
+  def call: Parser[Map[String,Int] => Node] =
     fname ~ rep(argexpr) ^^
-    { case f~as =>
-        val fun = graph.addNode(f, as.length)
-        graph.addNode(Let(0 until as.length toList), fun :: as)
+    { case f~as => table =>
+        if(as.isEmpty && table.contains(f))
+          graph.addNode(Renaming(0 -> table(f)), List(theVar))
+        else {
+          val fun = graph.addNode(f, as.length)
+          graph.addNode(Let(0 until as.length toList), fun :: as.map(_(table)))
+        }
     }
-    
-  def cons: Parser[Node] =
-    cname ~ rep(argexpr) ^^
-    { case c~as =>
-        graph.addNode(Construct(c), as) }
   
-  def expr: Parser[Node] =
-    argexpr |
+  def variable: Parser[Map[String,Int] => Node] =
+    fname ^^
+    { case f => table =>
+        graph.addNode(Renaming(0 -> table(f)), List(theVar)) }
+    
+  def cons: Parser[Map[String,Int] => Node] =
+    cname ~ rep(argexpr) ^^
+    { case c~as => table =>
+        graph.addNode(Construct(c), as.map(_(table))) }
+  
+  def expr: Parser[Map[String,Int] => Node] =
+    caseof |
+    "(" ~> expr <~ ")" |
     call |
     cons
   
-  def argexpr: Parser[Node] =
+  def argexpr: Parser[Map[String,Int] => Node] =
     variable |
     caseof |
     "(" ~> expr <~ ")"
@@ -224,9 +234,9 @@ object Test {
     val three = Value("S", List(two))
     
     val p = new ExprParser(g)
-    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 2) }")
+    p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     println(g.runNode(g("add"), Vector(two, three)))
-    p("mul/2 = case 0 of { Z -> Z; S 0 -> add 2 (mul 0 2) }")
+    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
     println(g.runNode(g("mul"), Vector(two, three)))
     //p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
     //println(g.runNode(g("z"), Vector(two)))
