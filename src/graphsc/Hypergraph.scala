@@ -3,17 +3,18 @@ package graphsc
 trait Hypergraph {
   // h should be with known dests and null source
   // if source is not null then perform gluing
-  def addHyperedge(h: Hyperedge): Hyperedge
-  
-  def addHyperedge(l: Label, ds: List[Node]): Node =
-    addHyperedge(Hyperedge(l, null, ds)).source
-  
-  def addNode(used: Set[Int]): Node
+  def addHyperedge(h: Hyperedge)
+    
+  def addNode(n: Node): Node
+  def addNode(l: Label, ds: List[Node]): Node = addNode(Node(l, ds))
+  def newNode(used: Set[Int]): Node
   def removeNode(n: Node)
+  
+  // Nodes shouldn't be glued manually, they should be marked equal with 
+  // a Renaming() hyperedge. Then the hypergraph should glue these nodes automatically.
   def glueNodes(l: Node, r: Node): Node
   
   def onNewHyperedge(h: Hyperedge) {}
-  def onNewNode(n: Node) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
   
@@ -26,26 +27,16 @@ class TheHypergraph extends Hypergraph {
   val nodes = collection.mutable.Set[Node]()
   
   def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
-    if(h.source == null) {
-      val n = new Node(h.used)
-      nodes += n
-      val res = h.from(n)
-      n.outs += res
-      h.dests.foreach(_.ins.add(res))
-      res
-    }
-    else {
-      nodes += h.source
-      h.source.outs += h
-      h.dests.foreach(_.ins.add(h))
-      h
-    }
+    val n = Node(h)
+    nodes += n
+    val res = h.from(n)
+    res.dests.foreach(_.insMut.add(res))
+    res
   }
   
-  override def addHyperedge(h1: Hyperedge): Hyperedge = {
-    val h = h1.derefGlued
-    require(h.source == null || nodes.contains(h.source))
-    require(h.dests.forall(nodes.contains(_)))
+  def addHyperedgeImpl(h1: Hyperedge): Hyperedge = {
+    val Hyperedge(l1, s1, dst1) = h1
+    val h = Hyperedge(l1, s1, dst1.map(addNode(_))).derefGlued
     
     if(h.dests.nonEmpty)
       h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
@@ -68,10 +59,37 @@ class TheHypergraph extends Hypergraph {
       }
   }
   
-  override def addNode(used: Set[Int]): Node = {
+  override def addHyperedge(h: Hyperedge) = {
+    val Hyperedge(l, src, ds) = h  
+    l match {
+      case r: Renaming =>
+        val r1 = r.reduce(ds(0).used)
+        if(r1.isId)
+          glueNodes(src, ds(0))
+        else {
+          // We also add a backward renaming
+          addHyperedgeImpl(Hyperedge(r1.inv, ds(0), List(src)))
+          addHyperedgeImpl(Hyperedge(r1, src, ds))
+        }
+      case Let(vars) if vars.isEmpty =>
+        glueNodes(src, ds(0))
+      case _ =>
+        addHyperedgeImpl(Hyperedge(l, src, ds))
+    }
+  }
+  
+  override def addNode(n: Node): Node = {
+    if(!nodes(n.getRealNode)) {
+      nodes.add(n.getRealNode)
+      for(h <- n.outs)
+        addHyperedge(h)
+    }
+    n.getRealNode
+  }
+  
+  override def newNode(used: Set[Int]): Node = {
     val n = new Node(used)
     nodes.add(n)
-    onNewNode(n)
     n
   }
   
@@ -82,18 +100,24 @@ class TheHypergraph extends Hypergraph {
     // from all incident nodes except n
     for(h <- n.ins) {
       if(h.source != n)
-        h.source.outs -= h
+        h.source.outsMut -= h
       for(d <- h.dests if d != n)
-        d.ins.remove(h)
+        d.insMut -= h
     }
     for(h <- n.outs; d <- h.dests if d != n)
-      d.ins -= h
+      d.insMut -= h
   }
   
   override def glueNodes(l1: Node, r1: Node): Node = {
+    // just for convenience, this feature is undocumented, don't use it
+    if(l1 == null) return r1
+    if(r1 == null) return l1
+    
+    if(!nodes.contains(l1))
+      addNode(l1)
+    
     val l = l1.getRealNode
     val r = r1.getRealNode
-    require(nodes.contains(l) && nodes.contains(r))
     
     if(l != r) {
       beforeGlue(l, r)
@@ -166,7 +190,7 @@ trait NamedNodes extends Hypergraph {
       namedNodes(n)
     }
     else {
-      val node = addNode((0 until arity).toSet)
+      val node = newNode((0 until arity).toSet)
       namedNodes += n -> node
       node
     }

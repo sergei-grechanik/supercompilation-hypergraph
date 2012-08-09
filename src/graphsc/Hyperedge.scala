@@ -22,7 +22,7 @@ case class CaseOf(cases: List[(String, List[Int])])
 
 case class Let(vars: List[Int])
   extends Label {
-  require(vars.length > 0 && vars.forall(_ >= 0) && vars.toSet.size == vars.size)
+  require(vars.forall(_ >= 0) && vars.toSet.size == vars.size)
   
   override def bound(destnum: Int): Set[Int] =
     if(destnum == 0)
@@ -61,14 +61,80 @@ case class Renaming private(vector: Vector[Int])
     
   def apply(i: Int): Int = 
     if(i < vector.length) vector(i) else i
+    
+  // Reduce the domain of the renaming to this set of variables
+  // used to equalize more renamings
+  def reduce(used: Set[Int]): Renaming =
+    Renaming(vector.zipWithIndex.filter(p => used(p._1)).toMap)
+    
+  // Move the renaming up through a binding, i.e. find r1 such that
+  // this . shift(bnd) = r1 . shift(this^-1(bnd))
+  def upThroughBinding(bnd: List[Int]): (Renaming, List[Int]) = {
+    import Renaming._
+    val bndset = bnd.toSet
+    val thisinv = this.inv
+    val newbnd = bnd.map(thisinv(_))
+    val newrnm = Renaming(Vector() ++
+        (0 to ((bndset.size max (vector.length - 1)) - bndset.size) map {i =>
+          shift(bndset)(this(shiftInv(newbnd.toSet)(i))) 
+      })).normalize
+    (newrnm, newbnd)
+  }
 }
 
 object Renaming {
   def apply(): Renaming = Renaming(Vector())
   
   def apply(p: (Int, Int)): Renaming = 
-    Renaming(Vector() ++ (0 to (p._1 max p._2)).toArray.map(i => 
+    Renaming(Vector() ++ (0 to (p._1 max p._2)).map(i => 
       if(i == p._1) p._2 else if(i == p._2) p._1 else i )).normalize
+  
+  // m should be one-to-one
+  def apply(m: Map[Int, Int]): Renaming = {
+    if(m.isEmpty)
+      return Renaming()
+      
+    val maxvar = m.keys.max max m.values.max
+    val free = ((0 to maxvar).toSet &~ m.values.toSet).toSeq.sorted
+    var freej = -1
+    val vec = Vector() ++
+      (0 to maxvar map { i =>
+        m.getOrElse(i, {freej += 1; free(freej)}) 
+      })
+    Renaming(vec).normalize
+  }
+      
+  def shift(bnd: Set[Int])(i: Int): Int = {
+    require(!bnd(i) && i >= 0)
+    i - bnd.count(_ < i)
+  }
+  
+  def shiftInv(bnd: Set[Int])(i: Int): Int = {
+    require(i >= 0)
+    var j = -1
+    var sj = -1
+    while(sj != i) {
+      j += 1
+      if(!bnd(j))
+        sj += 1
+    }
+    assert(shift(bnd)(j) == i)
+    j
+  }
+  
+  // This renaming takes variable numbers before binding
+  // to the corresponding variables after binding.
+  def shiftInvRenaming(bnd: Set[Int], varcount: Int): Renaming = {
+    var j: Int = -1
+    val pairs =
+      0 until varcount map { i =>
+        j += 1
+        while(bnd(j)) j += 1
+        assert(shift(bnd)(j) == i)
+        (i,j)
+      }
+    Renaming(pairs.toMap)
+  }
 }
 
 case class Var
@@ -85,8 +151,10 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     case _ =>
       // remove bound variables from the dests' used sets
       val destused =
-        for((d,i) <- dests.zipWithIndex) yield
-          d.used &~ label.bound(i) 
+        for((d,i) <- dests.zipWithIndex) yield {
+          val bnd = label.bound(i)
+          (d.used &~ bnd).map(Renaming.shift(bnd) _)
+        }
       (Set[Int]() /: destused)(_ | _)
   } 
   
@@ -111,9 +179,17 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   
   override def toString =
     source.uniqueName + " -> " + label + " -> " + dests.map(_.uniqueName).mkString(" ")
-      
+  
+  /*def run(args: Vector[Value], runNode: (Node, Vector[Value]) => Value): Value = {
+    println("running " + this + " on " + args)
+    val res = run1(args, runNode)
+    println("run " + this)
+    println(args + " -> " + res)
+    res
+  }*/
+    
   def run(args: Vector[Value], runNode: (Node, Vector[Value]) => Value): Value = {
-    def nodeRunner(n: Node, args: Vector[Value]): Value = {
+    def nodeRunner(n: Node, args: IndexedSeq[Value]): Value = {
       // we replace unused variables with nulls to 
       // normalize our argument list
       // should we move this code to HyperTester?
@@ -138,24 +214,26 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       case CaseOf(cases) =>
         val victim = nodeRunner(dests(0), args)
         val Some(((_, vars), expr)) = (cases zip dests.tail).find(_._1._1 == victim.constructor)
+        val shiftfun = Renaming.shift(vars.toSet) _
         val newargs =
-          for((v,i) <- args.zipWithIndex) yield {
+          for(i <- 0 until expr.varCount) yield {
             val j = vars.indexWhere(_ == i)
-            if(j >= 0)
+            if(j != -1)
               victim.args(j)
             else
-              v
+              args(shiftfun(i))
           }
         nodeRunner(expr, newargs)
       case Let(vars) =>
         // Well, it's not lazy yet, but I don't know how to do laziness right in scala
+        val shiftfun = Renaming.shift(vars.toSet) _
         val newargs =
-          for((v,i) <- args.zipWithIndex) yield {
+          for(i <- 0 until dests(0).varCount) yield {
             val j = vars.indexWhere(_ == i)
             if(j != -1)
               nodeRunner(dests(j + 1), args)
             else
-              v
+              args(shiftfun(i))
           }
         nodeRunner(dests(0), newargs)
       case Tick() =>
@@ -176,13 +254,21 @@ class Node(var mused: Set[Int]) {
   val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
   
+  def varCount: Int =
+    if(used.isEmpty) 0 else used.max + 1
+  
   def used: Set[Int] = 
     if(gluedTo == null) mused else getRealNode.used
-  def outs: collection.mutable.Set[Hyperedge] = 
-    if(gluedTo == null) mouts else getRealNode.outs
-  def ins: collection.mutable.Set[Hyperedge] = 
-    if(gluedTo == null) mins else getRealNode.ins
+  def outs: Set[Hyperedge] = 
+    if(gluedTo == null) mouts.toSet else getRealNode.outs
+  def ins: Set[Hyperedge] = 
+    if(gluedTo == null) mins.toSet else getRealNode.ins
   
+  def outsMut: collection.mutable.Set[Hyperedge] = 
+    if(gluedTo == null) mouts else getRealNode.outsMut
+  def insMut: collection.mutable.Set[Hyperedge] = 
+    if(gluedTo == null) mins else getRealNode.insMut
+    
   // Sometimes the node was glued to some other node...
   // Imperative programming sucks, I know
   def getRealNode: Node =
@@ -203,4 +289,30 @@ class Node(var mused: Set[Int]) {
       "\n\nuses: " + used.mkString(" ") +
       "\n\nouts:\n" + outs.mkString("\n") +
       "\n\nins:\n" + ins.mkString("\n"))
+}
+
+object Hyperedge {
+  // Create a new auxiliary node for this hyperedge
+  def apply(l: Label, dst: List[Node]): Hyperedge = {
+    val h = Hyperedge(l, null, dst)
+    val n = new Node(h.used)
+    val res = h.from(n)
+    n.outsMut += res
+    res
+  }
+}
+
+object Node {
+  // Create an auxiliary node with one hyperedge
+  def apply(l: Label, dst: List[Node]): Node = 
+    Hyperedge(l, dst).source
+  
+  def apply(h: Hyperedge): Node = {
+    if(h.source == null) {
+      apply(h.label, h.dests)
+    } else {
+      h.source.outsMut += h
+      h.source
+    }
+  }
 }

@@ -6,6 +6,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def apply(s: String) {
     val success = parseAll(prog, s).successful
     assert(success) // We've modified the graph even if the parsing wasn't successful
+    // it is better to rewrite it in a bit more functional style
   }
   
   def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
@@ -21,12 +22,11 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
-  private lazy val theVar = graph.addHyperedge(Var(), List())
+  private lazy val theVar = graph.addNode(Var(), List())
   def variable: Parser[Node] =
     wholeNumber ^^
     { case i => 
-        graph.addHyperedge(
-            Hyperedge(Renaming(0 -> i.toInt), null, List(theVar))).source }
+        graph.addNode(Renaming(0 -> i.toInt), List(theVar)) }
   
   def onecase: Parser[((String, List[Int]), Node)] =
     cname ~ rep(wholeNumber) ~ "->" ~ expr ^^
@@ -35,20 +35,19 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def caseof: Parser[Node] =
     ("case" ~> expr <~ "of") ~ ("{" ~> repsep(onecase, ";") <~ "}") ^^
     { case e~lst => 
-        graph.addHyperedge(
-            CaseOf(lst.map(_._1)), e :: lst.map(_._2)) }
+        graph.addNode(CaseOf(lst.map(_._1)), e :: lst.map(_._2)) }
   
   def call: Parser[Node] =
     fname ~ rep(argexpr) ^^
     { case f~as =>
         val fun = graph.addNode(f, as.length)
-        graph.addHyperedge(Let(0 until as.length toList), fun :: as)
+        graph.addNode(Let(0 until as.length toList), fun :: as)
     }
     
   def cons: Parser[Node] =
     cname ~ rep(argexpr) ^^
     { case c~as =>
-        graph.addHyperedge(Construct(c), as) }
+        graph.addNode(Construct(c), as) }
   
   def expr: Parser[Node] =
     argexpr |
@@ -150,10 +149,10 @@ trait HyperLogger extends Hypergraph {
     super.onNewHyperedge(h)
   }
   
-  override def onNewNode(n: Node) {
+  /*override def onNewNode(n: Node) {
     println("new node " + n.uniqueName)
     super.onNewNode(n)
-  }
+  }*/
   
   override def beforeGlue(l: Node, r: Node) {
     println("glue " + l.uniqueName + " " + r.uniqueName)
@@ -161,7 +160,7 @@ trait HyperLogger extends Hypergraph {
   }
 }
 
-trait Transformer extends TheHypergraph with HyperTester {
+trait Transformer extends TheHypergraph with HyperTester with Transformations {
   val updatedNodes = collection.mutable.Set[Node]()
   
   override def onNewHyperedge(h: Hyperedge) {
@@ -182,7 +181,7 @@ trait Transformer extends TheHypergraph with HyperTester {
     println("***********************")
     updatedNodes.clear()
     for(h <- set) {
-        println("letdown")
+        /*println("letdown")
         Transformations.letDown(g, h)
         Transformations.glueAll(g)
         g.statistics()
@@ -205,7 +204,7 @@ trait Transformer extends TheHypergraph with HyperTester {
         println("propagate")
         Transformations.propagate(g, h)
         Transformations.glueAll(g)
-        g.statistics()
+        g.statistics()*/
     }
   }
 }
@@ -213,11 +212,11 @@ trait Transformer extends TheHypergraph with HyperTester {
 object Test {
   def main(args: Array[String]) {
     val g = new TheHypergraph 
-        with NamedNodes 
-        with HyperTester 
+        with NamedNodes
+        with Transformer 
         with Visualizer 
-        with HyperLogger
-        with Transformer
+        with HyperTester
+        with HyperLogger 
     
     val zero = Value("Z", List())
     val one = Value("S", List(zero))
@@ -225,13 +224,12 @@ object Test {
     val three = Value("S", List(two))
     
     val p = new ExprParser(g)
-    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 1) }")
+    p("add/2 = case 0 of { Z -> 1; S 0 -> S (add 0 2) }")
     println(g.runNode(g("add"), Vector(two, three)))
-    p("mul/2 = case 0 of { Z -> Z; S 0 -> add 1 (mul 0 1) }")
+    p("mul/2 = case 0 of { Z -> Z; S 0 -> add 2 (mul 0 2) }")
     println(g.runNode(g("mul"), Vector(two, three)))
     //p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
     //println(g.runNode(g("z"), Vector(two)))
-    Transformations.glueAll(g)
     try {
     for(i <- 0 to 50) {
       println("nodes: " + g.nodes.size)
