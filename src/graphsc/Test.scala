@@ -12,7 +12,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
   
   def definition: Parser[Node] = 
-    (sign <~ "=") ~ expr ^^
+    (sign <~ "=") ~! expr ^^
     { case (n,table)~e => graph.glueNodes(n, e(table)) }
   
   def sign: Parser[(Node, Map[String,Int])] =
@@ -32,7 +32,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
       ((n, 0 until lsize toList), e(newtable))}
   
   def caseof: Parser[Map[String,Int] => Node] =
-    ("case" ~> argexpr <~ "of") ~ ("{" ~> repsep(onecase, ";") <~ "}") ^^
+    ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
     { case e~lst => table =>
         val cases = lst.map(_(table))
         graph.addNode(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2)) }
@@ -58,6 +58,11 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     { case c~as => table =>
         graph.addNode(Construct(c), as.map(_(table))) }
   
+  def zeroargCons: Parser[Map[String,Int] => Node] =
+    cname ^^
+    { case c => table =>
+        graph.addNode(Construct(c), List()) }
+  
   def expr: Parser[Map[String,Int] => Node] =
     caseof |
     "(" ~> expr <~ ")" |
@@ -67,6 +72,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def argexpr: Parser[Map[String,Int] => Node] =
     variable |
     caseof |
+    zeroargCons |
     "(" ~> expr <~ ")"
     
 }
@@ -228,18 +234,25 @@ object Test {
         with HyperTester
         with HyperLogger 
     
-    val zero = Value("Z", List())
-    val one = Value("S", List(zero))
-    val two = Value("S", List(one))
-    val three = Value("S", List(two))
+    def peano(i: Int): Value =
+      if(i == 0)
+        Value("Z", List())
+      else
+        Value("S", List(peano(i-1)))
     
     val p = new ExprParser(g)
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
-    println(g.runNode(g("add"), Vector(two, three)))
+    assert(g.runNode(g("add"), Vector(peano(2), peano(3))) == peano(5))
     p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
-    println(g.runNode(g("mul"), Vector(two, three)))
-    //p("z/1 = case 0 of {Z -> Z; S 0 -> S (z 0)}")
-    //println(g.runNode(g("z"), Vector(two)))
+    assert(g.runNode(g("mul"), Vector(peano(2), peano(3))) == peano(6))
+    p("id x = case x of {Z -> Z; S x -> S (id x)}")
+    assert(g.runNode(g("id"), Vector(peano(3))) == peano(3))
+    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    assert(g.runNode(g("nrev"), Vector(peano(2))) == peano(2))
+    p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
+    assert(g.runNode(g("fac"), Vector(peano(4))) == peano(24))
+    p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
+    assert(g.runNode(g("fib"), Vector(peano(6))) == peano(8))
     try {
     for(i <- 0 to 50) {
       println("nodes: " + g.nodes.size)
