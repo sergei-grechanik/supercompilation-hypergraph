@@ -3,9 +3,13 @@ package graphsc
 trait Hypergraph {
   // h should be with known dests and null source
   // if source is not null then perform gluing
+  // this function may perform some hyperedge transformations
   def addHyperedge(h: Hyperedge)
     
+  // note that this function doesn't copy the node n,
+  // so you cannot use n afterwards as a free node
   def addNode(n: Node): Node
+  
   def addNode(l: Label, ds: List[Node]): Node = addNode(Node(l, ds))
   def newNode(used: Set[Int]): Node
   def removeNode(n: Node)
@@ -17,10 +21,6 @@ trait Hypergraph {
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
-  
-  // Transformations should call this function before performing transformations
-  // they should pass a list of hyperedges being transformed
-  def transforming(h: Hyperedge*) {}
 }
 
 class TheHypergraph extends Hypergraph {
@@ -45,6 +45,7 @@ class TheHypergraph extends Hypergraph {
         case Some(x) => glueNodes(h.source, x.source); x.derefGlued
         case None => 
           val newh = addHyperedgeSimple(h)
+          checkIntegrity()
           onNewHyperedge(newh)
           newh
       }
@@ -54,6 +55,7 @@ class TheHypergraph extends Hypergraph {
         case Some(n) => glueNodes(h.source, n); h.derefGlued
         case None => 
           val newh = addHyperedgeSimple(h)
+          checkIntegrity()
           onNewHyperedge(newh)
           newh
       }
@@ -68,8 +70,11 @@ class TheHypergraph extends Hypergraph {
           glueNodes(src, ds(0))
         else {
           // We also add a backward renaming
-          addHyperedgeImpl(Hyperedge(r1.inv, ds(0), List(src)))
           addHyperedgeImpl(Hyperedge(r1, src, ds))
+          // There is a sublety: we should add an invese renaming
+          // after the main renaming because otherwise we could introduce
+          // a hyperedge to a node that is not defined yet, causing the HyperTester to crash
+          addHyperedgeImpl(Hyperedge(r1.inv, ds(0), List(src)))
         }
       case Let(vars) if vars.isEmpty =>
         glueNodes(src, ds(0))
@@ -79,11 +84,19 @@ class TheHypergraph extends Hypergraph {
   }
   
   override def addNode(n: Node): Node = {
-    if(!nodes(n.getRealNode)) {
-      nodes.add(n.getRealNode)
-      for(h <- n.outs)
+    val realn = n.getRealNode
+    if(!nodes(realn)) {
+      val outs = realn.outs
+      // we should remove all connections before adding the node
+      // to preserve integrity of the hypergraph
+      // the connections will be restored later
+      realn.outsMut.clear
+      realn.insMut.clear
+      nodes.add(realn)
+      for(h <- outs)
         addHyperedge(h)
     }
+    checkIntegrity()
     n.getRealNode
   }
   
@@ -106,6 +119,7 @@ class TheHypergraph extends Hypergraph {
     }
     for(h <- n.outs; d <- h.dests if d != n)
       d.insMut -= h
+    checkIntegrity()
   }
   
   override def glueNodes(l1: Node, r1: Node): Node = {
@@ -120,16 +134,22 @@ class TheHypergraph extends Hypergraph {
     val r = r1.getRealNode
     
     if(l != r) {
+      // We add temporary id hyperedges, so that HyperTester won't crash
+      addHyperedgeSimple(Hyperedge(Renaming(), l, List(r)))
+      addHyperedgeSimple(Hyperedge(Renaming(), r, List(l)))
       beforeGlue(l, r)
+      
       removeNode(r)
       l.mused = l.used & r.used
       r.gluedTo = l
-      assert(nodes.forall(_.gluedTo == null))
       for(h <- r.mouts)
         addHyperedgeSimple(h.derefGlued)
       for(h <- r.mins)
         addHyperedgeSimple(h.derefGlued)
+        
+      // TODO: Remove temporary id hyperedges
       afterGlue(l)
+      checkIntegrity()
       // maybe there appeared some more nodes to glue 
       glueParents(l)
       // Now l may be glued to something else
@@ -167,11 +187,16 @@ class TheHypergraph extends Hypergraph {
   
   def checkIntegrity() {
     for(n <- nodes) {
+      assert(n.getRealNode == n)
       for(h <- n.ins) {
+        assert(nodes(h.source))
+        assert(h.dests.forall(nodes(_)))
         assert(h.source.outs(h))
         assert(h.dests.forall(_.ins(h)))
       }
       for(h <- n.outs) {
+        assert(nodes(h.source))
+        assert(h.dests.forall(nodes(_)))
         assert(h.dests.forall(_.ins(h)))
         assert(h.source == n)
       }

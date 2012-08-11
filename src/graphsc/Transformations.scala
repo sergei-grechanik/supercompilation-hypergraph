@@ -1,12 +1,33 @@
 package graphsc
 
-trait Transformations extends TheHypergraph {
-  /*
+object Transformations {
+  
   private def isOrdered[T](l: List[T])(implicit ord: Ordering[T]): Boolean =
     (l, l.tail).zipped.forall(ord.lteq(_, _))
-  
+    
+  def letSimplify: PartialFunction[Hyperedge, List[Hyperedge]] = {
+    case Hyperedge(Let(xs), src, f :: es) if xs.exists(!f.used(_)) || !isOrdered(xs) =>
+      import Renaming._
+      val oldxsset = xs.toSet
+      val newxes = (xs zip es).filter(f used _._1).sortBy(_._1)
+      val newxs = newxes.map(_._1)
+      val newes = newxes.map(_._2)
+      val newxsset = newxs.toSet
+      val n = f.varCount
+      val theta = 
+        shiftInvRenaming(newxsset, n) comp shiftInvRenaming(oldxsset, n).inv reduce f.used
+      if(theta.isId)
+        List(Hyperedge(Let(newxs), src, f :: newes))
+      else {
+        val f1 = Hyperedge(theta, List(f))
+        List(Hyperedge(Let(newxs), src, f1.source :: newes), f1)
+      }
+  }
+    
+  /*
   def letSimplify: PartialFunction[Hyperedge, Unit] = {
     case Hyperedge(Let(xs), src, f :: es) if xs.exists(!f.used(_)) || !isOrdered(xs.sorted) =>
+    
       
   }
   

@@ -192,7 +192,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     def nodeRunner(n: Node, args: IndexedSeq[Value]): Value = {
       // we replace unused variables with nulls to 
       // normalize our argument list
-      // should we move this code to HyperTester?
+      // TODO: should we move this code to HyperTester?
       val newargs =
         if(n.used.nonEmpty)
           Vector() ++

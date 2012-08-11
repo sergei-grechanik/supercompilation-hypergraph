@@ -154,12 +154,6 @@ trait Visualizer extends TheHypergraph {
 }
 
 trait HyperLogger extends Hypergraph {
-  override def transforming(hs: Hyperedge*) {
-    println("transforming:")
-    for(h <- hs)
-      println("    " + h)
-  }
-  
   override def onNewHyperedge(h: Hyperedge) {
     println("new " + h)
     super.onNewHyperedge(h)
@@ -176,7 +170,7 @@ trait HyperLogger extends Hypergraph {
   }
 }
 
-trait Transformer extends TheHypergraph with HyperTester with Transformations {
+trait Transformer extends TheHypergraph with HyperTester {
   val updatedNodes = collection.mutable.Set[Node]()
   
   override def onNewHyperedge(h: Hyperedge) {
@@ -189,14 +183,35 @@ trait Transformer extends TheHypergraph with HyperTester with Transformations {
     super.afterGlue(n)
   }
   
+  def transforming(hs: Hyperedge*) {
+    println("transforming:")
+    for(h <- hs)
+      println("    " + h)
+  }
+  
+  def transform(h: Hyperedge, t: PartialFunction[Hyperedge, List[Hyperedge]]) {
+    t.lift(h) match {
+      case Some(l) =>
+        transforming(h)
+        for(nh <- l)
+          addHyperedge(nh)
+      case None =>
+    }
+  }
+  
   def transform() {
-    val set = updatedNodes.map(n => n.outs ++ n.ins).flatten
+    import Transformations._
+    val reallyUpdated = updatedNodes.map(_.getRealNode)
+    val set = reallyUpdated.map(n => n.outs ++ n.ins).flatten
     val g = this
     println("***********************")
-    println("*** updnodes: " + updatedNodes.size + " hyp: " + set.size)
+    println("*** updnodes: " + reallyUpdated.size + " hyp: " + set.size)
     println("***********************")
     updatedNodes.clear()
     for(h <- set) {
+      g.statistics()
+      println("letSimplify")
+      transform(h, letSimplify)
         /*println("letdown")
         Transformations.letDown(g, h)
         Transformations.glueAll(g)
@@ -234,25 +249,35 @@ object Test {
         with HyperTester
         with HyperLogger 
     
-    def peano(i: Int): Value =
+    implicit def peano(i: Int): Value =
       if(i == 0)
         Value("Z", List())
       else
         Value("S", List(peano(i-1)))
+        
+    def list(vs: Value*): Value = 
+      (vs :\ Value("N", List()))((x, y) => Value("C", List(x, y)))
     
     val p = new ExprParser(g)
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
-    assert(g.runNode(g("add"), Vector(peano(2), peano(3))) == peano(5))
+    assert(g.runNode(g("add"), Vector(2, 3)) == peano(5))
     p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
-    assert(g.runNode(g("mul"), Vector(peano(2), peano(3))) == peano(6))
+    assert(g.runNode(g("mul"), Vector(2, 3)) == peano(6))
+    p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
+    assert(g.runNode(g("padd"), Vector(2, 3)) == peano(5))
+    p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
+    assert(g.runNode(g("pmul"), Vector(2, 3)) == peano(6))
     p("id x = case x of {Z -> Z; S x -> S (id x)}")
-    assert(g.runNode(g("id"), Vector(peano(3))) == peano(3))
+    assert(g.runNode(g("id"), Vector(3)) == peano(3))
     p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    assert(g.runNode(g("nrev"), Vector(peano(2))) == peano(2))
+    assert(g.runNode(g("nrev"), Vector(2)) == peano(2))
     p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
-    assert(g.runNode(g("fac"), Vector(peano(4))) == peano(24))
+    assert(g.runNode(g("fac"), Vector(4)) == peano(24))
     p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
-    assert(g.runNode(g("fib"), Vector(peano(6))) == peano(8))
+    assert(g.runNode(g("fib"), Vector(6)) == peano(8))
+    p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
+    p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
+    assert(g.runNode(g("nrevL"), Vector(list(1,2,3,4))) == list(4,3,2,1))
     try {
     for(i <- 0 to 50) {
       println("nodes: " + g.nodes.size)
