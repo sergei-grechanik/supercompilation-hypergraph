@@ -11,7 +11,7 @@ trait Hypergraph {
   def addNode(n: Node): Node
   
   def addNode(l: Label, ds: List[Node]): Node = addNode(Node(l, ds))
-  def newNode(used: Set[Int]): Node
+  def newNode(arity: Int): Node
   def removeNode(n: Node)
   
   // Nodes shouldn't be glued manually, they should be marked equal with 
@@ -64,21 +64,9 @@ class TheHypergraph extends Hypergraph {
   override def addHyperedge(h: Hyperedge) = {
     val Hyperedge(l, src, ds) = h  
     l match {
-      case r: Renaming =>
-        // We reduce renaming to the set of used variables
-        val r1 = r.reduce(ds(0).used)
-        if(r1.isId)
-          glueNodes(src, ds(0))
-        else {
-          addHyperedgeImpl(Hyperedge(r1, src, ds))
-          // We also add a backward renaming
-          // There is a subtlety: we should add an inverse renaming
-          // after the main renaming because otherwise we could introduce
-          // a hyperedge to a node that is not defined yet, causing the HyperTester to crash
-          addHyperedgeImpl(Hyperedge(r1.inv, ds(0), List(src)))
-        }
-      case Let(vars) if vars.isEmpty =>
-        glueNodes(src, ds(0))
+      //case Let() if ds.length == 1 =>
+        // TODO: let x = x in e(x)
+        //glueNodes(src, ds(0))
       case _ =>
         addHyperedgeImpl(Hyperedge(l, src, ds))
     }
@@ -101,8 +89,8 @@ class TheHypergraph extends Hypergraph {
     n.getRealNode
   }
   
-  override def newNode(used: Set[Int]): Node = {
-    val n = new Node(used)
+  override def newNode(arity: Int): Node = {
+    val n = new Node(arity)
     nodes.add(n)
     n
   }
@@ -137,14 +125,10 @@ class TheHypergraph extends Hypergraph {
     val r = r1.getRealNode
     
     if(l != r) {
-      assert(l.used == r.used)
-      // We intersect the sets of used variables
-      // for now gluing two nodes is the only way to reduce the used set
-      l.mused = l.used & r.used
-      r.mused = l.mused
+      assert(l.arity == r.arity)
       // We add temporary id hyperedges, so that HyperTester won't crash
-      addHyperedgeSimple(Hyperedge(Renaming(), l, List(r)))
-      addHyperedgeSimple(Hyperedge(Renaming(), r, List(l)))
+      addHyperedgeSimple(Hyperedge(Improvement(), l, List(r)))
+      addHyperedgeSimple(Hyperedge(Improvement(), r, List(l)))
       beforeGlue(l, r)
       
       checkIntegrity()
@@ -223,7 +207,7 @@ trait NamedNodes extends Hypergraph {
       namedNodes(n)
     }
     else {
-      val node = newNode((0 until arity).toSet)
+      val node = newNode(arity)
       namedNodes += n -> node
       node
     }
@@ -316,21 +300,8 @@ trait HyperTester extends TheHypergraph {
   override def beforeGlue(l: Node, r: Node) {
     val ctx = new RunningContext
     val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
-    val used = l.used & r.used
     for((n,a) <- data) {
-      val newa =
-        if(used.nonEmpty)
-          Vector() ++
-          (0 to used.max).map { i =>
-            if(used(i)) a(i) else null
-          }
-        else
-          Vector()
-      
-      if(newa != a)
-        runCache.remove((n,a))
-        
-      assert(runNode(ctx, l, newa) == runNode(ctx, r, newa))
+      assert(runNode(ctx, l, a) == runNode(ctx, r, a))
     }
     checkFailed(ctx)
     super.beforeGlue(l, r)

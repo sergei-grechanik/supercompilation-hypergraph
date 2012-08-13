@@ -22,14 +22,21 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
-  private lazy val theVar = graph.addNode(Var(), List())
+  private def theVar(a: Int, v: Int): Node = graph.addNode(Var(a, v), List())
   
-  def onecase: Parser[Map[String,Int] => ((String, List[Int]), Node)] =
+  private def tableArity(table: Map[String, Int]): Int =
+    if(table.isEmpty)
+      0
+    else
+      table.values.max + 1
+  
+  def onecase: Parser[Map[String,Int] => ((String, Int), Node)] =
     cname ~ rep(fname) ~ "->" ~ expr ^^
     {case n~l~"->"~e => table =>
       val lsize = l.size
-      val newtable = table.mapValues(_ + lsize) ++ l.zipWithIndex
-      ((n, 0 until lsize toList), e(newtable))}
+      val ar = tableArity(table)
+      val newtable = table ++ (l zip (0 until lsize).map(_ + ar))
+      ((n, lsize), e(newtable))}
   
   def caseof: Parser[Map[String,Int] => Node] =
     ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
@@ -41,33 +48,34 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     fname ~ rep(argexpr) ^^
     { case f~as => table =>
         if(as.isEmpty && table.contains(f))
-          graph.addNode(Renaming(0 -> table(f)), List(theVar))
+          theVar(tableArity(table), table(f))
         else {
           val fun = graph.addNode(f, as.length)
-          graph.addNode(Let(0 until as.length toList), fun :: as.map(_(table)))
+          graph.addNode(Let(tableArity(table)), fun :: as.map(_(table)))
         }
     }
   
   def variable: Parser[Map[String,Int] => Node] =
     fname ^^
-    { case f => table =>
-        graph.addNode(Renaming(0 -> table(f)), List(theVar)) }
+    { case f => table => theVar(tableArity(table), table(f))}
     
   def cons: Parser[Map[String,Int] => Node] =
-    cname ~ rep(argexpr) ^^
+    cname ~ rep1(argexpr) ^^
     { case c~as => table =>
         graph.addNode(Construct(c), as.map(_(table))) }
   
   def zeroargCons: Parser[Map[String,Int] => Node] =
     cname ^^
     { case c => table =>
-        graph.addNode(Construct(c), List()) }
+        graph.addNode(Let(tableArity(table)), List(
+            graph.addNode(Construct(c), List()))) }
   
   def expr: Parser[Map[String,Int] => Node] =
     caseof |
     "(" ~> expr <~ ")" |
     call |
-    cons
+    cons |
+    zeroargCons
   
   def argexpr: Parser[Map[String,Int] => Node] =
     variable |
@@ -222,6 +230,8 @@ trait Transformer extends TheHypergraph with HyperTester {
     println("***********************")
     updatedNodes.clear()
     for(h <- set) {
+      statistics()
+      /*
       println("letSimplify")
       transform(h, letSimplify)
       println("letVar")
@@ -230,7 +240,7 @@ trait Transformer extends TheHypergraph with HyperTester {
       transform(h, letRenaming)
       println("letCaseOf")
       transform(h, letCaseOf)
-        /*println("letdown")
+        println("letdown")
         Transformations.letDown(g, h)
         Transformations.glueAll(g)
         g.statistics()

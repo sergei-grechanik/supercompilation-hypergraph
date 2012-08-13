@@ -1,7 +1,7 @@
 package graphsc
 
 object Transformations {
-  
+  /*
   private def isOrdered[T](l: List[T])(implicit ord: Ordering[T]): Boolean =
     (l, l.tail).zipped.forall(ord.lteq(_, _))
     
@@ -68,7 +68,7 @@ object Transformations {
       List(Hyperedge(CaseOf(cases), src, newg :: newhs))
   }
     
-  /*
+  
   // let e in (a + b) -> (let e in a) + (let e in b)
   // let x = e in x -> e
   def letDown(g: Hypergraph, let: Hyperedge) = let match {
