@@ -15,6 +15,9 @@ case class CaseOf(cases: List[(String, Int)])
 case class Let(arity: Int)
   extends Label
 
+case class Id
+  extends Label
+  
 case class Tick
   extends Label
   
@@ -96,6 +99,8 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       case Tick() =>
         nodeRunner(dests(0), args)
       case Improvement() =>
+        nodeRunner(dests(0), args)
+      case Id() => 
         nodeRunner(dests(0), args)
       case Var(ar, i) =>
         assert(args.length == ar)

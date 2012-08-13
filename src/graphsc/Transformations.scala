@@ -1,6 +1,35 @@
 package graphsc
 
 object Transformations {
+  
+  def letVar: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(a1), src1, f1 :: es1),
+          Hyperedge(Var(a2, i), src2, List())) if f1 == src2 =>
+      List(Hyperedge(Id(), src1, List(es1(i))))
+  }
+  
+  def letLet: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(a1), src1, f1 :: es1),
+          Hyperedge(Let(a2), src2, f2 :: es2)) if f1 == src2 =>
+      val newes = es2.map(e => Node(Let(a2), e :: es1))
+      List(Hyperedge(Let(a1), src1, f2 :: newes))
+  }
+  
+  def letCaseOf: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(a1), src1, f :: es),
+          Hyperedge(CaseOf(cases), src2, g :: hs)) if f == src2 =>
+      val newg = Node(Let(a1), g :: es)
+      val newhs = (cases zip hs).map { case ((_,n),h) =>
+          val newes = es.map { e => 
+            Node(Let(a1 + n), e :: 
+                (0 until a1).map(i => Node(Var(a1 + n, i), Nil)).toList) 
+          }
+          val ys = (0 until n).map(i => Node(Var(a1 + n, a1 + i), Nil))
+          Node(Let(a1 + n), h :: newes ++ ys)
+        }
+      List(Hyperedge(CaseOf(cases), src1, newg :: newhs))
+  }
+  
   /*
   private def isOrdered[T](l: List[T])(implicit ord: Ordering[T]): Boolean =
     (l, l.tail).zipped.forall(ord.lteq(_, _))
