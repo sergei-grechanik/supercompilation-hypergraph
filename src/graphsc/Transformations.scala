@@ -5,17 +5,29 @@ object Transformations {
   private def isOrdered[T](l: List[T])(implicit ord: Ordering[T]): Boolean =
     (l, l.tail).zipped.forall(ord.lteq(_, _))
     
+  // Remove unused bound variables and sort them
   def letSimplify: PartialFunction[Hyperedge, List[Hyperedge]] = {
     case Hyperedge(Let(xs), src, f :: es) if xs.exists(!f.used(_)) || !isOrdered(xs) =>
       import Renaming._
+      println("f.used = " + f.used)
       val oldxsset = xs.toSet
+      println("oldxsset = " + oldxsset)
       val newxes = (xs zip es).filter(f used _._1).sortBy(_._1)
       val newxs = newxes.map(_._1)
+      println("newxs = " + newxs)
       val newes = newxes.map(_._2)
       val newxsset = newxs.toSet
       val n = f.varCount
+      println("n = " + n)
+      val sirnew = shiftInvRenaming(newxsset, n)
+      println("sirnew = " + sirnew)
+      val sirold = shiftInvRenaming(oldxsset, n)
+      println("sirold = " + sirold)
+      println("sirold.inv = " + sirold.inv)
+      println("sirnew . sirold.inv = " + (sirnew comp sirold.inv))
       val theta = 
-        shiftInvRenaming(newxsset, n) comp shiftInvRenaming(oldxsset, n).inv reduce f.used
+        (sirnew comp sirold.inv) reduce f.used
+      println("theta = " + theta)
       if(theta.isId)
         List(Hyperedge(Let(newxs), src, f :: newes))
       else {
@@ -23,24 +35,40 @@ object Transformations {
         List(Hyperedge(Let(newxs), src, f1.source :: newes), f1)
       }
   }
+  
+  // let x = e in x  ->  e
+  def letVar: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(xs), src, f :: es), Hyperedge(Var(), f1, List())) if f == f1 =>
+      List(Hyperedge(Renaming(), src, List(es(0))))
+  }
+  
+  // let x = e in θ f  ->  θ' let θx = θ'^-1 e in f
+  def letRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(xs), src, f :: es), 
+          Hyperedge(ren: Renaming, f1, List(dst))) if f == f1 =>
+      val (theta, newxs) = ren.upThroughBinding(xs)
+      val thetainv = theta.inv
+      val newxes = (newxs zip es).sortBy(_._1)
+      val newes = newxes.map(e => Hyperedge(thetainv, List(e._2)))
+      val dst1 = Hyperedge(Let(newxes.map(_._1)), dst :: newes.map(_.source))
+      List(Hyperedge(theta, src, List(dst1.source)), dst1) ++ newes
+  }
+  
+  // let x = e in case g of h  ->  case (let x = e in g) of (let shInv x = shInv e in h)
+  def letCaseOf: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(xs), src, f :: es), 
+          Hyperedge(CaseOf(cases), f1, g :: hs)) if f == f1 =>
+      val newg = Node(Let(xs), g :: es)
+      val varcount = (xs.max + 1) max es.map(_.varCount).max
+      val newhs = (cases zip hs).map { case ((_,bnd), h) =>
+        val shinv = Renaming.shiftInvRenaming(bnd.toSet, varcount)
+        val shinves = es.map(e => Node(shinv, List(e)))
+        Node(Let(xs.map(shinv(_))), h :: shinves)
+      }
+      List(Hyperedge(CaseOf(cases), src, newg :: newhs))
+  }
     
   /*
-  def letSimplify: PartialFunction[Hyperedge, Unit] = {
-    case Hyperedge(Let(xs), src, f :: es) if xs.exists(!f.used(_)) || !isOrdered(xs.sorted) =>
-    
-      
-  }
-  
-  def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
-    case (Hyperedge(Let(xs), src, f :: es), Hyperedge(Var(), f1, List())) if f == f1 =>
-      glueNodes(es(0), src)
-  }
-  
-  def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
-    case (Hyperedge(Let(xs), src, f :: es), Hyperedge(Var(), f1, List())) if f == f1 =>
-      glueNodes(es(0), src)
-  }
-  
   // let e in (a + b) -> (let e in a) + (let e in b)
   // let x = e in x -> e
   def letDown(g: Hypergraph, let: Hyperedge) = let match {

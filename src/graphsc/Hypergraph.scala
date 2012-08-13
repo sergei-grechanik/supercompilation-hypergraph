@@ -65,13 +65,14 @@ class TheHypergraph extends Hypergraph {
     val Hyperedge(l, src, ds) = h  
     l match {
       case r: Renaming =>
+        // We reduce renaming to the set of used variables
         val r1 = r.reduce(ds(0).used)
         if(r1.isId)
           glueNodes(src, ds(0))
         else {
-          // We also add a backward renaming
           addHyperedgeImpl(Hyperedge(r1, src, ds))
-          // There is a sublety: we should add an invese renaming
+          // We also add a backward renaming
+          // There is a subtlety: we should add an inverse renaming
           // after the main renaming because otherwise we could introduce
           // a hyperedge to a node that is not defined yet, causing the HyperTester to crash
           addHyperedgeImpl(Hyperedge(r1.inv, ds(0), List(src)))
@@ -124,23 +125,30 @@ class TheHypergraph extends Hypergraph {
   
   override def glueNodes(l1: Node, r1: Node): Node = {
     // just for convenience, this feature is undocumented, don't use it
-    if(l1 == null) return r1
-    if(r1 == null) return l1
+    if(l1 == null) return r1.getRealNode
+    if(r1 == null) return l1.getRealNode
     
-    if(!nodes.contains(l1))
-      addNode(l1)
+    if(!nodes.contains(l1.getRealNode))
+      addNode(l1.getRealNode)
+    if(!nodes.contains(r1.getRealNode))
+      addNode(r1.getRealNode)
     
     val l = l1.getRealNode
     val r = r1.getRealNode
     
     if(l != r) {
+      assert(l.used == r.used)
+      // We intersect the sets of used variables
+      // for now gluing two nodes is the only way to reduce the used set
+      l.mused = l.used & r.used
+      r.mused = l.mused
       // We add temporary id hyperedges, so that HyperTester won't crash
       addHyperedgeSimple(Hyperedge(Renaming(), l, List(r)))
       addHyperedgeSimple(Hyperedge(Renaming(), r, List(l)))
       beforeGlue(l, r)
       
+      checkIntegrity()
       removeNode(r)
-      l.mused = l.used & r.used
       r.gluedTo = l
       for(h <- r.mouts)
         addHyperedgeSimple(h.derefGlued)

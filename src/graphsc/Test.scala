@@ -77,7 +77,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     
 }
 
-class TooManyNodesException(s: String = "") extends Exception(s)
+class TooManyNodesException(s: String) extends Exception(s)
 
 trait Visualizer extends TheHypergraph {
   val dotObjects = collection.mutable.Map[String, String]()
@@ -88,7 +88,7 @@ trait Visualizer extends TheHypergraph {
   def save(e: Any = null) {
     cnt += 1
     if(cnt > 300)
-      throw new TooManyNodesException
+      throw new TooManyNodesException("")
     frames ::= dotVisible
   }
   
@@ -184,6 +184,7 @@ trait Transformer extends TheHypergraph with HyperTester {
   }
   
   def transforming(hs: Hyperedge*) {
+    statistics()
     println("transforming:")
     for(h <- hs)
       println("    " + h)
@@ -199,19 +200,36 @@ trait Transformer extends TheHypergraph with HyperTester {
     }
   }
   
+  def transform(h: Hyperedge, t: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]])
+  (implicit dummy1: DummyImplicit) {
+    for(d <- h.dests; h1 <- d.outs) {
+      t.lift(h, h1) match {
+        case Some(l) =>
+          transforming(h, h1)
+          for(nh <- l)
+            addHyperedge(nh)
+        case None =>
+      }
+    }
+  }
+  
   def transform() {
     import Transformations._
-    val reallyUpdated = updatedNodes.map(_.getRealNode)
+    val reallyUpdated = updatedNodes.map(_.getRealNode) & nodes
     val set = reallyUpdated.map(n => n.outs ++ n.ins).flatten
-    val g = this
     println("***********************")
     println("*** updnodes: " + reallyUpdated.size + " hyp: " + set.size)
     println("***********************")
     updatedNodes.clear()
     for(h <- set) {
-      g.statistics()
       println("letSimplify")
       transform(h, letSimplify)
+      println("letVar")
+      transform(h, letVar)
+      println("letRenaming")
+      transform(h, letRenaming)
+      println("letCaseOf")
+      transform(h, letCaseOf)
         /*println("letdown")
         Transformations.letDown(g, h)
         Transformations.glueAll(g)

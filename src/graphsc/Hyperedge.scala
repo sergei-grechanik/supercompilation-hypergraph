@@ -65,7 +65,7 @@ case class Renaming private(vector: Vector[Int])
   // Reduce the domain of the renaming to this set of variables
   // used to equalize more renamings
   def reduce(used: Set[Int]): Renaming =
-    Renaming(vector.zipWithIndex.filter(p => used(p._1)).toMap)
+    Renaming(vector.zipWithIndex.filter(p => used(p._2)).map(_.swap).toMap)
     
   // Move the renaming up through a binding, i.e. find r1 such that
   // this . shift(bnd) = r1 . shift(this^-1(bnd))
@@ -99,7 +99,7 @@ object Renaming {
     var freej = -1
     val vec = Vector() ++
       (0 to maxvar map { i =>
-        m.getOrElse(i, {freej += 1; free(freej)}) 
+        m.getOrElse(i, {freej += 1; free(freej)})
       })
     Renaming(vec).normalize
   }
@@ -145,7 +145,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   require(source == null || used.subsetOf(source.used))
   
   // Set of used variables
-  def used: Set[Int] = label match {
+  lazy val used: Set[Int] = label match {
     case Var() => Set(0)
     case r: Renaming => dests(0).used.map(r(_))
     case _ =>
