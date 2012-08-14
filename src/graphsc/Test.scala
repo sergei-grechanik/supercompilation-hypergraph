@@ -95,7 +95,7 @@ trait Visualizer extends TheHypergraph {
   var cnt = 0
   def save(e: Any = null) {
     cnt += 1
-    if(cnt > 300)
+    if(cnt > 3000)
       throw new TooManyNodesException("")
     frames ::= dotVisible
   }
@@ -198,9 +198,13 @@ trait Transformer extends TheHypergraph with HyperTester {
       println("    " + h)
   }
   
-  def transform(h: Hyperedge, t: PartialFunction[Hyperedge, List[Hyperedge]]) {
+  def transform(
+        h: Hyperedge, 
+        t: PartialFunction[Hyperedge, List[Hyperedge]], 
+        name: String) {
     t.lift(h) match {
       case Some(l) =>
+        println(name)
         transforming(h)
         for(nh <- l)
           addHyperedge(nh)
@@ -208,11 +212,15 @@ trait Transformer extends TheHypergraph with HyperTester {
     }
   }
   
-  def transform(h: Hyperedge, t: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]])
+  def transform(
+        h: Hyperedge, 
+        t: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]],
+        name: String)
   (implicit dummy1: DummyImplicit) {
     for(d <- h.dests; h1 <- d.outs) {
       t.lift(h, h1) match {
         case Some(l) =>
+          println(name)
           transforming(h, h1)
           for(nh <- l)
             addHyperedge(nh)
@@ -223,19 +231,23 @@ trait Transformer extends TheHypergraph with HyperTester {
   
   def transform() {
     import Transformations._
+    
+    if(nodes.size > 100)
+      throw new TooManyNodesException("")
+    
     val reallyUpdated = updatedNodes.map(_.getRealNode) & nodes
     val set = reallyUpdated.map(n => n.outs ++ n.ins).flatten
     println("***********************")
     println("*** updnodes: " + reallyUpdated.size + " hyp: " + set.size)
     println("***********************")
     updatedNodes.clear()
-    for(h <- set) {
-      println("letVar")
-      transform(h, letVar)
-      println("letLet")
-      transform(h, letLet)
-      println("letCaseOf")
-      transform(h, letCaseOf)
+    for(h <- set if h.derefGlued == h) {
+      transform(h, letVar, "letVar")
+      transform(h, letLet, "letLet")
+      transform(h, letCaseOf, "letCaseOf")
+      transform(h, caseReduce, "caseReduce")
+      transform(h, caseVar, "caseVar")
+      transform(h, caseCase, "caseCase")
       /*  println("letdown")
         Transformations.letDown(g, h)
         Transformations.glueAll(g)
@@ -269,9 +281,9 @@ object Test {
     val g = new TheHypergraph 
         with NamedNodes
         with Transformer 
-        with Visualizer 
+        //with Visualizer 
         with HyperTester
-        with HyperLogger 
+        //with HyperLogger 
     
     implicit def peano(i: Int): Value =
       if(i == 0)

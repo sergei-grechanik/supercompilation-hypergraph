@@ -4,7 +4,14 @@ case class Value(constructor: String, args: List[Value]) {
   override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
 }
 
-sealed trait Label
+sealed trait Label {
+  def almostId: Boolean = this match {
+    case Id() => true
+    case Tick() => true
+    case Improvement() => true
+    case _ => false
+  }
+}
 
 case class Construct(name: String)
   extends Label

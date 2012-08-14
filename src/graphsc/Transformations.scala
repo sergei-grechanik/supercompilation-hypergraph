@@ -11,7 +11,7 @@ object Transformations {
   def letLet: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(Let(a1), src1, f1 :: es1),
           Hyperedge(Let(a2), src2, f2 :: es2)) if f1 == src2 =>
-      val newes = es2.map(e => Node(Let(a2), e :: es1))
+      val newes = es2.map(e => Node(Let(a1), e :: es1))
       List(Hyperedge(Let(a1), src1, f2 :: newes))
   }
   
@@ -28,6 +28,62 @@ object Transformations {
           Node(Let(a1 + n), h :: newes ++ ys)
         }
       List(Hyperedge(CaseOf(cases), src1, newg :: newhs))
+  }
+  
+  def letOther: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(a1), src1, f :: es),
+          Hyperedge(l, src2, List(g))) if f == src2 && l.almostId =>
+      List(Hyperedge(l, src1, List(Node(Let(a1), g :: es))))
+  }
+  
+  def caseReduce: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(CaseOf(cases), src1, e :: hs),
+          Hyperedge(Construct(name), src2, args)) if e == src2 =>
+      val ((_,n),h) = (cases zip hs).find(_._1._1 == name).get
+      assert(n == args.size)
+      val bs = (0 until e.arity).map(i => Node(Var(e.arity, i), Nil)) ++ args
+      // TODO: Tick
+      List(Hyperedge(Let(e.arity), src1, List(h) ++ bs))
+  }
+  
+  // propagate positive information
+  def caseVar: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(CaseOf(cases), src1, e :: hs),
+          Hyperedge(Var(ar, v), src2, Nil)) if e == src2 =>
+      val newhs =
+        (cases zip hs).map { case ((c,n),h) =>
+          val value =
+            if(n == 0)
+              Node(Let(ar + n), List(Node(Construct(c), Nil)))
+            else
+              Node(Construct(c), (0 until n).map(i => Node(Var(ar + n, ar + i), Nil)).toList)
+          val bs = (0 until (ar + n)).map { i =>
+              if(i == v)
+                value
+              else
+                Node(Var(ar + n, i), Nil)
+            }
+          Node(Let(ar + n), List(h) ++ bs)
+        }
+      List(Hyperedge(CaseOf(cases), src1, e :: newhs))
+  }
+  
+  def caseCase: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(CaseOf(cases1), src1, e1 :: hs1),
+          Hyperedge(CaseOf(cases2), src2, e2 :: hs2)) if e1 == src2 =>
+      val newhs2 =
+        (cases2 zip hs2).map { case ((_,n),h) =>
+            val newhs1 = (cases1 zip hs1).map { case ((_,m),g) =>
+                val bs = (0 until g.arity).map(i => 
+                  if(i < g.arity - m)
+                    Node(Var(h.arity + m, i), Nil)
+                  else
+                    Node(Var(h.arity + m, i + n), Nil))
+                Node(Let(h.arity + m), List(g) ++ bs)
+              }
+            Node(CaseOf(cases1), h :: newhs1)
+          }
+      List(Hyperedge(CaseOf(cases2), src1, e2 :: newhs2))
   }
   
   /*

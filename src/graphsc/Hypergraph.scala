@@ -127,8 +127,8 @@ class TheHypergraph extends Hypergraph {
     if(l != r) {
       assert(l.arity == r.arity)
       // We add temporary id hyperedges, so that HyperTester won't crash
-      addHyperedgeSimple(Hyperedge(Improvement(), l, List(r)))
-      addHyperedgeSimple(Hyperedge(Improvement(), r, List(l)))
+      addHyperedgeSimple(Hyperedge(Id(), l, List(r)))
+      addHyperedgeSimple(Hyperedge(Id(), r, List(l)))
       beforeGlue(l, r)
       
       checkIntegrity()
@@ -233,11 +233,11 @@ trait HyperTester extends TheHypergraph {
   def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = 
     runCache.get((n,args)) match {
       case Some(v) =>
-        println(n.uniqueName + "(" + args + ") = " + v)
+        //println(n.uniqueName + "(" + args + ") = " + v)
         v
       case None => 
         val res = runNodeUncached(ctx, n, args)
-        println(n.uniqueName + "(" + args + ") = " + res)
+        //println(n.uniqueName + "(" + args + ") = " + res)
         res
     }
     
@@ -301,6 +301,7 @@ trait HyperTester extends TheHypergraph {
     val ctx = new RunningContext
     val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
     for((n,a) <- data) {
+      //println("testing " + a + " expect " + runCache((n,a)))
       assert(runNode(ctx, l, a) == runNode(ctx, r, a))
     }
     checkFailed(ctx)
@@ -318,7 +319,7 @@ trait HyperTester extends TheHypergraph {
       l match {
         case (n1, m1) :: tl =>
           for((n, m) <- s) {
-            if(m == m1)
+            if(m == m1 && m.nonEmpty)
               return fun(s, tl)
           }
           fun(s + (n1 -> m1), tl)
