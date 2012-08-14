@@ -2,6 +2,40 @@ package graphsc
 
 object Transformations {
   
+  def isVar(n: Node): Boolean =
+    n.outs.exists(h => h.label.isInstanceOf[Var])
+  
+  def getVar(n: Node): Int =
+    n.outs.collectFirst{ case Hyperedge(Var(a, i), _, _) => i }.get
+    
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+    
+  def varToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
+    case Hyperedge(Var(a, v), src, Nil) =>
+      List(Hyperedge(Renaming(a, List(v)), src, List(Node(Var(1,0), Nil))))
+  }
+    
+  def letToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
+    case Hyperedge(Let(a), src, f :: es) if es.forall(isVar(_)) =>
+      List(Hyperedge(Renaming(a, es.map(getVar(_))), src, List(f)))
+  }
+  
+  def letRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Let(a1), src1, f1 :: es1),
+          Hyperedge(Renaming(a2, vec), src2, List(f2))) if f1 == src2 =>
+      List(Hyperedge(Let(a1), src1, f2 :: vec.map(es1(_))))
+  }
+  
+  def renamingRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Renaming(a1, vec1), src1, List(f1)),
+          Hyperedge(Renaming(a2, vec2), src2, List(f2))) if f1 == src2 =>
+      List(Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2)))
+  }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+    
   def letVar: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(Let(a1), src1, f1 :: es1),
           Hyperedge(Var(a2, i), src2, List())) if f1 == src2 =>
@@ -30,11 +64,15 @@ object Transformations {
       List(Hyperedge(CaseOf(cases), src1, newg :: newhs))
   }
   
+  // Construct, Id, Tick, Improvement...
   def letOther: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(Let(a1), src1, f :: es),
-          Hyperedge(l, src2, List(g))) if f == src2 && l.almostId =>
-      List(Hyperedge(l, src1, List(Node(Let(a1), g :: es))))
+          Hyperedge(l, src2, gs)) if f == src2 && l.isSimple && gs.nonEmpty =>
+      List(Hyperedge(l, src1, gs.map(g => Node(Let(a1), g :: es))))
   }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
   
   def caseReduce: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(CaseOf(cases), src1, e :: hs),
@@ -85,5 +123,8 @@ object Transformations {
           }
       List(Hyperedge(CaseOf(cases2), src1, e2 :: newhs2))
   }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
 }

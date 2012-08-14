@@ -5,10 +5,11 @@ case class Value(constructor: String, args: List[Value]) {
 }
 
 sealed trait Label {
-  def almostId: Boolean = this match {
+  def isSimple: Boolean = this match {
     case Id() => true
     case Tick() => true
     case Improvement() => true
+    case Construct(_) => true
     case _ => false
   }
 }
@@ -22,6 +23,12 @@ case class CaseOf(cases: List[(String, Int)])
 case class Let(arity: Int)
   extends Label
 
+// Like Let, but binds variables only to variables
+case class Renaming(arity: Int, vector: List[Int])
+  extends Label {
+  require(vector.forall(_ < arity))
+}
+  
 case class Id
   extends Label
   
@@ -46,6 +53,9 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       assert(dests(0).arity == dests.tail.size)
       assert(dests.tail.forall(_.arity == ar))
       ar
+    case Renaming(ar, vec) =>
+      assert(dests(0).arity == vec.size)
+      ar
     case CaseOf(cases) =>
       assert(cases.size == dests.size - 1)
       val ar = dests(0).arity
@@ -59,7 +69,23 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
           assert(ds.forall(_.arity == ar))
           ar
       }
-  } 
+  }
+  
+  def isId: Boolean = label match {
+    case Id() => true
+    case Let(ar) =>
+      ar == dests.tail.length &&
+      dests.tail.zipWithIndex.forall { case (d,i) =>
+        d.outs.exists(h => h.label match {
+          case Var(_, j) if i == j => true
+          case _ => false
+        })
+      }
+    case Renaming(ar, vec) =>
+      ar == vec.length &&
+      vec.zipWithIndex.forall{ case (a,b) => a == b }
+    case _ => false
+  }
   
   // Returns the same hyperedge but with different source
   def from(newsrc: Node): Hyperedge =
@@ -103,6 +129,8 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
       case Let(_) =>
         // Well, it's not lazy yet, but I don't know how to do laziness right in scala
         nodeRunner(dests(0), Vector() ++ dests.tail.map(nodeRunner(_, args)))
+      case Renaming(_, vec) =>
+        nodeRunner(dests(0), Vector() ++ vec.map(args(_)))
       case Tick() =>
         nodeRunner(dests(0), args)
       case Improvement() =>

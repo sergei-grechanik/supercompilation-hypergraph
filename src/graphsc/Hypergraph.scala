@@ -64,8 +64,7 @@ class TheHypergraph extends Hypergraph {
   override def addHyperedge(h: Hyperedge) = {
     val Hyperedge(l, src, ds) = h  
     l match {
-      // TODO: let x = x in e(x)
-      case Id() =>
+      case _ if h.isId =>
         glueNodes(src, ds(0))
       case _ =>
         addHyperedgeImpl(Hyperedge(l, src, ds))
