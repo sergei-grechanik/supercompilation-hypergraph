@@ -5,20 +5,34 @@ object Transformations {
   def isVar(n: Node): Boolean =
     n.outs.exists(h => h.label.isInstanceOf[Var])
   
-  def getVar(n: Node): Int =
-    n.outs.collectFirst{ case Hyperedge(Var(a, i), _, _) => i }.get
+  def getVar(n: Node): Option[Int] =
+    n.outs.collectFirst{ case Hyperedge(Var(a, i), _, _) => i }
+  
+  def isInj[T](l: Seq[T]): Boolean = 
+    l.distinct == l
+  
+  def sequence[T](l: List[List[T]]): List[List[T]] = l match {
+    case (h :: t) => for(x <- h; y <- sequence(t)) yield x :: y
+    case Nil => List(Nil)
+  }
     
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
-    
+  
+  /*def renamingToId: PartialFunction[Hyperedge, List[Hyperedge]] = {
+    case Hyperedge(Renaming(a, vec), src, List(n)) if
+      a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
+      List(Hyperedge(Id(), src, List(n)))
+  }*/
+  
   def varToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
     case Hyperedge(Var(a, v), src, Nil) =>
       List(Hyperedge(Renaming(a, List(v)), src, List(Node(Var(1,0), Nil))))
   }
     
   def letToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
-    case Hyperedge(Let(a), src, f :: es) if es.forall(isVar(_)) =>
-      List(Hyperedge(Renaming(a, es.map(getVar(_))), src, List(f)))
+    case Hyperedge(Let(a), src, f :: es) if isInj(es.map(getVar(_))) =>
+      List(Hyperedge(Renaming(a, es.map(getVar(_).get)), src, List(f)))
   }
   
   def letRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
@@ -31,6 +45,51 @@ object Transformations {
     case (Hyperedge(Renaming(a1, vec1), src1, List(f1)),
           Hyperedge(Renaming(a2, vec2), src2, List(f2))) if f1 == src2 =>
       List(Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2)))
+  }
+  
+  def rename(ns: List[Node]): List[(List[Int], List[Node])] = {
+    // if it is a caseof then ns may have different arities and
+    // we mustn't rename variables >= arity
+    val arity = ns.map(_.arity).min
+    val ll = sequence(ns.map(_.outs.filter(_.isInstanceOf[Renaming]).toList))
+    for(hs <- ll) yield {
+      val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
+      assert(pairs.size == hs.size)
+      val varlist = pairs.map(_._1.vector.take(arity)).flatten.distinct
+      val map = varlist.zipWithIndex.toMap
+      val newa = varlist.size
+      val shift = arity - newa
+      
+      def varmap(i: Int): Int = 
+        if(i < arity) map(i) else i - shift
+      
+      (varlist, pairs.map { 
+          case (r,n) =>
+            val k = r.arity - arity
+            Node(Renaming(newa + k, r.vector.map(varmap(_))), List(n))
+        })
+    }
+  }
+  
+  // Move h through multiple renamings
+  def throughRenamings(h: Hyperedge): List[Hyperedge] =
+    h.label match {
+      case Let(a) =>
+        for((v, newdests) <- rename(h.dests.tail)) yield
+          Hyperedge(Renaming(a, v), h.source, List(Node(Let(v.size), h.dests(0) :: newdests)))
+      case Construct(name) if h.dests.nonEmpty =>
+        for((v, newdests) <- rename(h.dests)) yield
+          Hyperedge(Renaming(h.arity, v), h.source, List(Node(Construct(name), newdests)))
+      case CaseOf(cases) =>
+        for((v, newdests) <- rename(h.dests)) yield
+          Hyperedge(Renaming(h.arity, v), h.source, List(Node(CaseOf(cases), newdests)))
+      case _ => Nil
+    }
+  
+  def otherRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(l, src1, List(f1)),
+          Hyperedge(r: Renaming, src2, List(f2))) if f1 == src2 && l.isSimple =>
+      List(Hyperedge(r, src1, List(Node(l, List(f1)))))
   }
   
   /////////////////////////////////////////////////////////////////////////////

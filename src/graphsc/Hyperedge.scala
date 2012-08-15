@@ -24,9 +24,10 @@ case class Let(arity: Int)
   extends Label
 
 // Like Let, but binds variables only to variables
+// should be injective, i.e. no gluing of variables
 case class Renaming(arity: Int, vector: List[Int])
   extends Label {
-  require(vector.forall(_ < arity))
+  require(vector.forall(_ < arity) && vector.distinct == vector)
 }
   
 case class Id
@@ -81,9 +82,9 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
           case _ => false
         })
       }
-    case Renaming(ar, vec) =>
-      ar == vec.length &&
-      vec.zipWithIndex.forall{ case (a,b) => a == b }
+    case Renaming(ar, vec) => false //???
+      //ar == vec.length &&
+      //vec.zipWithIndex.forall{ case (a,b) => a == b }
     case _ => false
   }
   

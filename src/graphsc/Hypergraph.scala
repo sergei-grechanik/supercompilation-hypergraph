@@ -66,6 +66,17 @@ class TheHypergraph extends Hypergraph {
     l match {
       case _ if h.isId =>
         glueNodes(src, ds(0))
+      case Renaming(a, vec) if 
+        a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
+        // we do both because renamings mark canonicalized nodes
+        addHyperedge(h)
+        glueNodes(src, ds(0))
+      case r: Renaming if h.dests(0).outs.count(_.label.isInstanceOf[Renaming]) == 1 =>
+        // the dest of the hyperedge h is a renaming of some more canonical node
+        // it is better to connect h to it directly
+        val h1 = h.dests(0).outs.find(_.label.isInstanceOf[Renaming]).get
+        for(newh <- Transformations.renamingRenaming(h, h1))
+          addHyperedge(newh)
       case _ =>
         addHyperedgeImpl(Hyperedge(l, src, ds))
     }
@@ -138,7 +149,12 @@ class TheHypergraph extends Hypergraph {
       for(h <- r.mins)
         addHyperedgeSimple(h.derefGlued)
         
-      // TODO: Remove temporary id hyperedges
+      // Remove id nodes
+      // Id nodes can only be added by the two lines above,
+      // so we don't remove anything we shouldn't
+      l.outsMut -= Hyperedge(Id(), l, List(l))
+      l.insMut -= Hyperedge(Id(), l, List(l))
+        
       afterGlue(l)
       checkIntegrity()
       // maybe there appeared some more nodes to glue 
@@ -308,19 +324,27 @@ trait HyperTester extends TheHypergraph {
   }
   
   def statistics() {
+    var empty = 0
     val nv =
       for(n <- nodes) yield
         (n, runCache.filter(_._1._1 == n).map(x => (x._1._2, x._2)).toMap)
-    println("statistics: " + nodes.size + " should be " + fun(Set(), nv.toList).size)
+    
+    println(
+        "statistics: " + nodes.size + 
+        " should be " + fun(Set(), nv.toList).size + 
+        " empty: " + empty)
     
     def fun(s: Set[(Node, Map[Vector[Value], Value])], 
             l: List[(Node, Map[Vector[Value], Value])]): Set[(Node, Map[Vector[Value], Value])] = {
       l match {
         case (n1, m1) :: tl =>
-          for((n, m) <- s) {
-            if(m == m1 && m.nonEmpty)
-              return fun(s, tl)
-          }
+          if(m1.isEmpty)
+            empty += 1
+          else
+            for((n, m) <- s) {
+              if(m == m1)// || (m.toSet & m1.toSet).size >= 2) //m == m1
+                return fun(s, tl)
+            }
           fun(s + (n1 -> m1), tl)
         case Nil => s
       }
