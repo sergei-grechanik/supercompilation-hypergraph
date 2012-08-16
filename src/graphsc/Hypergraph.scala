@@ -42,7 +42,9 @@ class TheHypergraph extends Hypergraph {
       h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
         case Some(x) if h.source == null => x
         case Some(x) if h.source == x.source => x
-        case Some(x) => glueNodes(h.source, x.source); x.derefGlued
+        case Some(x) =>
+          glueNodes(h.source, x.source)
+          x.derefGlued
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
@@ -52,7 +54,9 @@ class TheHypergraph extends Hypergraph {
     else
       nodes.find(_.outs.exists(_.label == h.label)) match {
         case Some(n) if h.source == null => h.from(n)
-        case Some(n) => glueNodes(h.source, n); h.derefGlued
+        case Some(n) =>
+          glueNodes(h.source, n)
+          h.derefGlued
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
@@ -69,14 +73,17 @@ class TheHypergraph extends Hypergraph {
       case Renaming(a, vec) if 
         a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
         // we do both because renamings mark canonicalized nodes
-        addHyperedge(h)
+        addHyperedgeImpl(h)
         glueNodes(src, ds(0))
       case r: Renaming if h.dests(0).outs.count(_.label.isInstanceOf[Renaming]) == 1 =>
         // the dest of the hyperedge h is a renaming of some more canonical node
         // it is better to connect h to it directly
         val h1 = h.dests(0).outs.find(_.label.isInstanceOf[Renaming]).get
         for(newh <- Transformations.renamingRenaming(h, h1))
-          addHyperedge(newh)
+          if(newh == h)
+            addHyperedgeImpl(h)
+          else
+            addHyperedge(newh)
       case _ =>
         addHyperedgeImpl(Hyperedge(l, src, ds))
     }
@@ -193,6 +200,7 @@ class TheHypergraph extends Hypergraph {
   }
   
   def checkIntegrity() {
+    return
     for(n <- nodes) {
       assert(n.getRealNode == n)
       for(h <- n.ins) {
@@ -262,7 +270,11 @@ trait HyperTester extends TheHypergraph {
     
     ctx.visited.add((n,args))
     var v: Value = null
-    for(h <- n.outs)
+    // Try id hyperedges first
+    val outs = 
+      n.outs.filter(_.label.isInstanceOf[Id]).toList ++
+      n.outs.filter(!_.label.isInstanceOf[Id]).toList
+    for(h <- outs)
       try {
         val newv = runHyperedgeUncached(ctx, h, args)
         if(v != null && v != newv)

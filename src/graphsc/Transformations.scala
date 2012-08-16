@@ -5,8 +5,8 @@ object Transformations {
   def isVar(n: Node): Boolean =
     n.outs.exists(h => h.label.isInstanceOf[Var])
   
-  def getVar(n: Node): Option[Int] =
-    n.outs.collectFirst{ case Hyperedge(Var(a, i), _, _) => i }
+  def getVar(n: Node): Int =
+    n.outs.collectFirst{ case Hyperedge(Var(a, i), _, _) => i }.get
   
   def isInj[T](l: Seq[T]): Boolean = 
     l.distinct == l
@@ -15,6 +15,9 @@ object Transformations {
     case (h :: t) => for(x <- h; y <- sequence(t)) yield x :: y
     case Nil => List(Nil)
   }
+  
+  def isRenaming(es: List[Node]): Boolean =
+    es.forall(isVar(_)) && isInj(es.map(getVar(_)))
     
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -31,8 +34,8 @@ object Transformations {
   }
     
   def letToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
-    case Hyperedge(Let(a), src, f :: es) if isInj(es.map(getVar(_))) =>
-      List(Hyperedge(Renaming(a, es.map(getVar(_).get)), src, List(f)))
+    case Hyperedge(Let(a), src, f :: es) if isRenaming(es) =>
+      List(Hyperedge(Renaming(a, es.map(getVar(_))), src, List(f)))
   }
   
   def letRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
@@ -50,7 +53,7 @@ object Transformations {
   def rename(ns: List[Node]): List[(List[Int], List[Node])] = {
     // if it is a caseof then ns may have different arities and
     // we mustn't rename variables >= arity
-    val arity = ns.map(_.arity).min
+    val arity = if(ns.nonEmpty) ns.map(_.arity).min else -1
     val ll = sequence(ns.map(_.outs.filter(_.isInstanceOf[Renaming]).toList))
     for(hs <- ll) yield {
       val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
@@ -89,7 +92,7 @@ object Transformations {
   def otherRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(l, src1, List(f1)),
           Hyperedge(r: Renaming, src2, List(f2))) if f1 == src2 && l.isSimple =>
-      List(Hyperedge(r, src1, List(Node(l, List(f1)))))
+      List(Hyperedge(r, src1, List(Node(l, List(f2)))))
   }
   
   /////////////////////////////////////////////////////////////////////////////
