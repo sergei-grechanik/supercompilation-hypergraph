@@ -82,7 +82,7 @@ class TheHypergraph extends Hypergraph {
     val Hyperedge(l, src, ds) = h
     l match {
       case _ if h.isId =>
-        List(Hyperedge(Id(), src, ds))
+        List(Hyperedge(Id(), src, List(ds(0))))
       case Renaming(a, vec) if 
         a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
         // we do both because renamings mark canonicalized nodes
@@ -213,11 +213,14 @@ class TheHypergraph extends Hypergraph {
       g.toList.map(_.source).reduce(glueNodes)
   }
   
+  def nodeDotLabel(n: Node): String =
+    n.uniqueName
+  
   def toDot: String = {
     val sb = new StringBuilder()
     sb.append("digraph Hyper {\n")
     for(n <- nodes) {
-      sb.append("\"" + n.uniqueName + "\"[label=\"" + n.uniqueName + "\"];\n")
+      sb.append("\"" + n.uniqueName + "\"[label=\"" + nodeDotLabel(n) + "\", shape=box];\n")
       for(h <- n.outs) {
         val lab = "{" + h.label.toString + "|{" + 
             (0 until h.dests.length).map("<" + _ + ">").mkString("|") + "}}"
@@ -276,7 +279,7 @@ class RunningContext {
   val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
 }
 
-trait HyperTester extends Hypergraph {
+trait HyperTester extends TheHypergraph {
   val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
   
   def runNode(n: Node, args: Vector[Value]): Value = {
@@ -366,6 +369,12 @@ trait HyperTester extends Hypergraph {
     }
     checkFailed(ctx)
     super.beforeGlue(l, r)
+  }
+  
+  override def nodeDotLabel(n: Node): String = {
+    n.uniqueName + "\\l" + 
+    (for(((n1,a),r) <- runCache if n1 == n) yield
+        a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
   }
   
   def statistics() {

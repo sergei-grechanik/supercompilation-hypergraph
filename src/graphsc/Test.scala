@@ -228,28 +228,6 @@ trait Transformer extends HyperTester {
     }
   }
   
-  def transform(h: Hyperedge) {
-    import Transformations._
-    val tr = List(
-        "varToRenaming" -> varToRenaming,
-        "letToRenaming" -> letToRenaming)
-        
-    for((name,trans) <- tr) {
-      if(trans.isDefinedAt(h)) {
-        println(name)
-        transforming(h)
-        for(nh <- trans(h))
-          addHyperedge(nh)
-      }
-    }
-    
-    for(nh <- throughRenamings(h)) {
-      println("throughRenamings")
-      transforming(h)
-      addHyperedge(nh)
-    }
-  }
-  
   def transform(h1: Hyperedge, h2: Hyperedge) {
     import Transformations._
     val tr = List(
@@ -273,18 +251,19 @@ trait Transformer extends HyperTester {
       }
     }
     
-    for(nh <- throughRenamings(h1)) {
-      println("throughRenamings")
-      transforming(h1)
-      addHyperedge(nh)
-    }
+    if(h2.label.isInstanceOf[Renaming])
+      for(nh <- throughRenamings(h1)) {
+        println("throughRenamings")
+        transforming(h1)
+        addHyperedge(nh)
+      }
   }
   
   def transform() {
     import Transformations._
     
-    //if(nodes.size > 10000)
-    //  throw new TooManyNodesException("")
+    if(allNodes.size > 20)
+      throw new TooManyNodesException("")
     
     val set = updatedHyperedges.map(_.derefGlued)
     println("***********************")
@@ -292,7 +271,6 @@ trait Transformer extends HyperTester {
     println("***********************")
     updatedHyperedges.clear()
     for(h <- set if h.derefGlued == h) {
-      transform(h)
       for(d <- h.dests; h1 <- d.outs)
         transform(h, h1)
       for(h1 <- h.source.ins)
@@ -307,11 +285,87 @@ trait Canonizer extends TheHypergraph {
     Transformations.throughRenamings(h) match {
       case Nil =>
         println("uncanonized " + h)
-        //Transformations.throughRenamings(h)       
+        if(!h.label.isInstanceOf[Renaming])
+        Transformations.throughRenamings(h)
         List(h)
       case lst => lst 
     }
   }
+}
+
+trait Prettifier extends TheHypergraph with NamedNodes {
+  val prettyMap = collection.mutable.Map[Node, String]() 
+  
+  def pretty(n: Node): String = prettyMap.get(n.getRealNode) match {
+    case None => 
+      n.uniqueName
+    case Some(s) => s
+  }
+  
+  override def addNode(n: String, arity: Int): Node = {
+    val node = super.addNode(n, arity)
+    prettyMap += node.getRealNode -> n
+    node
+  }
+  
+  override def onNewHyperedge(h: Hyperedge) {
+    val s = prettyHyperedge(h)
+    prettyMap.get(h.source.getRealNode) match {
+      case Some(p) if p.length <= s.length =>
+      case _ =>
+        prettyMap += h.source.getRealNode -> s
+    }
+    super.onNewHyperedge(h)
+  }
+  
+  override def beforeGlue(l1: Node, r1: Node) {
+    val l = l1.getRealNode
+    val r = r1.getRealNode
+    val lp = pretty(l)
+    val rp = pretty(r)
+    if(lp.length <= rp.length && lp != l.uniqueName) {
+      prettyMap += l -> lp
+      prettyMap += r -> lp
+    } else {
+      prettyMap += l -> rp
+      prettyMap += r -> rp
+    }
+    super.beforeGlue(l1, r1)
+  }
+  
+  private def indent(s: String, ind: String = "  "): String = "  " + indent1(s, ind)
+  private def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
+  
+  def prettyHyperedge(h: Hyperedge): String = h.label match {
+    case Construct(name) => name + " " + h.dests.map("(" + pretty(_) + ")").mkString(" ")
+    case CaseOf(cases) =>
+      "case " + pretty(h.dests(0)) + " of {\n" +
+      indent((
+        for(((n,k),e) <- cases zip h.dests.tail) yield
+          n + " " + (0 until k map (_ + e.arity - k)).mkString(" ") + " -> " +
+          indent1(pretty(e))
+      ).mkString(";\n")) + "\n}"
+    case Let(_) =>
+      val vars = h.dests.tail.zipWithIndex.map {
+        case (e,i) => "v" + i + "v = " + indent1(pretty(e), "      ")
+      } 
+      "let " + indent1(vars.mkString(";\n"), "    ") + "\nin " + 
+      indent1(pretty(h.dests(0)), "   ")
+    case Var(_, i) => "v" + i + "v"
+    case Id() => pretty(h.dests(0))
+    case Tick() => "* " + pretty(h.dests(0))
+    case Improvement() => ">= " + pretty(h.dests(0))
+    case Renaming(_, vec) =>
+      var orig = pretty(h.dests(0))
+      for((j,i) <- vec.zipWithIndex)
+        orig.replace("v" + i + "v", "v" + j + "v")
+      orig
+  }
+  
+  override def nodeDotLabel(n: Node): String =
+    n.uniqueName + " =\\l" +
+    pretty(n).replace("\n", "\\l") + "\\l" +
+    "\\l" + super.nodeDotLabel(n)
 }
 
 object Test {
@@ -320,6 +374,7 @@ object Test {
         with Canonizer
         with NamedNodes
         with Transformer
+        with Prettifier
         //with Visualizer 
         //with HyperTester
         //with HyperLogger 

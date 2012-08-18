@@ -47,6 +47,14 @@ case class Var(arity: Int, num: Int)
   
 case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   require(source == null || arity == source.arity)
+  label match {
+    case _:Id => require(dests.size == 1)
+    case _:Tick => require(dests.size == 1)
+    case _:Improvement => require(dests.size == 1)
+    case _:Renaming => require(dests.size == 1)
+    case _:Var => require(dests.size == 0)
+    case _ =>
+  }
   
   def arity: Int = label match {
     case Var(a, _) => a

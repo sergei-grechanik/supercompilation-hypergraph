@@ -58,7 +58,7 @@ object Transformations {
     for(hs <- ll) yield {
       val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
       assert(pairs.size == hs.size)
-      val varlist = pairs.map(_._1.vector.take(arity)).flatten.distinct
+      val varlist = pairs.map(_._1.vector.filter(_ < arity)).flatten.distinct
       val map = varlist.zipWithIndex.toMap
       val newa = varlist.size
       val shift = arity - newa
