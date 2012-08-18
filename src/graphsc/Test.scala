@@ -174,10 +174,13 @@ trait HyperLogger extends Hypergraph {
   }
 }
 
-trait Transformer extends TheHypergraph with HyperTester {
+trait Transformer extends HyperTester {
   val updatedHyperedges = collection.mutable.Set[Hyperedge]()
   
+  var maxar = 0
   override def onNewHyperedge(h: Hyperedge) {
+    maxar = maxar max h.arity
+    println("### " + h.arity + " ############# max: " + maxar)
     updatedHyperedges += h
     super.onNewHyperedge(h)
   }
@@ -240,7 +243,11 @@ trait Transformer extends TheHypergraph with HyperTester {
       }
     }
     
-    throughRenamings(h)
+    for(nh <- throughRenamings(h)) {
+      println("throughRenamings")
+      transforming(h)
+      addHyperedge(nh)
+    }
   }
   
   def transform(h1: Hyperedge, h2: Hyperedge) {
@@ -266,14 +273,18 @@ trait Transformer extends TheHypergraph with HyperTester {
       }
     }
     
-    throughRenamings(h1)
+    for(nh <- throughRenamings(h1)) {
+      println("throughRenamings")
+      transforming(h1)
+      addHyperedge(nh)
+    }
   }
   
   def transform() {
     import Transformations._
     
-    if(nodes.size > 10000)
-      throw new TooManyNodesException("")
+    //if(nodes.size > 10000)
+    //  throw new TooManyNodesException("")
     
     val set = updatedHyperedges.map(_.derefGlued)
     println("***********************")
@@ -290,11 +301,25 @@ trait Transformer extends TheHypergraph with HyperTester {
   }
 }
 
+trait Canonizer extends TheHypergraph {
+  override def preprocessors = canonize _ :: super.preprocessors
+  def canonize(h: Hyperedge): List[Hyperedge] = {
+    Transformations.throughRenamings(h) match {
+      case Nil =>
+        println("uncanonized " + h)
+        //Transformations.throughRenamings(h)       
+        List(h)
+      case lst => lst 
+    }
+  }
+}
+
 object Test {
   def main(args: Array[String]) {
-    val g = new TheHypergraph 
+    val g = new TheHypergraph
+        with Canonizer
         with NamedNodes
-        with Transformer 
+        with Transformer
         //with Visualizer 
         //with HyperTester
         //with HyperLogger 
@@ -311,7 +336,7 @@ object Test {
     val p = new ExprParser(g)
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), Vector(2, 3)) == peano(5))
-    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
     assert(g.runNode(g("mul"), Vector(2, 3)) == peano(6))
     p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
     assert(g.runNode(g("padd"), Vector(2, 3)) == peano(5))
@@ -327,10 +352,10 @@ object Test {
     assert(g.runNode(g("fib"), Vector(6)) == peano(8))
     p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
-    assert(g.runNode(g("nrevL"), Vector(list(1,2,3,4))) == list(4,3,2,1))
+    assert(g.runNode(g("nrevL"), Vector(list(1,2,3,4))) == list(4,3,2,1))*/
     try {
     for(i <- 0 to 50) {
-      println("nodes: " + g.nodes.size)
+      println("nodes: " + g.allNodes.size)
       g.transform()
     }
     }catch {case _:TooManyNodesException => println("aborted")}

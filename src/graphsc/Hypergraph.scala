@@ -21,10 +21,28 @@ trait Hypergraph {
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
+  
+  def allNodes: Set[Node]
+}
+
+trait HypergraphProxy extends Hypergraph {
+  def self: Hypergraph
+  override def addHyperedge(h: Hyperedge) = self.addHyperedge(h)
+  override def addNode(n: Node): Node = self.addNode(n)
+  override def addNode(l: Label, ds: List[Node]): Node = self.addNode(l, ds)
+  override def newNode(arity: Int): Node = self.newNode(arity)
+  override def removeNode(n: Node) = self.removeNode(n)
+  override def glueNodes(l: Node, r: Node): Node = self.glueNodes(l, r)
+  override def onNewHyperedge(h: Hyperedge) = self.onNewHyperedge(h)
+  override def beforeGlue(l: Node, r: Node) = self.beforeGlue(l, r)
+  override def afterGlue(l: Node) = self.afterGlue(l)
+  override def allNodes: Set[Node] = self.allNodes
 }
 
 class TheHypergraph extends Hypergraph {
   val nodes = collection.mutable.Set[Node]()
+  
+  override def allNodes: Set[Node] = nodes.toSet
   
   def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     val n = Node(h)
@@ -34,73 +52,88 @@ class TheHypergraph extends Hypergraph {
     res
   }
   
-  def addHyperedgeImpl(h1: Hyperedge): Hyperedge = {
+  def addHyperedgeImpl(h1: Hyperedge) {
     val Hyperedge(l1, s1, dst1) = h1
-    val h = Hyperedge(l1, s1, dst1.map(addNode(_))).derefGlued
+    val adder = addNodeP(addHyperedgeP(h => List(h), addHyperedgeImpl _)) _
+    val h = Hyperedge(l1, s1, dst1.map(adder)).derefGlued
     
     if(h.dests.nonEmpty)
       h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
         case Some(x) if h.source == null => x
         case Some(x) if h.source == x.source => x
-        case Some(x) =>
-          glueNodes(h.source, x.source)
-          x.derefGlued
+        case Some(x) => glueNodes(h.source, x.source)
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
           onNewHyperedge(newh)
-          newh
       }
     else
       nodes.find(_.outs.exists(_.label == h.label)) match {
         case Some(n) if h.source == null => h.from(n)
-        case Some(n) =>
-          glueNodes(h.source, n)
-          h.derefGlued
+        case Some(n) => glueNodes(h.source, n)
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
           onNewHyperedge(newh)
-          newh
       }
   }
   
-  override def addHyperedge(h: Hyperedge) = {
-    val Hyperedge(l, src, ds) = h  
+  def preprocessHyperedge(h: Hyperedge): List[Hyperedge] = {
+    val Hyperedge(l, src, ds) = h
     l match {
       case _ if h.isId =>
-        glueNodes(src, ds(0))
+        List(Hyperedge(Id(), src, ds))
       case Renaming(a, vec) if 
         a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
         // we do both because renamings mark canonicalized nodes
-        addHyperedgeImpl(h)
-        glueNodes(src, ds(0))
-      case r: Renaming if h.dests(0).outs.count(_.label.isInstanceOf[Renaming]) == 1 =>
-        // the dest of the hyperedge h is a renaming of some more canonical node
-        // it is better to connect h to it directly
-        val h1 = h.dests(0).outs.find(_.label.isInstanceOf[Renaming]).get
-        for(newh <- Transformations.renamingRenaming(h, h1))
-          if(newh == h)
-            addHyperedgeImpl(h)
-          else
-            addHyperedge(newh)
+        List(h, Hyperedge(Id(), src, ds))
       case _ =>
-        addHyperedgeImpl(Hyperedge(l, src, ds))
+        List(h)
     }
   }
   
-  override def addNode(n: Node): Node = {
+  def preprocessors: List[Hyperedge => List[Hyperedge]] =
+    List(preprocessHyperedge)
+  
+  override def addHyperedge(h: Hyperedge): Unit =
+    addHyperedgeP(preprocessors)(h)
+  
+  def addHyperedgeP(ps: List[Hyperedge => List[Hyperedge]])(h: Hyperedge) {
+    ps match {
+      case p :: ps => addHyperedgeP(p, addHyperedgeP(ps) _)(h)
+      case Nil => addHyperedgeImpl(h)
+    }
+  }
+    
+  def addHyperedgeP(hyperedgePreprocessor: Hyperedge => List[Hyperedge],
+                    nextAdder: Hyperedge => Unit)(h1: Hyperedge) {
+    // Make sure that all destination nodes are added
+    val Hyperedge(l1, s1, dst1) = h1
+    val adder = addNodeP(addHyperedgeP(hyperedgePreprocessor, nextAdder) _) _
+    val h = Hyperedge(l1, s1, dst1.map(adder)).derefGlued
+    
+    // Preprocessing may perform some useful transformations like canonicalization
+    for(nh <- hyperedgePreprocessor(h)) nh match {
+      case Hyperedge(Id(), src, List(dst)) => glueNodes(src, dst)
+      case _ => nextAdder(nh)
+    }
+  }
+  
+  override def addNode(n: Node): Node =
+    addNodeP(addHyperedge _)(n)
+  
+  def addNodeP(hyperedgeAdder: Hyperedge => Unit)(n: Node): Node = {
     val realn = n.getRealNode
     if(!nodes(realn)) {
       val outs = realn.outs
       // we should remove all connections before adding the node
       // to preserve integrity of the hypergraph
-      // the connections will be restored later
+      // the connections will be restored later by hyperedge addition
       realn.outsMut.clear
       realn.insMut.clear
       nodes.add(realn)
       for(h <- outs)
-        addHyperedge(h)
+        hyperedgeAdder(h)
     }
     checkIntegrity()
     n.getRealNode
@@ -243,7 +276,7 @@ class RunningContext {
   val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
 }
 
-trait HyperTester extends TheHypergraph {
+trait HyperTester extends Hypergraph {
   val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
   
   def runNode(n: Node, args: Vector[Value]): Value = {
@@ -336,6 +369,7 @@ trait HyperTester extends TheHypergraph {
   }
   
   def statistics() {
+    val nodes = allNodes
     var empty = 0
     val nv =
       for(n <- nodes) yield

@@ -54,7 +54,7 @@ object Transformations {
     // if it is a caseof then ns may have different arities and
     // we mustn't rename variables >= arity
     val arity = if(ns.nonEmpty) ns.map(_.arity).min else -1
-    val ll = sequence(ns.map(_.outs.filter(_.isInstanceOf[Renaming]).toList))
+    val ll = sequence(ns.map(_.outs.filter(_.label.isInstanceOf[Renaming]).toList))
     for(hs <- ll) yield {
       val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
       assert(pairs.size == hs.size)
@@ -75,17 +75,26 @@ object Transformations {
   }
   
   // Move h through multiple renamings
+  // now it is actually a canonizer, I should rename it
   def throughRenamings(h: Hyperedge): List[Hyperedge] =
     h.label match {
+      case _ if letToRenaming.isDefinedAt(h) =>
+        letToRenaming(h)
+      case _ if varToRenaming.isDefinedAt(h) =>
+        varToRenaming(h)
       case Let(a) =>
         for((v, newdests) <- rename(h.dests.tail)) yield
           Hyperedge(Renaming(a, v), h.source, List(Node(Let(v.size), h.dests(0) :: newdests)))
-      case Construct(name) if h.dests.nonEmpty =>
+      case l if l.isSimple && h.dests.nonEmpty =>
         for((v, newdests) <- rename(h.dests)) yield
-          Hyperedge(Renaming(h.arity, v), h.source, List(Node(Construct(name), newdests)))
+          Hyperedge(Renaming(h.arity, v), h.source, List(Node(l, newdests)))
       case CaseOf(cases) =>
         for((v, newdests) <- rename(h.dests)) yield
           Hyperedge(Renaming(h.arity, v), h.source, List(Node(CaseOf(cases), newdests)))
+      case Renaming(a1, vec1) =>
+        val Hyperedge(_, src1, List(f1)) = h
+        for(Hyperedge(Renaming(a2, vec2), src2, List(f2)) <- f1.outs.toList) yield
+          Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2))
       case _ => Nil
     }
   
