@@ -30,13 +30,13 @@ case class Renaming(arity: Int, vector: List[Int])
   require(vector.forall(_ < arity) && vector.distinct == vector)
 }
   
-case class Id
+case class Id()
   extends Label
   
-case class Tick
+case class Tick()
   extends Label
   
-case class Improvement
+case class Improvement()
   extends Label
 
 case class Var(arity: Int, num: Int)
