@@ -289,7 +289,8 @@ trait HyperTester extends TheHypergraph {
     res
   }
   
-  def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = 
+  def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
+    require(n.getRealNode == n)
     runCache.get((n,args)) match {
       case Some(v) =>
         //println(n.uniqueName + "(" + args + ") = " + v)
@@ -299,6 +300,7 @@ trait HyperTester extends TheHypergraph {
         //println(n.uniqueName + "(" + args + ") = " + res)
         res
     }
+  }
     
   def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
     if(ctx.visited((n,args)))
@@ -362,9 +364,8 @@ trait HyperTester extends TheHypergraph {
   
   override def beforeGlue(l: Node, r: Node) {
     val ctx = new RunningContext
-    val data = for(((n, a), _) <- runCache if n == l || n == r) yield (n, a)
+    val data = for(((n, a), _) <- runCache.toSet if n == l || n == r) yield (n, a)
     for((n,a) <- data) {
-      //println("testing " + a + " expect " + runCache((n,a)))
       assert(runNode(ctx, l, a) == runNode(ctx, r, a))
     }
     checkFailed(ctx)
@@ -372,7 +373,7 @@ trait HyperTester extends TheHypergraph {
   }
   
   override def nodeDotLabel(n: Node): String = {
-    n.uniqueName + "\\l" + 
+    "\\l" + 
     (for(((n1,a),r) <- runCache if n1 == n) yield
         a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
   }
@@ -395,11 +396,10 @@ trait HyperTester extends TheHypergraph {
         case (n1, m1) :: tl =>
           if(m1.isEmpty)
             empty += 1
-          else
-            for((n, m) <- s) {
-              if(m == m1)// || (m.toSet & m1.toSet).size >= 2) //m == m1
-                return fun(s, tl)
-            }
+          for((n, m) <- s) {
+            if(m == m1 || (m.toSet & m1.toSet).size >= 2) //m == m1
+              return fun(s, tl)
+          }
           fun(s + (n1 -> m1), tl)
         case Nil => s
       }

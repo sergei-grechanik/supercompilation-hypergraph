@@ -28,6 +28,9 @@ case class Let(arity: Int)
 case class Renaming(arity: Int, vector: List[Int])
   extends Label {
   require(vector.forall(_ < arity) && vector.distinct == vector)
+  
+  override def toString: String =
+    "Renaming(" + vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString(", ") + ")"
 }
   
 case class Id()
@@ -181,13 +184,13 @@ class Node(val arity: Int) {
       super.toString + "(" + getRealNode.uniqueName + ")"
   
   override def toString =
-    uniqueName + "/" + arity +
+    uniqueName + "/" + arity /*+
     (if(gluedTo != null) 
       " gluedTo\n" + gluedTo.toString
      else
       "\n\narity: " + arity +
       "\n\nouts:\n" + outs.mkString("\n") +
-      "\n\nins:\n" + ins.mkString("\n"))
+      "\n\nins:\n" + ins.mkString("\n"))*/
 }
 
 object Hyperedge {

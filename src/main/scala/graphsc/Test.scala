@@ -262,7 +262,7 @@ trait Transformer extends HyperTester {
   def transform() {
     import Transformations._
     
-    if(allNodes.size > 20)
+    if(allNodes.size > 15)
       throw new TooManyNodesException("")
     
     val set = updatedHyperedges.map(_.derefGlued)
@@ -324,11 +324,9 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     val lp = pretty(l)
     val rp = pretty(r)
     if(lp.length <= rp.length && lp != l.uniqueName) {
-      prettyMap += l -> lp
       prettyMap += r -> lp
     } else {
       prettyMap += l -> rp
-      prettyMap += r -> rp
     }
     super.beforeGlue(l1, r1)
   }
@@ -342,15 +340,16 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       "case " + pretty(h.dests(0)) + " of {\n" +
       indent((
         for(((n,k),e) <- cases zip h.dests.tail) yield
-          n + " " + (0 until k map (_ + e.arity - k)).mkString(" ") + " -> " +
+          n + " " + (0 until k map (i => "v" + (i + e.arity - k) + "v")).mkString(" ") + " -> " +
           indent1(pretty(e))
       ).mkString(";\n")) + "\n}"
     case Let(_) =>
       val vars = h.dests.tail.zipWithIndex.map {
-        case (e,i) => "v" + i + "v = " + indent1(pretty(e), "      ")
-      } 
+        case (e,i) => "b" + i + "b = " + indent1(pretty(e), "      ")
+      }
+      val in = indent1(pretty(h.dests(0)), "   ")
       "let " + indent1(vars.mkString(";\n"), "    ") + "\nin " + 
-      indent1(pretty(h.dests(0)), "   ")
+      in.replaceAll("v([0-9]+)v", "b$1b")
     case Var(_, i) => "v" + i + "v"
     case Id() => pretty(h.dests(0))
     case Tick() => "* " + pretty(h.dests(0))
@@ -358,7 +357,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     case Renaming(_, vec) =>
       var orig = pretty(h.dests(0))
       for((j,i) <- vec.zipWithIndex)
-        orig.replace("v" + i + "v", "v" + j + "v")
+        orig = orig.replace("v" + i + "v", "v" + j + "v")
       orig
   }
   
