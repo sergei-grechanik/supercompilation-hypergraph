@@ -30,7 +30,7 @@ case class Renaming(arity: Int, vector: List[Int])
   require(vector.forall(_ < arity) && vector.distinct == vector)
   
   override def toString: String =
-    "Renaming(" + vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString(", ") + ")"
+    "Renaming/" + arity + "(" + vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString(", ") + ")"
 }
   
 case class Id()
@@ -179,12 +179,12 @@ class Node(val arity: Int) {
     
   def uniqueName: String =
     if(gluedTo == null)
-      super.toString
+      super.toString + "/" + arity
     else
-      super.toString + "(" + getRealNode.uniqueName + ")"
+      super.toString + "/" + arity + "(" + getRealNode.uniqueName + ")"
   
   override def toString =
-    uniqueName + "/" + arity /*+
+    uniqueName /*+
     (if(gluedTo != null) 
       " gluedTo\n" + gluedTo.toString
      else

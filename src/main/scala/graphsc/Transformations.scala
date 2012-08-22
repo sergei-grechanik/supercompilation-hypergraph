@@ -27,6 +27,12 @@ object Transformations {
       a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
       List(Hyperedge(Id(), src, List(n)))
   }*/
+    
+  def renamingVar: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (Hyperedge(Renaming(a1, vec1), src1, List(f1)),
+          Hyperedge(Var(a2, i), src2, Nil)) if f1 == src2 =>
+      List(Hyperedge(Var(a1, vec1(i)), src1, Nil))
+  }
   
   def varToRenaming: PartialFunction[Hyperedge, List[Hyperedge]] = {
     case Hyperedge(Var(a, v), src, Nil) =>

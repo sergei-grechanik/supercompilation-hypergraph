@@ -231,6 +231,7 @@ trait Transformer extends HyperTester {
   def transform(h1: Hyperedge, h2: Hyperedge) {
     import Transformations._
     val tr = List(
+        "renamingVar" -> renamingVar,
         "letVar" -> letVar,
         "letLet" -> letLet,
         "letCaseOf" -> letCaseOf,
@@ -242,6 +243,12 @@ trait Transformer extends HyperTester {
         "renamingRenaming" -> renamingRenaming,
         "otherRenaming" -> otherRenaming)
         
+    // We readd hyperedges in order that they be canonized
+    println("Readding " + h1)
+    addHyperedge(h1)
+    println("Readding " + h2)
+    addHyperedge(h2)
+        
     for((name,trans) <- tr) {
       if(trans.isDefinedAt((h1,h2))) {
         println(name)
@@ -250,19 +257,13 @@ trait Transformer extends HyperTester {
           addHyperedge(nh)
       }
     }
-    
-    if(h2.label.isInstanceOf[Renaming])
-      for(nh <- throughRenamings(h1)) {
-        println("throughRenamings")
-        transforming(h1)
-        addHyperedge(nh)
-      }
   }
   
+  var counter = 0
   def transform() {
     import Transformations._
     
-    if(allNodes.size > 15)
+    if(counter > 40)
       throw new TooManyNodesException("")
     
     val set = updatedHyperedges.map(_.derefGlued)
@@ -270,7 +271,11 @@ trait Transformer extends HyperTester {
     println("*** updnhyp: " + set.size)
     println("***********************")
     updatedHyperedges.clear()
-    for(h <- set if h.derefGlued == h) {
+    val processed = collection.mutable.Set[Hyperedge]()
+    for(h1 <- set; val h = h1.derefGlued; if !processed(h) && !processed(h1)) {
+      processed += h
+      counter += 1
+      println(counter)
       for(d <- h.dests; h1 <- d.outs)
         transform(h, h1)
       for(h1 <- h.source.ins)
@@ -286,7 +291,7 @@ trait Canonizer extends TheHypergraph {
       case Nil =>
         println("uncanonized " + h)
         if(!h.label.isInstanceOf[Renaming])
-        Transformations.throughRenamings(h)
+          Transformations.throughRenamings(h)
         List(h)
       case lst => lst 
     }
