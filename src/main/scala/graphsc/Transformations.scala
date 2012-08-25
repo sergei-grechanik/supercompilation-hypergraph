@@ -56,11 +56,18 @@ object Transformations {
       List(Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2)))
   }
   
-  def rename(ns: List[Node]): List[(List[Int], List[Node])] = {
+  def rename(ns: List[Node], ren: Hyperedge = null): List[(List[Int], List[Node])] = {
     // if it is a caseof then ns may have different arities and
     // we mustn't rename variables >= arity
     val arity = if(ns.nonEmpty) ns.map(_.arity).min else -1
-    val ll = sequence(ns.map(_.outs.filter(_.label.isInstanceOf[Renaming]).toList))
+    
+    val ll = sequence(ns.map(n => 
+      if(ren != null && ren.source == n)
+        List(ren)
+      else
+        n.outs.filter(_.label.isInstanceOf[Renaming]).toList))
+        
+    println("Renamings give " + ll.size)
     for(hs <- ll) yield {
       val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
       assert(pairs.size == hs.size)
@@ -103,6 +110,29 @@ object Transformations {
           Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2))
       case _ => Nil
     }
+  
+  def anyRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
+    case (h1@Hyperedge(l1, src1, ds1), 
+          h2@Hyperedge(Renaming(a2, vec2), src2, List(f2))) if ds1.contains(src2) =>
+      l1 match {
+        case Let(a1) if ds1(0) == src2 =>
+          letRenaming(h1, h2)
+        case Let(a1) =>
+          for((v, newdests) <- rename(ds1.tail, h2)) yield
+            Hyperedge(Renaming(a1, v), src1, List(Node(Let(v.size), ds1(0) :: newdests)))
+        case l if l.isSimple =>
+          for((v, newdests) <- rename(ds1, h2)) yield
+            Hyperedge(Renaming(h1.arity, v), src1, List(Node(l, newdests)))
+        case CaseOf(cases) =>
+          for((v, newdests) <- rename(ds1, h2)) yield
+            Hyperedge(Renaming(h1.arity, v), src1, List(Node(CaseOf(cases), newdests))) 
+        case Renaming(a1, vec1) =>
+          List(Hyperedge(Renaming(a1, vec2.map(vec1(_))), src1, List(f2)))
+        case _ =>
+          // Impossible
+          throw new Exception("There is a bug")
+      }
+  }
   
   def otherRenaming: PartialFunction[(Hyperedge, Hyperedge), List[Hyperedge]] = {
     case (Hyperedge(l, src1, List(f1)),

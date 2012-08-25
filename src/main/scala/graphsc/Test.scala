@@ -181,11 +181,13 @@ trait Transformer extends HyperTester {
   override def onNewHyperedge(h: Hyperedge) {
     maxar = maxar max h.arity
     println("### " + h.arity + " ############# max: " + maxar)
+    println("### " + h)
     updatedHyperedges += h
     super.onNewHyperedge(h)
   }
   
   override def afterGlue(n: Node) {
+    println("### GLUED ")
     updatedHyperedges ++= n.outs
     super.afterGlue(n)
   }
@@ -241,13 +243,7 @@ trait Transformer extends HyperTester {
         "caseCase" -> caseCase,
         "letRenaming" -> letRenaming,
         "renamingRenaming" -> renamingRenaming,
-        "otherRenaming" -> otherRenaming)
-        
-    // We readd hyperedges in order that they be canonized
-    println("Readding " + h1)
-    addHyperedge(h1)
-    println("Readding " + h2)
-    addHyperedge(h2)
+        "anyRenaming" -> anyRenaming)
         
     for((name,trans) <- tr) {
       if(trans.isDefinedAt((h1,h2))) {
@@ -263,9 +259,6 @@ trait Transformer extends HyperTester {
   def transform() {
     import Transformations._
     
-    if(counter > 40)
-      throw new TooManyNodesException("")
-    
     val set = updatedHyperedges.map(_.derefGlued)
     println("***********************")
     println("*** updnhyp: " + set.size)
@@ -280,6 +273,9 @@ trait Transformer extends HyperTester {
         transform(h, h1)
       for(h1 <- h.source.ins)
         transform(h1, h)
+        
+      if(counter > 350 || allNodes.size > 50)
+        throw new TooManyNodesException("")
     }
   }
 }
@@ -353,7 +349,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
         case (e,i) => "b" + i + "b = " + indent1(pretty(e), "      ")
       }
       val in = indent1(pretty(h.dests(0)), "   ")
-      "let " + indent1(vars.mkString(";\n"), "    ") + "\nin " + 
+      "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
       in.replaceAll("v([0-9]+)v", "b$1b")
     case Var(_, i) => "v" + i + "v"
     case Id() => pretty(h.dests(0))
