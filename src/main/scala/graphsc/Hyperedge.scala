@@ -1,4 +1,5 @@
 package graphsc
+import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
 case class Value(constructor: String, args: List[Value]) {
   override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
@@ -102,6 +103,9 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   // Returns the same hyperedge but with different source
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
+    
+  def freeSource: Hyperedge =
+   from(new FreeNode(arity))
   
   // Replace a node in source and destination nodes
   def replace(old: Node, n: Node): Hyperedge = {
@@ -119,7 +123,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   }
   
   override def toString =
-    source.uniqueName + " -> " + label + " -> " + dests.map(_.uniqueName).mkString(" ")
+    source + " -> " + label + " -> " + dests.mkString(" ")
   
   /*def run(args: Vector[Value], runNode: (Node, Vector[Value]) => Value): Value = {
     println("running " + this + " on " + args)
@@ -161,6 +165,8 @@ class Node(val arity: Int) {
   val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
   
+  var prettyDebug = ""
+  
   def outs: Set[Hyperedge] = 
     if(gluedTo == null) mouts.toSet else getRealNode.outs
   def ins: Set[Hyperedge] = 
@@ -184,37 +190,19 @@ class Node(val arity: Int) {
       super.toString + "/" + arity + "(" + getRealNode.uniqueName + ")"
   
   override def toString =
-    uniqueName /*+
-    (if(gluedTo != null) 
-      " gluedTo\n" + gluedTo.toString
-     else
-      "\n\narity: " + arity +
-      "\n\nouts:\n" + outs.mkString("\n") +
-      "\n\nins:\n" + ins.mkString("\n"))*/
+    uniqueName
 }
 
-object Hyperedge {
-  // Create a new auxiliary node for this hyperedge
-  def apply(l: Label, dst: List[Node]): Hyperedge = {
-    val h = Hyperedge(l, null, dst)
-    val n = new Node(h.arity)
-    val res = h.from(n)
-    n.outsMut += res
-    res
-  }
-}
+class InvalidFreeNodeUseException extends 
+  Exception("FreeNode should be glued and then dereferenced to be used safely")
 
-object Node {
-  // Create an auxiliary node with one hyperedge
-  def apply(l: Label, dst: List[Node]): Node = 
-    Hyperedge(l, dst).source
-  
-  def apply(h: Hyperedge): Node = {
-    if(h.source == null) {
-      apply(h.label, h.dests)
-    } else {
-      h.source.outsMut += h
-      h.source
-    }
-  }
+// An auxiliary node that cannot belong to a hypergraph
+class FreeNode(arity: Int) extends Node(arity) {
+  override def uniqueName: String =
+    "{" + super.uniqueName + "}"
+    
+  override def outs = throw new InvalidFreeNodeUseException
+  override def ins = throw new InvalidFreeNodeUseException
+  override def outsMut = throw new InvalidFreeNodeUseException
+  override def insMut = throw new InvalidFreeNodeUseException
 }

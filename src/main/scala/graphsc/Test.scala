@@ -1,90 +1,5 @@
 package graphsc
 
-import scala.util.parsing.combinator._
-
-class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
-  def apply(s: String) {
-    val success = parseAll(prog, s).successful
-    assert(success) // We've modified the graph even if the parsing wasn't successful
-    // it is better to rewrite it in a bit more functional style
-  }
-  
-  def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
-  
-  def definition: Parser[Node] = 
-    (sign <~ "=") ~! expr ^^
-    { case (n,table)~e => graph.glueNodes(n, e(table)) }
-  
-  def sign: Parser[(Node, Map[String,Int])] =
-    fname ~ rep(fname) ^^
-    { case i~vs => (graph.addNode(i, vs.length.toInt), vs.zipWithIndex.toMap) }
-  
-  def fname = "[a-z][a-zA-Z0-9.@_]*".r
-  def cname = "[A-Z][a-zA-Z0-9.@_]*".r
-  
-  private def theVar(a: Int, v: Int): Node = graph.addNode(Var(a, v), List())
-  
-  private def tableArity(table: Map[String, Int]): Int =
-    if(table.isEmpty)
-      0
-    else
-      table.values.max + 1
-  
-  def onecase: Parser[Map[String,Int] => ((String, Int), Node)] =
-    cname ~ rep(fname) ~ "->" ~ expr ^^
-    {case n~l~"->"~e => table =>
-      val lsize = l.size
-      val ar = tableArity(table)
-      val newtable = table ++ (l zip (0 until lsize).map(_ + ar))
-      ((n, lsize), e(newtable))}
-  
-  def caseof: Parser[Map[String,Int] => Node] =
-    ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
-    { case e~lst => table =>
-        val cases = lst.map(_(table))
-        graph.addNode(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2)) }
-  
-  def call: Parser[Map[String,Int] => Node] =
-    fname ~ rep(argexpr) ^^
-    { case f~as => table =>
-        if(as.isEmpty && table.contains(f))
-          theVar(tableArity(table), table(f))
-        else {
-          val fun = graph.addNode(f, as.length)
-          graph.addNode(Let(tableArity(table)), fun :: as.map(_(table)))
-        }
-    }
-  
-  def variable: Parser[Map[String,Int] => Node] =
-    fname ^^
-    { case f => table => theVar(tableArity(table), table(f))}
-    
-  def cons: Parser[Map[String,Int] => Node] =
-    cname ~ rep1(argexpr) ^^
-    { case c~as => table =>
-        graph.addNode(Construct(c), as.map(_(table))) }
-  
-  def zeroargCons: Parser[Map[String,Int] => Node] =
-    cname ^^
-    { case c => table =>
-        graph.addNode(Let(tableArity(table)), List(
-            graph.addNode(Construct(c), List()))) }
-  
-  def expr: Parser[Map[String,Int] => Node] =
-    caseof |
-    "(" ~> expr <~ ")" |
-    call |
-    cons |
-    zeroargCons
-  
-  def argexpr: Parser[Map[String,Int] => Node] =
-    variable |
-    caseof |
-    zeroargCons |
-    "(" ~> expr <~ ")"
-    
-}
-
 class TooManyNodesException(s: String) extends Exception(s)
 
 trait Visualizer extends TheHypergraph {
@@ -158,43 +73,51 @@ trait Visualizer extends TheHypergraph {
 }
 
 trait HyperLogger extends Hypergraph {
+  abstract override def addHyperedge(h: Hyperedge): Node = {
+    println("\nhyper " + h)
+    val n = super.addHyperedge(h)
+    println("=> " + n + "\n")
+    n
+  }
+  
   override def onNewHyperedge(h: Hyperedge) {
-    println("new " + h)
+    println("    new " + h)
     super.onNewHyperedge(h)
   }
   
-  /*override def onNewNode(n: Node) {
-    println("new node " + n.uniqueName)
-    super.onNewNode(n)
-  }*/
+  abstract override def newNode(a: Int): Node = {
+    val n = super.newNode(a)
+    println("    new node " + n)
+    n
+  }
   
   override def beforeGlue(l: Node, r: Node) {
-    println("glue " + l.uniqueName + " " + r.uniqueName)
+    println("    glue " + l.uniqueName + " " + r.uniqueName)
     super.beforeGlue(l, r)
   }
 }
 
-trait Transformer extends HyperTester {
+trait Transformer extends HyperTester with Transformations with Prettifier {
+  val stat = collection.mutable.Map[String, List[Int]]()
   val updatedHyperedges = collection.mutable.Set[Hyperedge]()
   
-  var maxar = 0
-  override def onNewHyperedge(h: Hyperedge) {
-    maxar = maxar max h.arity
-    println("### " + h.arity + " ############# max: " + maxar)
-    println("### " + h)
+  def allHyperedges: Set[Hyperedge] = {
+    val sets = allNodes.toList.map(n => n.ins ++ n.outs)
+    (Set[Hyperedge]() /: sets)(_ | _)
+  }
+  
+  override def onNewHyperedge(h: Hyperedge) {    
     updatedHyperedges += h
     super.onNewHyperedge(h)
   }
   
   override def afterGlue(n: Node) {
-    println("### GLUED ")
     updatedHyperedges ++= n.outs
     super.afterGlue(n)
   }
   
   def transforming(hs: Hyperedge*) {
     statistics()
-    println("transforming:")
     for(h <- hs)
       println("    " + h)
   }
@@ -230,9 +153,24 @@ trait Transformer extends HyperTester {
     }
   }
   
-  def transform(h1: Hyperedge, h2: Hyperedge) {
-    import Transformations._
-    val tr = List(
+  def transform(h1: Hyperedge, h2: Hyperedge, simple: Boolean) {
+    val tr =
+      if(simple)
+      List(
+        "renamingVar" -> renamingVar,
+        "letVar" -> letVar,
+        //"letLet" -> letLet,
+        //"letCaseOf" -> letCaseOf,
+        //"letOther" -> letOther,
+        //"caseReduce" -> caseReduce,
+        //"caseVar" -> caseVar,
+        //"caseCase" -> caseCase,
+        //"letRenaming" -> letRenaming,
+        "renamingRenaming" -> renamingRenaming
+        //"anyRenaming" -> anyRenaming
+        )
+      else
+      List(
         "renamingVar" -> renamingVar,
         "letVar" -> letVar,
         "letLet" -> letLet,
@@ -247,17 +185,25 @@ trait Transformer extends HyperTester {
         
     for((name,trans) <- tr) {
       if(trans.isDefinedAt((h1,h2))) {
+        val before = allNodes.size
+        println("\ntransforming:")
         println(name)
         transforming(h1, h2)
-        for(nh <- trans((h1,h2)))
-          addHyperedge(nh)
+        println(prettyTwoHyperedges(h1, h2))
+        trans((h1,h2))
+        val after = allNodes.size
+        
+        stat += name -> ((after - before) :: stat.getOrElse(name, Nil))
       }
+      
+      if((!simple && (counter > 300 || allNodes.size > 100)) || allNodes.size > 200)
+        throw new TooManyNodesException("")
+      
     }
   }
   
   var counter = 0
-  def transform() {
-    import Transformations._
+  def transform(simple: Boolean = false) {
     
     val set = updatedHyperedges.map(_.derefGlued)
     println("***********************")
@@ -270,114 +216,47 @@ trait Transformer extends HyperTester {
       counter += 1
       println(counter)
       for(d <- h.dests; h1 <- d.outs)
-        transform(h, h1)
+        transform(h, h1, simple)
       for(h1 <- h.source.ins)
-        transform(h1, h)
-        
-      if(counter > 350 || allNodes.size > 50)
-        throw new TooManyNodesException("")
+        transform(h1, h, simple)
     }
   }
 }
 
 trait Canonizer extends TheHypergraph {
-  override def preprocessors = canonize _ :: super.preprocessors
-  def canonize(h: Hyperedge): List[Hyperedge] = {
-    Transformations.throughRenamings(h) match {
-      case Nil =>
-        println("uncanonized " + h)
-        if(!h.label.isInstanceOf[Renaming])
-          Transformations.throughRenamings(h)
-        List(h)
-      case lst => lst 
-    }
+  
+  def addHyperedgeSuper(h: Hyperedge): Node =
+      super.addHyperedge(h)
+  
+  def newNodeSuper(a: Int): Node =
+      super.newNode(a)
+      
+  object superthis extends Transformations {
+    def addHyperedge(h: Hyperedge): Node =
+      addHyperedgeSuper(h)
+      
+    def newNode(a: Int): Node =
+      newNodeSuper(a)
+  }
+  
+  override def addHyperedge(h: Hyperedge): Node = {
+    superthis.throughRenamings(h)
+    h.source.getRealNode
   }
 }
 
-trait Prettifier extends TheHypergraph with NamedNodes {
-  val prettyMap = collection.mutable.Map[Node, String]() 
-  
-  def pretty(n: Node): String = prettyMap.get(n.getRealNode) match {
-    case None => 
-      n.uniqueName
-    case Some(s) => s
-  }
-  
-  override def addNode(n: String, arity: Int): Node = {
-    val node = super.addNode(n, arity)
-    prettyMap += node.getRealNode -> n
-    node
-  }
-  
-  override def onNewHyperedge(h: Hyperedge) {
-    val s = prettyHyperedge(h)
-    prettyMap.get(h.source.getRealNode) match {
-      case Some(p) if p.length <= s.length =>
-      case _ =>
-        prettyMap += h.source.getRealNode -> s
-    }
-    super.onNewHyperedge(h)
-  }
-  
-  override def beforeGlue(l1: Node, r1: Node) {
-    val l = l1.getRealNode
-    val r = r1.getRealNode
-    val lp = pretty(l)
-    val rp = pretty(r)
-    if(lp.length <= rp.length && lp != l.uniqueName) {
-      prettyMap += r -> lp
-    } else {
-      prettyMap += l -> rp
-    }
-    super.beforeGlue(l1, r1)
-  }
-  
-  private def indent(s: String, ind: String = "  "): String = "  " + indent1(s, ind)
-  private def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
-  
-  def prettyHyperedge(h: Hyperedge): String = h.label match {
-    case Construct(name) => name + " " + h.dests.map("(" + pretty(_) + ")").mkString(" ")
-    case CaseOf(cases) =>
-      "case " + pretty(h.dests(0)) + " of {\n" +
-      indent((
-        for(((n,k),e) <- cases zip h.dests.tail) yield
-          n + " " + (0 until k map (i => "v" + (i + e.arity - k) + "v")).mkString(" ") + " -> " +
-          indent1(pretty(e))
-      ).mkString(";\n")) + "\n}"
-    case Let(_) =>
-      val vars = h.dests.tail.zipWithIndex.map {
-        case (e,i) => "b" + i + "b = " + indent1(pretty(e), "      ")
-      }
-      val in = indent1(pretty(h.dests(0)), "   ")
-      "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
-      in.replaceAll("v([0-9]+)v", "b$1b")
-    case Var(_, i) => "v" + i + "v"
-    case Id() => pretty(h.dests(0))
-    case Tick() => "* " + pretty(h.dests(0))
-    case Improvement() => ">= " + pretty(h.dests(0))
-    case Renaming(_, vec) =>
-      var orig = pretty(h.dests(0))
-      for((j,i) <- vec.zipWithIndex)
-        orig = orig.replace("v" + i + "v", "v" + j + "v")
-      orig
-  }
-  
-  override def nodeDotLabel(n: Node): String =
-    n.uniqueName + " =\\l" +
-    pretty(n).replace("\n", "\\l") + "\\l" +
-    "\\l" + super.nodeDotLabel(n)
-}
+
 
 object Test {
   def main(args: Array[String]) {
     val g = new TheHypergraph
-        with Canonizer
+        //with Canonizer
         with NamedNodes
         with Transformer
         with Prettifier
         //with Visualizer 
         //with HyperTester
-        //with HyperLogger 
+        with HyperLogger 
     
     implicit def peano(i: Int): Value =
       if(i == 0)
@@ -389,6 +268,10 @@ object Test {
       (vs :\ Value("N", List()))((x, y) => Value("C", List(x, y)))
     
     val p = new ExprParser(g)
+    //p("fst x y = x")
+    //p("snd x y = y")
+    //p("ololo x y = snd (fst y x) (fst (snd (fst x y) y) x)")
+    //assert(g.runNode(g("ololo"), Vector(1, 2)) == peano(2))
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), Vector(2, 3)) == peano(5))
     /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
@@ -409,14 +292,32 @@ object Test {
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), Vector(list(1,2,3,4))) == list(4,3,2,1))*/
     try {
-    for(i <- 0 to 50) {
-      println("nodes: " + g.allNodes.size)
-      g.transform()
-    }
-    }catch {case _:TooManyNodesException => println("aborted")}
-    
+      for(i <- 0 to 50) {
+        println("nodes: " + g.allNodes.size)
+        g.transform()
+      }
+    } catch { 
+      case _:TooManyNodesException => 
+        try {
+          println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
+          readLine()
+          g.updatedHyperedges ++= g.allHyperedges
+          for(i <- 0 to 10) {
+            println("OLOLO: " + g.allNodes.size)
+            g.transform(true)
+          }
+        } catch {
+          case _:TooManyNodesException =>
+            println("aborted")
+            g.statistics()
+        }
+    } 
     println("**********************************************")
     //g.writeDotFrames
+    
+    g.statistics()
+    for((n, l) <- g.stat)
+      println(n + ": " + l.sum.toDouble/l.length + " (" + l.filter(_ < 0).sum + "/" + l.filter(_ > 0).sum + ")")
     
     val out = new java.io.FileWriter("test.dot")
     out.write(g.toDot)

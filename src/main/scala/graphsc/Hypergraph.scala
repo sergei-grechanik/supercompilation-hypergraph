@@ -1,142 +1,94 @@
 package graphsc
 
 trait Hypergraph {
-  // h should be with known dests and null source
-  // if source is not null then perform gluing
-  // this function may perform some hyperedge transformations
-  def addHyperedge(h: Hyperedge)
-    
-  // note that this function doesn't copy the node n,
-  // so you cannot use n afterwards as a free node
-  def addNode(n: Node): Node
+  // h should connect nodes known to the hypergraph
+  // h.source may be a free node, in this case the function should add or find an appropriate node 
+  // This function may perform transformations
+  def addHyperedge(h: Hyperedge): Node
   
-  def addNode(l: Label, ds: List[Node]): Node = addNode(Node(l, ds))
+  // add a hyperedge, shortcut
+  def add(l: Label, src: Node, ds: List[Node]): Node =
+    addHyperedge(Hyperedge(l, src, ds))
+  
+  // Create a node with a hyperedge (or return an existing one)
+  def add(l: Label, ds: List[Node]): Node =
+    addHyperedge(Hyperedge(l, null, ds).freeSource)
+  
+  // Create a node without any connections
   def newNode(arity: Int): Node
-  def removeNode(n: Node)
   
   // Nodes shouldn't be glued manually, they should be marked equal with 
-  // a Renaming() hyperedge. Then the hypergraph should glue these nodes automatically.
-  def glueNodes(l: Node, r: Node): Node
+  // an Id() hyperedge. Then the hypergraph should glue these nodes automatically.
+  // def glueNodes(l: Node, r: Node): Node
   
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
   
-  def allNodes: Set[Node]
+  // deprecated
+  def allNodes: Set[Node] =
+    null
 }
 
-trait HypergraphProxy extends Hypergraph {
-  def self: Hypergraph
-  override def addHyperedge(h: Hyperedge) = self.addHyperedge(h)
-  override def addNode(n: Node): Node = self.addNode(n)
-  override def addNode(l: Label, ds: List[Node]): Node = self.addNode(l, ds)
-  override def newNode(arity: Int): Node = self.newNode(arity)
-  override def removeNode(n: Node) = self.removeNode(n)
-  override def glueNodes(l: Node, r: Node): Node = self.glueNodes(l, r)
-  override def onNewHyperedge(h: Hyperedge) = self.onNewHyperedge(h)
-  override def beforeGlue(l: Node, r: Node) = self.beforeGlue(l, r)
-  override def afterGlue(l: Node) = self.afterGlue(l)
-  override def allNodes: Set[Node] = self.allNodes
-}
-
-class TheHypergraph extends Hypergraph {
+trait TheHypergraph extends Hypergraph {
   val nodes = collection.mutable.Set[Node]()
   
   override def allNodes: Set[Node] = nodes.toSet
   
   def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
-    val n = Node(h)
-    nodes += n
-    val res = h.from(n)
+    val res =
+      if(h.source.isInstanceOf[FreeNode]) {
+        val n = newNode(h.arity)
+        h.source.gluedTo = n
+        h.from(n)
+      }
+      else
+        h
+    
+    res.source.outsMut += res
     res.dests.foreach(_.insMut.add(res))
     res
   }
   
-  def addHyperedgeImpl(h1: Hyperedge) {
-    val Hyperedge(l1, s1, dst1) = h1
-    val adder = addNodeP(addHyperedgeP(h => List(h), addHyperedgeImpl _)) _
-    val h = Hyperedge(l1, s1, dst1.map(adder)).derefGlued
+  def addHyperedgeImpl(h1: Hyperedge): Node = {
+    val h = h1.derefGlued
+    
+    require(h.source.isInstanceOf[FreeNode] || nodes(h.source))
     
     if(h.dests.nonEmpty)
       h.dests(0).ins.find(x => x.label == h.label && x.dests == h.dests) match {
-        case Some(x) if h.source == null => x
-        case Some(x) if h.source == x.source => x
-        case Some(x) => glueNodes(h.source, x.source)
+        case Some(x) if h.source == x.source => x.source
+        case Some(x) => glueNodes(x.source, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
           onNewHyperedge(newh)
+          newh.source
       }
     else
       nodes.find(_.outs.exists(_.label == h.label)) match {
-        case Some(n) if h.source == null => h.from(n)
-        case Some(n) => glueNodes(h.source, n)
+        case Some(n) => glueNodes(n, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
           onNewHyperedge(newh)
+          newh.source
       }
   }
   
-  def preprocessHyperedge(h: Hyperedge): List[Hyperedge] = {
+  def addHyperedge(h: Hyperedge): Node = {
     val Hyperedge(l, src, ds) = h
     l match {
       case _ if h.isId =>
-        List(Hyperedge(Id(), src, List(ds(0))))
+        glueNodes(ds(0), src)
       case Renaming(a, vec) if 
         a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
         // we do both because renamings mark canonicalized nodes
-        List(h, Hyperedge(Id(), src, ds))
+        val n = glueNodes(ds(0), src)
+        addHyperedgeImpl(Hyperedge(l, n, List(n)))
       case _ =>
-        List(h)
+        addHyperedgeImpl(h)
     }
-  }
-  
-  def preprocessors: List[Hyperedge => List[Hyperedge]] =
-    List(preprocessHyperedge)
-  
-  override def addHyperedge(h: Hyperedge): Unit =
-    addHyperedgeP(preprocessors)(h)
-  
-  def addHyperedgeP(ps: List[Hyperedge => List[Hyperedge]])(h: Hyperedge) {
-    ps match {
-      case p :: ps => addHyperedgeP(p, addHyperedgeP(ps) _)(h)
-      case Nil => addHyperedgeImpl(h)
-    }
-  }
-    
-  def addHyperedgeP(hyperedgePreprocessor: Hyperedge => List[Hyperedge],
-                    nextAdder: Hyperedge => Unit)(h1: Hyperedge) {
-    // Make sure that all destination nodes are added
-    val Hyperedge(l1, s1, dst1) = h1
-    val adder = addNodeP(addHyperedgeP(hyperedgePreprocessor, nextAdder) _) _
-    val h = Hyperedge(l1, s1, dst1.map(adder)).derefGlued
-    
-    // Preprocessing may perform some useful transformations like canonicalization
-    for(nh <- hyperedgePreprocessor(h)) nh match {
-      case Hyperedge(Id(), src, List(dst)) => glueNodes(src, dst)
-      case _ => nextAdder(nh)
-    }
-  }
-  
-  override def addNode(n: Node): Node =
-    addNodeP(addHyperedge _)(n)
-  
-  def addNodeP(hyperedgeAdder: Hyperedge => Unit)(n: Node): Node = {
-    val realn = n.getRealNode
-    if(!nodes(realn)) {
-      val outs = realn.outs
-      // we should remove all connections before adding the node
-      // to preserve integrity of the hypergraph
-      // the connections will be restored later by hyperedge addition
-      realn.outsMut.clear
-      realn.insMut.clear
-      nodes.add(realn)
-      for(h <- outs)
-        hyperedgeAdder(h)
-    }
-    checkIntegrity()
-    n.getRealNode
   }
   
   override def newNode(arity: Int): Node = {
@@ -145,7 +97,7 @@ class TheHypergraph extends Hypergraph {
     n
   }
   
-  override def removeNode(n: Node) {
+  def removeNode(n: Node) {
     nodes -= n
     // we should leave n.outs and n.ins intact
     // so we remove all hyperedges incident with n
@@ -161,15 +113,24 @@ class TheHypergraph extends Hypergraph {
     checkIntegrity()
   }
   
-  override def glueNodes(l1: Node, r1: Node): Node = {
+  def glueNodes(l1: Node, r1: Node): Node = {
     // just for convenience, this feature is undocumented, don't use it
     if(l1 == null) return r1.getRealNode
     if(r1 == null) return l1.getRealNode
     
-    if(!nodes.contains(l1.getRealNode))
-      addNode(l1.getRealNode)
-    if(!nodes.contains(r1.getRealNode))
-      addNode(r1.getRealNode)
+    if(l1.isInstanceOf[FreeNode] && l1.gluedTo == null) {
+      assert(nodes.contains(r1.getRealNode))
+      l1.gluedTo = r1.getRealNode
+      return l1.getRealNode
+    }
+    
+    if(r1.isInstanceOf[FreeNode] && r1.gluedTo == null) {
+      assert(nodes.contains(l1.getRealNode))
+      r1.gluedTo = l1.getRealNode
+      return r1.getRealNode
+    }
+    
+    assert(nodes.contains(l1.getRealNode) && nodes.contains(r1.getRealNode))
     
     val l = l1.getRealNode
     val r = r1.getRealNode
@@ -255,154 +216,4 @@ class TheHypergraph extends Hypergraph {
   }
 }
 
-// Just supports named nodes
-trait NamedNodes extends Hypergraph {
-  val namedNodes = collection.mutable.Map[String, Node]()
-  
-  def apply(n: String): Node = namedNodes(n)
-  
-  def addNode(n: String, arity: Int): Node = 
-    if(namedNodes.contains(n)) {
-      namedNodes(n)
-    }
-    else {
-      val node = newNode(arity)
-      namedNodes += n -> node
-      node
-    }
-}
 
-class NonTerminationException(s: String = "") extends Exception(s)
-
-class RunningContext {
-  val visited = collection.mutable.Set[(Node, Vector[Value])]()
-  val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
-}
-
-trait HyperTester extends TheHypergraph {
-  val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
-  
-  def runNode(n: Node, args: Vector[Value]): Value = {
-    val ctx = new RunningContext
-    val res = runNode(ctx, n, args)
-    checkFailed(ctx)
-    res
-  }
-  
-  def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
-    require(n.getRealNode == n)
-    runCache.get((n,args)) match {
-      case Some(v) =>
-        //println(n.uniqueName + "(" + args + ") = " + v)
-        v
-      case None => 
-        val res = runNodeUncached(ctx, n, args)
-        //println(n.uniqueName + "(" + args + ") = " + res)
-        res
-    }
-  }
-    
-  def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
-    if(ctx.visited((n,args)))
-      throw new NonTerminationException("Nontermination detected")
-    
-    ctx.visited.add((n,args))
-    var v: Value = null
-    // Try id hyperedges first
-    val outs = 
-      n.outs.filter(_.label.isInstanceOf[Id]).toList ++
-      n.outs.filter(!_.label.isInstanceOf[Id]).toList
-    for(h <- outs)
-      try {
-        val newv = runHyperedgeUncached(ctx, h, args)
-        if(v != null && v != newv)
-          throw new Exception("Test failed: a node has nonequal outgoing hyperedges")
-        else if(v == null) {
-          runCache += (n,args) -> newv
-          v = newv
-        }
-      } catch {
-        case e: NonTerminationException =>
-          // We don't crash here, vacuous path are ok if there are non-vacuous ones
-          // just test this hyperedge later
-          ctx.failed.add((h, args))
-      }
-    
-    ctx.visited.remove((n, args))
-      
-    // None of the hyperedges has terminated, rollback
-    if(v == null)
-      throw new NonTerminationException("None of the hyperedges has terminated")
-      
-    v
-  }
-  
-  def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, args: Vector[Value]): Value = {
-    val res = h.run(args, this.runNode(ctx, _, _))
-    ctx.failed.remove((h, args))
-    res
-  }
-  
-  def checkFailed(ctx: RunningContext) {
-    ctx.visited.clear()
-    if(ctx.failed.nonEmpty) {
-      for((h, a) <- ctx.failed) {
-        assert(runNode(ctx, h.source, a) == runHyperedgeUncached(ctx, h, a))
-      }
-      checkFailed(ctx)
-    }
-  }
-  
-  override def onNewHyperedge(h: Hyperedge) {
-    val ctx = new RunningContext
-    for(((n, a), r) <- runCache if h.source == n) {
-      assert(runHyperedgeUncached(ctx, h, a) == r)
-    }
-    checkFailed(ctx)
-    super.onNewHyperedge(h)
-  }
-  
-  override def beforeGlue(l: Node, r: Node) {
-    val ctx = new RunningContext
-    val data = for(((n, a), _) <- runCache.toSet if n == l || n == r) yield (n, a)
-    for((n,a) <- data) {
-      assert(runNode(ctx, l, a) == runNode(ctx, r, a))
-    }
-    checkFailed(ctx)
-    super.beforeGlue(l, r)
-  }
-  
-  override def nodeDotLabel(n: Node): String = {
-    "\\l" + 
-    (for(((n1,a),r) <- runCache if n1 == n) yield
-        a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
-  }
-  
-  def statistics() {
-    val nodes = allNodes
-    var empty = 0
-    val nv =
-      for(n <- nodes) yield
-        (n, runCache.filter(_._1._1 == n).map(x => (x._1._2, x._2)).toMap)
-    
-    println(
-        "statistics: " + nodes.size + 
-        " should be " + fun(Set(), nv.toList).size + 
-        " empty: " + empty)
-    
-    def fun(s: Set[(Node, Map[Vector[Value], Value])], 
-            l: List[(Node, Map[Vector[Value], Value])]): Set[(Node, Map[Vector[Value], Value])] = {
-      l match {
-        case (n1, m1) :: tl =>
-          if(m1.isEmpty)
-            empty += 1
-          for((n, m) <- s) {
-            if(m == m1 || (m.toSet & m1.toSet).size >= 2) //m == m1
-              return fun(s, tl)
-          }
-          fun(s + (n1 -> m1), tl)
-        case Nil => s
-      }
-    }
-  }
-}
