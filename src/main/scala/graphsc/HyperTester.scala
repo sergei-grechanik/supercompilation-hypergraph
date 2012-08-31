@@ -2,107 +2,117 @@ package graphsc
 
 class NonTerminationException(s: String = "") extends Exception(s)
 
-class RunningContext {
-  val visited = collection.mutable.Set[(Node, Vector[Value])]()
-  val failed = collection.mutable.Set[(Hyperedge, Vector[Value])]()
+case class RunningContext(depth: Int = 0, visited: List[(Node, Vector[Value])] = List()) {
+  def add(n: Node, a: Vector[Value]): RunningContext =
+    RunningContext(depth + 1, (n, a)::visited)
 }
 
 trait HyperTester extends TheHypergraph {
-  val runCache = collection.mutable.Map[(Node, Vector[Value]), Value]()
+  val runCacheImpl = collection.mutable.Map[Node, collection.mutable.Map[Vector[Value], Value]]()
+  
+  def runCache(n: Node): collection.mutable.Map[Vector[Value], Value] =
+    runCacheImpl.getOrElseUpdate(n, collection.mutable.Map())
+    
+  def depthLimit = 50
   
   def runNode(n: Node, args: Vector[Value]): Value = {
-    val ctx = new RunningContext
+    val ctx = RunningContext()
     val res = runNode(ctx, n, args)
-    checkFailed(ctx)
     res
   }
   
   def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
     require(n.getRealNode == n)
-    runCache.get((n,args)) match {
-      case Some(v) =>
-        //println(n.uniqueName + "(" + args + ") = " + v)
-        v
-      case None => 
-        val res = runNodeUncached(ctx, n, args)
-        //println(n.uniqueName + "(" + args + ") = " + res)
-        res
+    val args1 = args.map(_ | Bottom)
+    val almost = runCache(n).get(args1) match {
+      case Some(v) => v
+      case None => runNodeUncached(ctx, n, args1)
     }
+    
+    // If the result contains bottom then it may have
+    // been taken from the arguments, so if they contain ErrorBottom, we should propagate it
+    if(!args.contains(ErrorBottom) || almost.isBottomless)
+      almost
+    else
+      ErrorBottom
   }
     
+  // args should be without ErrorBottoms
   def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
-    if(ctx.visited((n,args)))
-      throw new NonTerminationException("Nontermination detected")
+    require(n.outs.nonEmpty)
+    require(args.forall(_ != ErrorBottom))
     
-    ctx.visited.add((n,args))
-    var v: Value = null
+    if(ctx.visited.contains((n,args)) || ctx.depth > depthLimit)
+      return ErrorBottom
+
+    val newctx = ctx.add(n,args)
+
     // Try id hyperedges first
     val outs = 
       n.outs.filter(_.label.isInstanceOf[Id]).toList ++
       n.outs.filter(!_.label.isInstanceOf[Id]).toList
-    for(h <- outs)
-      try {
-        val newv = runHyperedgeUncached(ctx, h, args)
-        if(v != null && v != newv)
-          throw new Exception("Test failed: a node has nonequal outgoing hyperedges")
-        else if(v == null) {
-          runCache += (n,args) -> newv
-          v = newv
+      
+    val values = 
+      for(o <- outs) yield {
+        val r = runHyperedgeUncached(newctx, o, args)
+        
+        // the answer may have been computed deeper
+        runCache(n).get(args) match {
+          case Some(x) =>
+            return x
+          case _ =>
         }
-      } catch {
-        case e: NonTerminationException =>
-          // We don't crash here, vacuous path are ok if there are non-vacuous ones
-          // just test this hyperedge later
-          ctx.failed.add((h, args))
+        
+        r
       }
     
-    ctx.visited.remove((n, args))
+    val lub = values.reduce(_ | _)
+    
+    if(lub != ErrorBottom) {
+      runCache(n) += args -> lub
+      assert(!args.forall(_.isBottomless) || lub.isBottomless)
       
-    // None of the hyperedges has terminated, rollback
-    if(v == null)
-      throw new NonTerminationException("None of the hyperedges has terminated")
+      for((v,o) <- values zip outs if v != lub) {
+        val test = runHyperedgeUncached(RunningContext(newctx.depth), o, args)
+        // Sometimes it is just too difficult to compute the true value
+        if(test != ErrorBottom)
+          assert(test == lub)
+        else {
+          println("Warning: there was an error computing\n\t" + o + " " + args)
+          println("Prettified source:")
+          println(n.prettyDebug)
+        }
+      }
+    }
       
-    v
+    lub
   }
   
   def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, args: Vector[Value]): Value = {
     val res = h.run(args, this.runNode(ctx, _, _))
-    ctx.failed.remove((h, args))
     res
   }
   
-  def checkFailed(ctx: RunningContext) {
-    ctx.visited.clear()
-    if(ctx.failed.nonEmpty) {
-      for((h, a) <- ctx.failed) {
-        assert(runNode(ctx, h.source, a) == runHyperedgeUncached(ctx, h, a))
-      }
-      checkFailed(ctx)
-    }
-  }
-  
   override def onNewHyperedge(h: Hyperedge) {
-    val ctx = new RunningContext
-    for(((n, a), r) <- runCache if h.source == n) {
+    val ctx = RunningContext()
+    for((a, r) <- runCache(h.source)) {
       assert(runHyperedgeUncached(ctx, h, a) == r)
     }
-    checkFailed(ctx)
     super.onNewHyperedge(h)
   }
   
   override def beforeGlue(l: Node, r: Node) {
-    val ctx = new RunningContext
-    val data = for(((n, a), _) <- runCache.toList if n == l || n == r) yield (n, a)
+    val ctx = RunningContext()
+    val data = for(n <- List(l,r); (a, _) <- runCache(n).toList) yield (n, a)
     for((n,a) <- data) {
       assert(runNode(ctx, l, a) == runNode(ctx, r, a))
     }
-    checkFailed(ctx)
     super.beforeGlue(l, r)
   }
   
   override def nodeDotLabel(n: Node): String = {
     "\\l" + 
-    (for(((n1,a),r) <- runCache if n1 == n) yield
+    (for((a,r) <- runCache(n)) yield
         a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
   }
   
@@ -111,7 +121,7 @@ trait HyperTester extends TheHypergraph {
     var empty = 0
     val nv =
       for(n <- nodes) yield
-        (n, runCache.filter(_._1._1 == n).map(x => (x._1._2, x._2)).toMap)
+        (n, runCache(n).toMap)
     
     println(
         "statistics: " + nodes.size + 
@@ -133,4 +143,49 @@ trait HyperTester extends TheHypergraph {
       }
     }
   }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
+sealed trait Value {
+  def size: Int
+  def |(v: Value): Value
+  def isBottomless: Boolean
+}
+
+case class Ctr(constructor: String, args: List[Value]) extends Value {
+  override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
+  override def size = 1 + args.map(_.size).sum
+  
+  def |(v: Value): Value = v match {
+    case Ctr(c1, a1) if c1 == constructor && a1.length == args.length =>
+      Ctr(c1, args zip a1 map { case (l,r) => l | r })
+    case Bottom =>
+      this
+    case ErrorBottom =>
+      this
+    case _ =>
+      throw new Exception("Values are incompatible")
+  }
+  
+  override def isBottomless = args.forall(_.isBottomless)
+}
+
+case object Bottom extends Value {
+  override def toString = "_|_"
+  override def size = 1
+  def |(v: Value): Value = v match {
+    case ErrorBottom => Bottom
+    case v => v
+  }
+  override def isBottomless = false
+}
+
+case object ErrorBottom extends Value {
+  override def toString = "_[fail]_"
+  override def size = 1
+  def |(v: Value): Value = v
+  
+  override def isBottomless = false
 }

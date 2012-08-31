@@ -166,8 +166,8 @@ trait Transformer extends HyperTester with Transformations with Prettifier {
         //"caseVar" -> caseVar,
         //"caseCase" -> caseCase,
         //"letRenaming" -> letRenaming,
-        "renamingRenaming" -> renamingRenaming
-        //"anyRenaming" -> anyRenaming
+        "renamingRenaming" -> renamingRenaming,
+        "anyRenaming" -> anyRenaming
         )
       else
       List(
@@ -260,12 +260,12 @@ object Test {
     
     implicit def peano(i: Int): Value =
       if(i == 0)
-        Value("Z", List())
+        Ctr("Z", List())
       else
-        Value("S", List(peano(i-1)))
+        Ctr("S", List(peano(i-1)))
         
     def list(vs: Value*): Value = 
-      (vs :\ Value("N", List()))((x, y) => Value("C", List(x, y)))
+      (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
     
     val p = new ExprParser(g)
     //p("fst x y = x")

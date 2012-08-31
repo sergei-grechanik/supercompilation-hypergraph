@@ -1,10 +1,6 @@
 package graphsc
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
-case class Value(constructor: String, args: List[Value]) {
-  override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
-}
-
 sealed trait Label {
   def isSimple: Boolean = this match {
     case Id() => true
@@ -136,15 +132,24 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   def run(args: Vector[Value], nodeRunner: (Node, Vector[Value]) => Value): Value = {
     label match {
       case Construct(name) =>
-        Value(name, dests.map(nodeRunner(_, args)))
+        // Bottoms are like ordinary bottoms, ErrorBottoms propagate through constructors
+        def subs = dests.map(nodeRunner(_, args))
+        if(subs.contains(ErrorBottom))
+          ErrorBottom
+        else
+          Ctr(name, subs)
       case CaseOf(cases) =>
-        val victim = nodeRunner(dests(0), args)
-        val Some(((_, n), expr)) = (cases zip dests.tail).find(_._1._1 == victim.constructor)
-        assert(victim.args.size == n)
-        nodeRunner(expr, args ++ victim.args)
+        nodeRunner(dests(0), args) match {
+          case Ctr(cname, cargs) =>
+            val Some(((_, n), expr)) = (cases zip dests.tail).find(_._1._1 == cname)
+            assert(cargs.size == n)
+            nodeRunner(expr, args ++ cargs)
+          case Bottom => Bottom
+          case ErrorBottom => ErrorBottom
+        }
       case Let(_) =>
-        // Well, it's not lazy yet, but I don't know how to do laziness right in scala
-        nodeRunner(dests(0), Vector() ++ dests.tail.map(nodeRunner(_, args)))
+        val newargs = Vector() ++ dests.tail.map(nodeRunner(_, args))
+        nodeRunner(dests(0), newargs)
       case Renaming(_, vec) =>
         nodeRunner(dests(0), Vector() ++ vec.map(args(_)))
       case Tick() =>
