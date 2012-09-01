@@ -165,9 +165,9 @@ trait Transformer extends HyperTester with Transformations with Prettifier {
         //"caseReduce" -> caseReduce,
         //"caseVar" -> caseVar,
         //"caseCase" -> caseCase,
-        //"letRenaming" -> letRenaming,
-        "renamingRenaming" -> renamingRenaming,
-        "anyRenaming" -> anyRenaming
+        "letRenaming" -> letRenaming,
+        "renamingRenaming" -> renamingRenaming
+        //"anyRenaming" -> anyRenaming
         )
       else
       List(
@@ -193,10 +193,13 @@ trait Transformer extends HyperTester with Transformations with Prettifier {
         trans((h1,h2))
         val after = allNodes.size
         
+        if(name == "letRenaming" && after > before) 
+          readLine()
+        
         stat += name -> ((after - before) :: stat.getOrElse(name, Nil))
       }
       
-      if((!simple && (counter > 300 || allNodes.size > 100)) || allNodes.size > 200)
+      if((!simple && (counter > 300 || allNodes.size > 100)) || allNodes.size > 1000)
         throw new TooManyNodesException("")
       
     }
@@ -250,7 +253,7 @@ trait Canonizer extends TheHypergraph {
 object Test {
   def main(args: Array[String]) {
     val g = new TheHypergraph
-        //with Canonizer
+        with Canonizer
         with NamedNodes
         with Transformer
         with Prettifier

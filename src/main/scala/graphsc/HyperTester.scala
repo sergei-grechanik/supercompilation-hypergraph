@@ -112,7 +112,7 @@ trait HyperTester extends TheHypergraph {
   
   override def nodeDotLabel(n: Node): String = {
     "\\l" + 
-    (for((a,r) <- runCache(n)) yield
+    (for((a,r) <- runCache(n) if a.forall(_.isBottomless)) yield
         a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
   }
   
