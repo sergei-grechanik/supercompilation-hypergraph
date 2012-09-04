@@ -28,6 +28,14 @@ trait Transformations extends Hypergraph {
       a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
       add(Id(), src, List(n))
   }
+  
+  // this transformation must be done automatically by TheHypergraph
+  def renamingInv: PartialFunction[Hyperedge, Unit] = {
+    case Hyperedge(Renaming(a, vec), src, List(n)) if
+      a == vec.length && vec.toSet == (0 until a).toSet =>
+      val newvec = vec.zipWithIndex.sortBy(_._1).map(_._2)
+      add(Renaming(a, newvec), n, List(src))
+  }
     
   def renamingVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(Renaming(a1, vec1), src1, List(f1)),
@@ -66,7 +74,14 @@ trait Transformations extends Hypergraph {
       if(ren != null && ren.source == n)
         List(ren)
       else
-        n.outs.filter(_.label.isInstanceOf[Renaming]).toList))
+        n.outs.map{
+        case o if o.label.isInstanceOf[Renaming] => o
+        case o => Hyperedge(Renaming(n.arity, 0 until n.arity toList), null, List(n))
+        }.toList))
+        /*n.outs.filter(_.label.isInstanceOf[Renaming]).toList match {
+          case Nil => List(Renaming(n.arity, 0 until n.arity toList))
+          case l => l
+        }))*/
         
     println("Renamings give " + ll.size)
     
@@ -118,7 +133,11 @@ trait Transformations extends Hypergraph {
         for(Hyperedge(Renaming(a2, vec2), src2, List(f2)) <- f1.outs.toList) yield
           add(Renaming(a1, vec2.map(vec1(_))), src1, List(f2))
         if(lst.isEmpty) addHyperedge(h)
+      case Construct(_) =>
+        addHyperedge(h)
+        add(Renaming(0, Nil), h.source, List(h.source))
       case _ =>
+        throw new Exception("This case should be impossible, I forgot something here")
     }
   
   def anyRenaming: PartialFunction[(Hyperedge, Hyperedge), Unit] = {

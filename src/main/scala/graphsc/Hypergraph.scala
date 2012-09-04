@@ -86,6 +86,14 @@ trait TheHypergraph extends Hypergraph {
         // we do both because renamings mark canonicalized nodes
         val n = glueNodes(ds(0), src)
         addHyperedgeImpl(Hyperedge(l, n, List(n)))
+      case Renaming(a, vec) =>
+        addHyperedgeImpl(h)
+        // add the inverse renaming as well
+        if(a == vec.length && vec.toSet == (0 until a).toSet) {
+          val newvec = vec.zipWithIndex.sortBy(_._1).map(_._2)
+          addHyperedgeImpl(Hyperedge(Renaming(a, newvec), ds(0), List(src)))
+        }
+        h.source.realNode
       case _ =>
         addHyperedgeImpl(h)
     }
@@ -115,25 +123,25 @@ trait TheHypergraph extends Hypergraph {
   
   def glueNodes(l1: Node, r1: Node): Node = {
     // just for convenience, this feature is undocumented, don't use it
-    if(l1 == null) return r1.getRealNode
-    if(r1 == null) return l1.getRealNode
+    if(l1 == null) return r1.realNode
+    if(r1 == null) return l1.realNode
     
     if(l1.isInstanceOf[FreeNode] && l1.gluedTo == null) {
-      assert(nodes.contains(r1.getRealNode))
-      l1.gluedTo = r1.getRealNode
-      return l1.getRealNode
+      assert(nodes.contains(r1.realNode))
+      l1.gluedTo = r1.realNode
+      return l1.realNode
     }
     
     if(r1.isInstanceOf[FreeNode] && r1.gluedTo == null) {
-      assert(nodes.contains(l1.getRealNode))
-      r1.gluedTo = l1.getRealNode
-      return r1.getRealNode
+      assert(nodes.contains(l1.realNode))
+      r1.gluedTo = l1.realNode
+      return r1.realNode
     }
     
-    assert(nodes.contains(l1.getRealNode) && nodes.contains(r1.getRealNode))
+    assert(nodes.contains(l1.realNode) && nodes.contains(r1.realNode))
     
-    val l = l1.getRealNode
-    val r = r1.getRealNode
+    val l = l1.realNode
+    val r = r1.realNode
     
     if(l != r) {
       assert(l.arity == r.arity)
@@ -161,7 +169,7 @@ trait TheHypergraph extends Hypergraph {
       // maybe there appeared some more nodes to glue 
       glueParents(l)
       // Now l may be glued to something else
-      l.getRealNode
+      l.realNode
     }
     else //if(l == r)
       l // Nodes are already glued
@@ -199,7 +207,7 @@ trait TheHypergraph extends Hypergraph {
   def checkIntegrity() {
     return
     for(n <- nodes) {
-      assert(n.getRealNode == n)
+      assert(n.realNode == n)
       for(h <- n.ins) {
         assert(nodes(h.source))
         assert(h.dests.forall(nodes(_)))

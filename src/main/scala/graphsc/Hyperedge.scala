@@ -114,8 +114,8 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   
   // Dereference all glued nodes
   def derefGlued: Hyperedge = {
-    val s = if(source == null) null else source.getRealNode
-    Hyperedge(label, s, dests.map(_.getRealNode))
+    val s = if(source == null) null else source.realNode
+    Hyperedge(label, s, dests.map(_.realNode))
   }
   
   override def toString =
@@ -173,26 +173,26 @@ class Node(val arity: Int) {
   var prettyDebug = ""
   
   def outs: Set[Hyperedge] = 
-    if(gluedTo == null) mouts.toSet else getRealNode.outs
+    if(gluedTo == null) mouts.toSet else realNode.outs
   def ins: Set[Hyperedge] = 
-    if(gluedTo == null) mins.toSet else getRealNode.ins
+    if(gluedTo == null) mins.toSet else realNode.ins
   
   def outsMut: collection.mutable.Set[Hyperedge] = 
-    if(gluedTo == null) mouts else getRealNode.outsMut
+    if(gluedTo == null) mouts else realNode.outsMut
   def insMut: collection.mutable.Set[Hyperedge] = 
-    if(gluedTo == null) mins else getRealNode.insMut
+    if(gluedTo == null) mins else realNode.insMut
     
   // Sometimes the node was glued to some other node...
   // Imperative programming sucks, I know
-  def getRealNode: Node =
+  def realNode: Node =
     if(gluedTo == null) this
-    else gluedTo.getRealNode
+    else gluedTo.realNode
     
   def uniqueName: String =
     if(gluedTo == null)
       super.toString + "/" + arity
     else
-      super.toString + "/" + arity + "(" + getRealNode.uniqueName + ")"
+      super.toString + "/" + arity + "(" + realNode.uniqueName + ")"
   
   override def toString =
     uniqueName

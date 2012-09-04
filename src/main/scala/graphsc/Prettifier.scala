@@ -4,7 +4,7 @@ package graphsc
 trait NamedNodes extends Hypergraph {
   val namedNodes = collection.mutable.Map[String, Node]()
   
-  def apply(n: String): Node = namedNodes(n).getRealNode
+  def apply(n: String): Node = namedNodes(n).realNode
   
   def newNode(n: String, arity: Int): Node = 
     if(namedNodes.contains(n)) {
@@ -21,31 +21,31 @@ trait NamedNodes extends Hypergraph {
 trait Prettifier extends TheHypergraph with NamedNodes {
   val prettyMap = collection.mutable.Map[Node, String]() 
   
-  def pretty(n: Node): String = prettyMap.get(n.getRealNode) match {
+  def pretty(n: Node): String = prettyMap.get(n.realNode) match {
     case None =>
       throw new NoSuchElementException("Node " + n + " is not pretty")
     case Some(s) => s
   }
   
   def prettySet(n: Node, s: String) {
-    prettyMap += n.getRealNode -> s
-    n.getRealNode.prettyDebug = s
+    prettyMap += n.realNode -> s
+    n.realNode.prettyDebug = s
   }
   
   override def newNode(n: String, arity: Int): Node = {
     val node = super.newNode(n, arity)
-    println("node " + n + " " + node.getRealNode)
-    prettySet(node.getRealNode, n)
+    println("node " + n + " " + node.realNode)
+    prettySet(node.realNode, n)
     node
   }
   
   override def onNewHyperedge(h: Hyperedge) {
     try {
       val s = prettyHyperedge(h)
-      prettyMap.get(h.source.getRealNode) match {
+      prettyMap.get(h.source.realNode) match {
         case Some(p) if p.length <= s.length =>
         case _ =>
-          prettySet(h.source.getRealNode, s)
+          prettySet(h.source.realNode, s)
       }
       super.onNewHyperedge(h)
     } catch {
@@ -54,8 +54,8 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   }
   
   override def beforeGlue(l1: Node, r1: Node) {
-    val l = l1.getRealNode
-    val r = r1.getRealNode
+    val l = l1.realNode
+    val r = r1.realNode
     val lp = prettyMap.get(l)
     val rp = prettyMap.get(r)
     assert(lp != None || rp != None)
@@ -110,4 +110,12 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     n.uniqueName + " =\\l" +
     pretty(n).replace("\n", "\\l") + "\\l" +
     "\\l" + super.nodeDotLabel(n)
+    
+  def statistics() {
+    val nodes = allNodes.toList.map(n => n.arity + "\n" + pretty(n))
+    val mostpop = nodes.groupBy(identity).mapValues(_.size).maxBy(_._2)
+    println("Nodes: " + allNodes.size + " should be: " + nodes.distinct.size)
+    println("Most popular(" + mostpop._2 + "): arity " + mostpop._1 + "\n")
+  }
 }
+
