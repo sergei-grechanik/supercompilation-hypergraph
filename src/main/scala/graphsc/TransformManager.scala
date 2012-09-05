@@ -33,7 +33,8 @@ trait TransformManager extends Hypergraph {
     val set = updatedHyperedges.map(_.derefGlued)
     updatedHyperedges.clear()
     val processed = collection.mutable.Set[Hyperedge]()
-    for(h1 <- set; val h = h1.derefGlued; if !processed(h) && !processed(h1)) {
+    for(h1 <- set; val h = h1.derefGlued; 
+        if !processed(h) && !processed(h1) && allNodes(h.source) && h.source.outs(h)) {
       processed += h
       procHyperedge(h)
     }

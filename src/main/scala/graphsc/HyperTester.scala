@@ -2,43 +2,47 @@ package graphsc
 
 class NonTerminationException(s: String = "") extends Exception(s)
 
-case class RunningContext(depth: Int = 0, visited: List[(Node, Vector[Value])] = List()) {
-  def add(n: Node, a: Vector[Value]): RunningContext =
+case class RunningContext(depth: Int = 0, visited: List[(Node, List[Value])] = List()) {
+  def add(n: Node, a: List[Value]): RunningContext =
     RunningContext(depth + 1, (n, a)::visited)
 }
 
 trait HyperTester extends TheHypergraph {
-  val runCacheImpl = collection.mutable.Map[Node, collection.mutable.Map[Vector[Value], Value]]()
+  val runCacheImpl = collection.mutable.Map[Node, collection.mutable.Map[List[Value], Value]]()
   
-  def runCache(n: Node): collection.mutable.Map[Vector[Value], Value] =
+  def runCache(n: Node): collection.mutable.Map[List[Value], Value] =
     runCacheImpl.getOrElseUpdate(n, collection.mutable.Map())
     
   def depthLimit = 50
   
-  def runNode(n: Node, args: Vector[Value]): Value = {
+  def runNode(n: Node, args: List[Value]): Value = {
     val ctx = RunningContext()
     val res = runNode(ctx, n, args)
     res
   }
   
-  def runNode(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
+  def runNode(ctx: RunningContext, n: Node, argsUncut: List[Value]): Value = {
     require(n.realNode == n)
-    val args1 = args.map(_ | Bottom)
-    val almost = runCache(n).get(args1) match {
+    val args =
+      if(argsUncut.size >= n.arity)
+        argsUncut.take(n.arity).map(_ | Bottom)
+      else
+        argsUncut.map(_ | Bottom) ++ (argsUncut.size until n.arity).map(_ => Bottom)
+    val almost = runCache(n).get(args) match {
       case Some(v) => v
-      case None => runNodeUncached(ctx, n, args1)
+      case None => runNodeUncached(ctx, n, args)
     }
     
     // If the result contains bottom then it may have
     // been taken from the arguments, so if they contain ErrorBottom, we should propagate it
-    if(!args.contains(ErrorBottom) || almost.isBottomless)
+    if(!argsUncut.contains(ErrorBottom) || almost.isBottomless)
       almost
     else
       ErrorBottom
   }
     
   // args should be without ErrorBottoms
-  def runNodeUncached(ctx: RunningContext, n: Node, args: Vector[Value]): Value = {
+  def runNodeUncached(ctx: RunningContext, n: Node, args: List[Value]): Value = {
     require(n.outs.nonEmpty)
     require(args.forall(_ != ErrorBottom))
     
@@ -70,7 +74,6 @@ trait HyperTester extends TheHypergraph {
     
     if(lub != ErrorBottom) {
       runCache(n) += args -> lub
-      assert(!args.forall(_.isBottomless) || lub.isBottomless)
       
       for((v,o) <- values zip outs if v != lub) {
         val test = runHyperedgeUncached(RunningContext(newctx.depth), o, args)
@@ -88,7 +91,13 @@ trait HyperTester extends TheHypergraph {
     lub
   }
   
-  def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, args: Vector[Value]): Value = {
+  def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): Value = {
+    val args =
+      if(argsUncut.size >= h.arity)
+        argsUncut.take(h.arity)
+      else
+        argsUncut ++ (argsUncut.size until h.arity).map(_ => Bottom)
+        
     val res = h.run(args, this.runNode(ctx, _, _))
     res
   }
@@ -110,7 +119,17 @@ trait HyperTester extends TheHypergraph {
     super.beforeGlue(l, r)
   }
   
+  override def onArityReduced(n: Node) {
+    val cache = runCache(n)
+    val data = cache.toList.map(_._1.take(n.arity))
+    cache.clear()
+    for(v <- data)
+      runNode(n, v)
+    super.onArityReduced(n)
+  }
+  
   override def nodeDotLabel(n: Node): String = {
+    super.nodeDotLabel(n) +
     "\\l" + 
     (for((a,r) <- runCache(n) if a.forall(_.isBottomless)) yield
         a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
@@ -128,8 +147,8 @@ trait HyperTester extends TheHypergraph {
         " should be " + fun(Set(), nv.toList).size + 
         " empty: " + empty)
     
-    def fun(s: Set[(Node, Map[Vector[Value], Value])], 
-            l: List[(Node, Map[Vector[Value], Value])]): Set[(Node, Map[Vector[Value], Value])] = {
+    def fun(s: Set[(Node, Map[List[Value], Value])], 
+            l: List[(Node, Map[List[Value], Value])]): Set[(Node, Map[List[Value], Value])] = {
       l match {
         case (n1, m1) :: tl =>
           if(m1.isEmpty)

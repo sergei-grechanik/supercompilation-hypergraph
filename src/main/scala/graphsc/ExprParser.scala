@@ -22,20 +22,13 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
-  private def theVar(a: Int, v: Int): Node = graph.add(Var(a, v), List())
-  
-  private def tableArity(table: Map[String, Int]): Int =
-    if(table.isEmpty)
-      0
-    else
-      table.values.max + 1
+  private def theVar(v: Int): Node = graph.add(Var(v), List())
   
   def onecase: Parser[Map[String,Int] => ((String, Int), Node)] =
     cname ~ rep(fname) ~ "->" ~ expr ^^
     {case n~l~"->"~e => table =>
       val lsize = l.size
-      val ar = tableArity(table)
-      val newtable = table ++ (l zip (0 until lsize).map(_ + ar))
+      val newtable = table.mapValues(_ + lsize) ++ (l zip (0 until lsize))
       ((n, lsize), e(newtable))}
   
   def caseof: Parser[Map[String,Int] => Node] =
@@ -48,16 +41,16 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     fname ~ rep(argexpr) ^^
     { case f~as => table =>
         if(as.isEmpty && table.contains(f))
-          theVar(tableArity(table), table(f))
+          theVar(table(f))
         else {
           val fun = graph.newNode(f, as.length)
-          graph.add(Let(tableArity(table)), fun :: as.map(_(table)))
+          graph.add(Let(), fun :: as.map(_(table)))
         }
     }
   
   def variable: Parser[Map[String,Int] => Node] =
     fname ^^
-    { case f => table => theVar(tableArity(table), table(f))}
+    { case f => table => theVar(table(f))}
     
   def cons: Parser[Map[String,Int] => Node] =
     cname ~ rep1(argexpr) ^^
@@ -67,7 +60,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def zeroargCons: Parser[Map[String,Int] => Node] =
     cname ^^
     { case c => table =>
-        graph.add(Let(tableArity(table)), List(
+        graph.add(Let(), List(
             graph.add(Construct(c), List()))) }
   
   def expr: Parser[Map[String,Int] => Node] =

@@ -138,7 +138,7 @@ object Test {
         //"caseReduce" -> caseReduce,
         //"caseVar" -> caseVar,
         //"caseCase" -> caseCase,
-        //"letRenaming" -> letRenaming,
+        "letRenaming" -> letRenaming,
         "letVar" -> letVar
         //"anyRenaming" -> anyRenaming
     )
@@ -175,53 +175,61 @@ object Test {
     //p("fst x y = x")
     //p("snd x y = y")
     //p("ololo x y = snd (fst y x) (fst (snd (fst x y) y) x)")
-    //assert(g.runNode(g("ololo"), Vector(1, 2)) == peano(2))
+    //assert(g.runNode(g("ololo"), List(1, 2)) == peano(2))
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
-    //assert(g.runNode(g("add"), Vector(2, 3)) == peano(5))
+    //assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
-    assert(g.runNode(g("mul"), Vector(2, 3)) == peano(6))
+    assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
     p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
-    assert(g.runNode(g("padd"), Vector(2, 3)) == peano(5))
+    assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
     p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
-    assert(g.runNode(g("pmul"), Vector(2, 3)) == peano(6))
+    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))
     p("id x = case x of {Z -> Z; S x -> S (id x)}")
-    assert(g.runNode(g("id"), Vector(3)) == peano(3))
+    assert(g.runNode(g("id"), List(3)) == peano(3))
     p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    assert(g.runNode(g("nrev"), Vector(2)) == peano(2))
+    assert(g.runNode(g("nrev"), List(2)) == peano(2))
     p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
-    assert(g.runNode(g("fac"), Vector(4)) == peano(24))
+    assert(g.runNode(g("fac"), List(4)) == peano(24))
     p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
-    assert(g.runNode(g("fib"), Vector(6)) == peano(8))
+    assert(g.runNode(g("fib"), List(6)) == peano(8))
     p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
-    assert(g.runNode(g("nrevL"), Vector(list(1,2,3,4))) == list(4,3,2,1))*/
+    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
+    
+    {
+      val out = new java.io.FileWriter("init.dot")
+      out.write(g.toDot)
+      out.close
+    }
+    
     try {
       for(i <- 0 to 50) {
         println("nodes: " + g.allNodes.size)
         g.transform(transAll(g))
       }
     } catch { 
-      case _:TooManyNodesException => 
-        try {
-          println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
-          g.statistics()
-          readLine()
-          g.updateAll()
-          for(i <- 0 to 10) {
-            println("OLOLO: " + g.allNodes.size)
-            g.statistics()
-            g.transform(transReduce(g))
-          }
-          g.statistics()
-          readLine()
-          g.updateAll()
-          g.transform(transLetRenaming(g))
-        } catch {
-          case _:TooManyNodesException =>
-            println("aborted")
-            //g.statistics()
-        }
-    } 
+      case _:TooManyNodesException =>
+        println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
+    }
+    try {
+      g.statistics()
+      readLine()
+      g.updateAll()
+      for(i <- 0 to 10) {
+        println("OLOLO: " + g.allNodes.size)
+        g.statistics()
+        g.transform(transReduce(g))
+      }
+      g.statistics()
+      /*readLine()
+      g.updateAll()
+      g.transform(transLetRenaming(g))*/
+    } catch {
+      case _:TooManyNodesException =>
+        println("aborted")
+        //g.statistics()
+    }
+     
     println("**********************************************")
     //g.writeDotFrames
     

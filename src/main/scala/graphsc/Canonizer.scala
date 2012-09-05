@@ -16,7 +16,8 @@ trait Canonizer extends Hypergraph {
       newNodeSuper(a)
   }
   
-  abstract override def newNode(arity: Int): Node
+  abstract override def newNode(arity: Int): Node =
+    super.newNode(arity)
   
   abstract override def addHyperedge(h: Hyperedge): Node = {
     if(h.label.isInstanceOf[Var])

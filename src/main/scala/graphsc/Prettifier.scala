@@ -34,8 +34,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   
   override def newNode(n: String, arity: Int): Node = {
     val node = super.newNode(n, arity)
-    println("node " + n + " " + node.realNode)
-    prettySet(node.realNode, n)
+    prettySet(node.realNode, n + (0 until arity).map("v" + _ + "v").mkString(" ", " ", ""))
     node
   }
   
@@ -79,22 +78,23 @@ trait Prettifier extends TheHypergraph with NamedNodes {
           n + " " + (0 until k map (i => "v" + (i + e.arity - k) + "v")).mkString(" ") + " -> " +
           indent1(prettyfun(e))
       ).mkString(";\n")) + "\n}"
-    case Let(_) =>
+    case Let() =>
       val vars = h.dests.tail.zipWithIndex.map {
         case (e,i) => "b" + i + "b = " + indent1(prettyfun(e), "      ")
       }
       val in = indent1(prettyfun(h.dests(0)), "   ")
       "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
       in.replaceAll("v([0-9]+)v", "b$1b")
-    case Var(_, i) => "v" + i + "v"
+    case Var(i) => "v" + i + "v"
     case Id() => prettyfun(h.dests(0))
     case Tick() => "* " + prettyfun(h.dests(0))
     case Improvement() => ">= " + prettyfun(h.dests(0))
-    case Renaming(_, vec) =>
+    case Renaming(vec) =>
       var orig = prettyfun(h.dests(0))
       for((j,i) <- vec.zipWithIndex)
         orig = orig.replace("v" + i + "v", "v" + j + "v")
       orig
+    case Error() => "_[fail]_"
   }
   
   def prettyTwoHyperedges(h1: Hyperedge, h2: Hyperedge): String = {
@@ -107,7 +107,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   }
   
   override def nodeDotLabel(n: Node): String =
-    n.uniqueName + " =\\l" +
+    super.nodeDotLabel(n) + "\\l" +
     pretty(n).replace("\n", "\\l") + "\\l" +
     "\\l" + super.nodeDotLabel(n)
     

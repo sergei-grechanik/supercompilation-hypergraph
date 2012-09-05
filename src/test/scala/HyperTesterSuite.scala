@@ -1,0 +1,55 @@
+import graphsc._
+import org.junit.runner.RunWith
+import org.scalatest.junit.JUnitRunner
+import org.scalatest.FunSuite
+
+@RunWith(classOf[JUnitRunner])
+class HyperTesterSuite extends FunSuite {
+  import Samples._
+  
+  val samples = List("add", "mul", "padd", "pmul", "id", "nrev", "fac", "fib", "append", "nrevL")
+  
+  def addSamples(g: NamedNodes) {
+    val parser = new ExprParser(g)
+    for(s <- samples)
+      parser(Samples(s))
+  }
+  
+  def runSamples(g: HyperTester with NamedNodes) {
+    assert(g.runNode(g("add"), List(2, 3)) === peano(5))
+    assert(g.runNode(g("add"), List(5, 1)) === peano(6))
+    assert(g.runNode(g("mul"), List(2, 3)) === peano(6))
+    assert(g.runNode(g("mul"), List(4, 3)) === peano(12))
+    assert(g.runNode(g("padd"), List(2, 3)) === peano(5))
+    assert(g.runNode(g("pmul"), List(2, 3)) === peano(6))
+    assert(g.runNode(g("id"), List(3)) === peano(3))
+    assert(g.runNode(g("nrev"), List(2)) === peano(2))
+    assert(g.runNode(g("nrev"), List(5)) === peano(5))
+    assert(g.runNode(g("fac"), List(4)) === peano(24))
+    assert(g.runNode(g("fib"), List(6)) === peano(8))
+    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) === list(4,3,2,1))
+  }
+  
+  test("evaluation with HyperTester with Canonizer") {
+    val g = 
+      new TheHypergraph 
+        with HyperTester
+        with Canonizer
+        with NamedNodes
+        with IntegrityCheckEnabled
+    
+    addSamples(g)
+    runSamples(g)
+  }
+  
+  test("evaluation with HyperTester without Canonizer") {
+    val g = 
+      new TheHypergraph 
+        with HyperTester
+        with NamedNodes
+        with IntegrityCheckEnabled
+    
+    addSamples(g)
+    runSamples(g)
+  }
+}

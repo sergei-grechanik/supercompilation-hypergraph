@@ -21,6 +21,7 @@ trait Hypergraph {
   // an Id() hyperedge. Then the hypergraph should glue these nodes automatically.
   // def glueNodes(l: Node, r: Node): Node
   
+  def onArityReduced(n: Node) {}
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
@@ -35,16 +36,19 @@ trait TheHypergraph extends Hypergraph {
   
   override def allNodes: Set[Node] = nodes.toSet
   
-  def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
+  def addHyperedgeSimple(h1: Hyperedge): Hyperedge = {
+    val h = h1.normal
     val res =
       if(h.source.isInstanceOf[FreeNode]) {
         val n = newNode(h.arity)
         h.source.gluedTo = n
         h.from(n)
       }
-      else
+      else {
+        reduceArity(h.source, h.arity)
         h
-    
+      }
+        
     res.source.outsMut += res
     res.dests.foreach(_.insMut.add(res))
     res
@@ -79,19 +83,19 @@ trait TheHypergraph extends Hypergraph {
   def addHyperedge(h: Hyperedge): Node = {
     val Hyperedge(l, src, ds) = h
     l match {
-      case _ if h.isId =>
+      case Id() =>
         glueNodes(ds(0), src)
-      case Renaming(a, vec) if 
-        a == vec.length && vec.zipWithIndex.forall{ case (a,b) => a == b } =>
+      case Renaming(vec) if 
+        vec.zipWithIndex.forall{ case (a,b) => a == b } =>
         // we do both because renamings mark canonicalized nodes
         val n = glueNodes(ds(0), src)
         addHyperedgeImpl(Hyperedge(l, n, List(n)))
-      case Renaming(a, vec) =>
+      case Renaming(vec) =>
         addHyperedgeImpl(h)
         // add the inverse renaming as well
-        if(a == vec.length && vec.toSet == (0 until a).toSet) {
+        if(vec.toSet == (0 until vec.size).toSet) {
           val newvec = vec.zipWithIndex.sortBy(_._1).map(_._2)
-          addHyperedgeImpl(Hyperedge(Renaming(a, newvec), ds(0), List(src)))
+          addHyperedgeImpl(Hyperedge(Renaming(newvec), ds(0), List(src)))
         }
         h.source.realNode
       case _ =>
@@ -144,8 +148,8 @@ trait TheHypergraph extends Hypergraph {
     val r = r1.realNode
     
     if(l != r) {
-      assert(l.arity == r.arity)
       // We add temporary id hyperedges, so that HyperTester won't crash
+      // This will also take care of arity reduction
       addHyperedgeSimple(Hyperedge(Id(), l, List(r)))
       addHyperedgeSimple(Hyperedge(Id(), r, List(l)))
       beforeGlue(l, r)
@@ -182,6 +186,28 @@ trait TheHypergraph extends Hypergraph {
       g.toList.map(_.source).reduce(glueNodes)
   }
   
+  def reduceArity(n: Node, a: Int) {
+    val node = n.realNode
+    assert(nodes(node))
+    if(a < node.arity) {
+      node.marity = a
+      onArityReduced(n)
+      
+      for(h <- node.ins ++ node.outs) {
+        val nor = h.normal
+        if(nor != h) {
+          h.source.outsMut -= h
+          h.dests.map(_.insMut -= h)
+          addHyperedgeSimple(nor)
+          println("Hyperedge ARITY REDUCED%%%%%%%%%%%%%%%%%%%%%%%")
+        }
+      }
+      
+      for(h <- n.ins)
+        reduceArity(h.source, h.arity)
+    }
+  }
+  
   def nodeDotLabel(n: Node): String =
     n.uniqueName
   
@@ -204,24 +230,28 @@ trait TheHypergraph extends Hypergraph {
     sb.toString
   }
   
+  def integrityCheckEnabled = false
   def checkIntegrity() {
-    return
-    for(n <- nodes) {
-      assert(n.realNode == n)
-      for(h <- n.ins) {
-        assert(nodes(h.source))
-        assert(h.dests.forall(nodes(_)))
-        assert(h.source.outs(h))
-        assert(h.dests.forall(_.ins(h)))
+    if(integrityCheckEnabled)
+      for(n <- nodes) {
+        assert(n.realNode == n)
+        for(h <- n.ins) {
+          assert(nodes(h.source))
+          assert(h.dests.forall(nodes(_)))
+          assert(h.source.outs(h))
+          assert(h.dests.forall(_.ins(h)))
+        }
+        for(h <- n.outs) {
+          assert(nodes(h.source))
+          assert(h.dests.forall(nodes(_)))
+          assert(h.dests.forall(_.ins(h)))
+          assert(h.source == n)
+        }
       }
-      for(h <- n.outs) {
-        assert(nodes(h.source))
-        assert(h.dests.forall(nodes(_)))
-        assert(h.dests.forall(_.ins(h)))
-        assert(h.source == n)
-      }
-    }
   }
 }
 
 
+trait IntegrityCheckEnabled extends TheHypergraph {
+  override def integrityCheckEnabled = true
+}
