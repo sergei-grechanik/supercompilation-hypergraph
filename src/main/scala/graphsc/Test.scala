@@ -153,6 +153,7 @@ object Test {
         
   def main(args: Array[String]) {
     val g = new TheHypergraph
+        //with HyperTester
         with Canonizer
         with NamedNodes
         with Transformations
@@ -172,13 +173,14 @@ object Test {
       (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
     
     val p = new ExprParser(g)
-    //p("fst x y = x")
-    //p("snd x y = y")
-    //p("ololo x y = snd (fst y x) (fst (snd (fst x y) y) x)")
-    //assert(g.runNode(g("ololo"), List(1, 2)) == peano(2))
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     //assert(g.runNode(g("add"), List(2, 3)) == peano(5))
-    /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    p("add3Left x y z = add (add x y) z")
+    //assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
+    p("add3Right x y z = add x (add y z)")
+    //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
+    /*
+    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
     assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
     p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
     assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
@@ -203,7 +205,7 @@ object Test {
     }
     
     try {
-      for(i <- 0 to 50) {
+      for(_ <- 0 to 20 if g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
         g.transform(transAll(g))
       }
@@ -233,7 +235,10 @@ object Test {
     println("**********************************************")
     //g.writeDotFrames
     
+    
     g.statistics()
+    
+    println(g("add3Left").realNode == g("add3Right").realNode)
     
     val out = new java.io.FileWriter("test.dot")
     out.write(g.toDot)

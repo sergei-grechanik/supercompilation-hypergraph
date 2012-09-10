@@ -7,7 +7,13 @@ sealed trait Value {
 }
 
 case class Ctr(constructor: String, args: List[Value]) extends Value {
-  override def toString = constructor + " " + args.map("(" + _ + ")").mkString(" ")
+  override def toString = constructor match {
+    case "S" if args.size == 1 && args(0).toString.startsWith("#") =>
+      "#" + (args(0).toString.tail.toInt + 1)
+    case "Z" if args.isEmpty => "#0"
+    case _ => constructor + " " + args.map("(" + _ + ")").mkString(" ")
+  }
+  
   override def size = 1 + args.map(_.size).sum
   
   def |(v: Value): Value = v match {

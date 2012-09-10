@@ -13,7 +13,7 @@ trait TransformManager extends Hypergraph {
     updatedHyperedges ++= allHyperedges
   }
   
-  override def onNewHyperedge(h: Hyperedge) {    
+  override def onNewHyperedge(h: Hyperedge) {
     updatedHyperedges += h
     super.onNewHyperedge(h)
   }
@@ -21,6 +21,12 @@ trait TransformManager extends Hypergraph {
   override def afterGlue(n: Node) {
     updatedHyperedges ++= n.outs
     super.afterGlue(n)
+  }
+  
+  override def onArityReduced(n: Node) {
+    updatedHyperedges ++= n.outs
+    updatedHyperedges ++= n.ins
+    super.onArityReduced(n)
   }
   
   def transforming(hs: Hyperedge*) {

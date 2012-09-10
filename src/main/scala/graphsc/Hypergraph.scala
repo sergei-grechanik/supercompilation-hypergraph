@@ -55,7 +55,7 @@ trait TheHypergraph extends Hypergraph {
   }
   
   def addHyperedgeImpl(h1: Hyperedge): Node = {
-    val h = h1.derefGlued
+    val h = h1.derefGlued.normal
     
     require(h.source.isInstanceOf[FreeNode] || nodes(h.source))
     
@@ -191,6 +191,8 @@ trait TheHypergraph extends Hypergraph {
     assert(nodes(node))
     if(a < node.arity) {
       node.marity = a
+      
+      // TODO: I don't know whether we should call it here or after re-adding hyperedges 
       onArityReduced(n)
       
       for(h <- node.ins ++ node.outs) {
@@ -199,9 +201,10 @@ trait TheHypergraph extends Hypergraph {
           h.source.outsMut -= h
           h.dests.map(_.insMut -= h)
           addHyperedgeSimple(nor)
-          println("Hyperedge ARITY REDUCED%%%%%%%%%%%%%%%%%%%%%%%")
         }
       }
+      
+      onArityReduced(n)
       
       for(h <- n.ins)
         reduceArity(h.source, h.arity)
