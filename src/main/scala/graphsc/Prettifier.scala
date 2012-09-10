@@ -75,8 +75,8 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       "case " + prettyfun(h.dests(0)) + " of {\n" +
       indent((
         for(((n,k),e) <- cases zip h.dests.tail) yield
-          n + " " + (0 until k map (i => "v" + (i + e.arity - k) + "v")).mkString(" ") + " -> " +
-          indent1(prettyfun(e))
+          n + " " + (0 until k map (i => "b" + (i + e.arity - k) + "b")).mkString(" ") + " -> " +
+          indent1(prettyfun(e).replaceAll("v([0-9]+)v", "b$1b"))
       ).mkString(";\n")) + "\n}"
     case Let() =>
       val vars = h.dests.tail.zipWithIndex.map {
@@ -90,10 +90,9 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     case Tick() => "* " + prettyfun(h.dests(0))
     case Improvement() => ">= " + prettyfun(h.dests(0))
     case Renaming(vec) =>
-      var orig = prettyfun(h.dests(0))
-      for((j,i) <- vec.zipWithIndex)
-        orig = orig.replace("v" + i + "v", "v" + j + "v")
-      orig
+      val orig = prettyfun(h.dests(0))
+      "v([0-9]+)v".r.replaceAllIn(orig, 
+          m => "v" + vec(m.group(1).toInt) + "v")
     case Error() => "_[fail]_"
   }
   
@@ -109,7 +108,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   override def nodeDotLabel(n: Node): String =
     super.nodeDotLabel(n) + "\\l" +
     pretty(n).replace("\n", "\\l") + "\\l" +
-    "\\l" + super.nodeDotLabel(n)
+    "\\l"
     
   def statistics() {
     val nodes = allNodes.toList.map(n => n.arity + "\n" + pretty(n))
