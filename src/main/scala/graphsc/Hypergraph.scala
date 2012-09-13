@@ -21,7 +21,7 @@ trait Hypergraph {
   // an Id() hyperedge. Then the hypergraph should glue these nodes automatically.
   // def glueNodes(l: Node, r: Node): Node
   
-  def onArityReduced(n: Node) {}
+  def onUsedReduced(n: Node) {}
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: Node, r: Node) {}
   def afterGlue(l: Node) {}
@@ -29,6 +29,27 @@ trait Hypergraph {
   // deprecated
   def allNodes: Set[Node] =
     null
+  
+  // Hyperedge normalizer
+  def normalize(h: Hyperedge): Hyperedge = h.label match {
+    case Let() => 
+      val newtail = 
+        h.dests.tail.take(h.dests(0).arity).zipWithIndex.map {
+          case (d, i) if h.dests(0).used(i) => d
+          case _ => add(Error(), Nil)
+        }
+      Hyperedge(h.label, h.source, h.dests.head :: newtail)
+    case Renaming(vec) =>
+      val dest_used = h.dests(0).used
+      val source_used = h.source.used
+      val newvec =
+        for((v,i) <- vec.take(h.dests(0).arity).zipWithIndex) yield
+          if(dest_used(i) && source_used(v)) v else -1
+      // remove tail of (-1)s
+      val newvecTailremoved = newvec.reverse.dropWhile(_ == -1).reverse
+      Hyperedge(Renaming(newvecTailremoved), h.source, h.dests)
+    case _ => h
+  }
 }
 
 trait TheHypergraph extends Hypergraph {
@@ -37,7 +58,7 @@ trait TheHypergraph extends Hypergraph {
   override def allNodes: Set[Node] = nodes.toSet
   
   def addHyperedgeSimple(h1: Hyperedge): Hyperedge = {
-    val h = h1.normal
+    val h = normalize(h1)
     val res =
       if(h.source.isInstanceOf[FreeNode]) {
         val n = newNode(h.arity)
@@ -45,17 +66,17 @@ trait TheHypergraph extends Hypergraph {
         h.from(n)
       }
       else {
-        reduceArity(h.source, h.arity)
         h
       }
         
     res.source.outsMut += res
     res.dests.foreach(_.insMut.add(res))
+    reduceUsed(h.source, h.used)
     res
   }
   
   def addHyperedgeImpl(h1: Hyperedge): Node = {
-    val h = h1.derefGlued.normal
+    val h = normalize(h1.derefGlued)
     
     require(h.source.isInstanceOf[FreeNode] || nodes(h.source))
     
@@ -80,21 +101,24 @@ trait TheHypergraph extends Hypergraph {
       }
   }
   
-  def addHyperedge(h: Hyperedge): Node = {
+  def addHyperedge(hUnnorm: Hyperedge): Node = {
+    val h = normalize(hUnnorm)
     val Hyperedge(l, src, ds) = h
     l match {
       case Id() =>
         glueNodes(ds(0), src)
       case Renaming(vec) if 
-        vec.zipWithIndex.forall{ case (a,b) => a == b } =>
+          src.used == ds(0).used &&
+          vec.zipWithIndex.forall{ case (a,b) => !ds(0).used(b) || a == b } =>
         // we do both because renamings mark canonicalized nodes
         val n = glueNodes(ds(0), src)
         addHyperedgeImpl(Hyperedge(l, n, List(n)))
       case Renaming(vec) =>
         addHyperedgeImpl(h)
         // add the inverse renaming as well
-        if(vec.toSet == (0 until vec.size).toSet) {
-          val newvec = vec.zipWithIndex.sortBy(_._1).map(_._2)
+        def map = vec.zipWithIndex.filter(_._1 != -1).toMap
+        if(map.values.toSet == ds(0).used) {
+          val newvec = (0 until src.arity).map(map.getOrElse(_, -1)).toList
           addHyperedgeImpl(Hyperedge(Renaming(newvec), ds(0), List(src)))
         }
         h.source.realNode
@@ -186,17 +210,19 @@ trait TheHypergraph extends Hypergraph {
       g.toList.map(_.source).reduce(glueNodes)
   }
   
-  def reduceArity(n: Node, a: Int) {
-    val node = n.realNode
+  def reduceUsed(nUnreal: Node, set: Set[Int]) {
+    val node = nUnreal.realNode
     assert(nodes(node))
-    if(a < node.arity) {
-      node.marity = a
+    val newused = node.used & set
+      
+    if(newused != node.used) {
+      node.mused = newused
       
       // TODO: I don't know whether we should call it here or after re-adding hyperedges 
-      onArityReduced(n)
+      onUsedReduced(node)
       
       for(h <- node.ins ++ node.outs) {
-        val nor = h.normal
+        val nor = normalize(h)
         if(nor != h) {
           h.source.outsMut -= h
           h.dests.map(_.insMut -= h)
@@ -204,10 +230,10 @@ trait TheHypergraph extends Hypergraph {
         }
       }
       
-      onArityReduced(n)
+      onUsedReduced(node)
       
-      for(h <- n.ins)
-        reduceArity(h.source, h.arity)
+      for(h <- node.ins)
+        reduceUsed(h.source, h.used)
     }
   }
   
@@ -220,11 +246,17 @@ trait TheHypergraph extends Hypergraph {
     for(n <- nodes) {
       sb.append("\"" + n.uniqueName + "\"[label=\"" + nodeDotLabel(n) + "\", shape=box];\n")
       for(h <- n.outs) {
+        def short(i: Int) =
+          if(h.dests(i).prettyDebug.size <= 4)
+            h.dests(i).prettyDebug.replaceAll("\\|", "\\\\|")
+          else
+            h.dests(i).uniqueName.dropWhile(_ != '@').tail.take(3)
         val lab = "{" + h.label.toString + "|{" + 
-            (0 until h.dests.length).map("<" + _ + ">").mkString("|") + "}}"
+            (0 until h.dests.length).map(i => "<" + i + ">" + short(i)).mkString("|") + "}}"
         sb.append("\"" + h.toString + "\"[label=\"" + lab + "\", shape=record];\n")
         sb.append("\"" + n.uniqueName + "\" -> \"" + h.toString + "\";\n")
-        for((d,i) <- h.dests.zipWithIndex)
+        for((d,i) <- h.dests.zipWithIndex 
+            if !d.outs.exists(h => h.label == Error() || h.label.isInstanceOf[Var]))
           sb.append("\"" + h.toString + "\":" + i + " -> \"" + d.uniqueName + "\";\n")
       }
       sb.append("\n")

@@ -24,10 +24,8 @@ trait HyperTester extends TheHypergraph {
   def runNode(ctx: RunningContext, n: Node, argsUncut: List[Value]): Value = {
     require(n.realNode == n)
     val args =
-      if(argsUncut.size >= n.arity)
-        argsUncut.take(n.arity).map(_ | Bottom)
-      else
-        argsUncut.map(_ | Bottom) ++ (argsUncut.size until n.arity).map(_ => Bottom)
+      truncArgs(n, argsUncut).map(_ | Bottom) ++ (argsUncut.size until n.arity).map(_ => Bottom)
+      
     val almost = runCache(n).get(args) match {
       case Some(v) => v
       case None => runNodeUncached(ctx, n, args)
@@ -119,14 +117,27 @@ trait HyperTester extends TheHypergraph {
     super.beforeGlue(l, r)
   }
   
-  override def onArityReduced(n: Node) {
+  override def onUsedReduced(n: Node) {
     val cache = runCache(n)
-    val data = cache.toList.map(_._1.take(n.arity))
+    val data = 
+      cache.toList.map {
+        case (as,r) => 
+          truncArgs(n, as) -> r
+      }
+        
     cache.clear()
-    for(v <- data)
-      runNode(n, v)
-    super.onArityReduced(n)
+    for((as,r) <- data) {
+      val newr = runNode(n, as)
+      assert(newr == r)
+    }
+    super.onUsedReduced(n)
   }
+  
+  private def truncArgs(n:Node, as: List[Value]): List[Value] =
+    as.take(n.arity).zipWithIndex.map {
+      case (v,i) if n.used(i) => v
+      case _ => Bottom
+    }
   
   override def nodeDotLabel(n: Node): String = {
     super.nodeDotLabel(n) +

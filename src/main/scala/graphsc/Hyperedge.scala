@@ -88,18 +88,6 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
     case Error() => Set()
   }
   
-  def normal: Hyperedge = label match {
-    case Let() => 
-      Hyperedge(label, source, dests.take(dests(0).arity + 1))
-    case Renaming(vec) =>
-      val dest_used = dests(0).used
-      val newvec =
-        for((v,i) <- vec.take(dests(0).arity).zipWithIndex) yield
-          if(dest_used(i)) v else -1
-      Hyperedge(Renaming(newvec), source, dests)
-    case _ => this
-  }
-  
   // Returns the same hyperedge but with different source
   def from(newsrc: Node): Hyperedge =
     Hyperedge(label, newsrc, dests)
@@ -147,7 +135,7 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
         val newargs = dests.tail.map(nodeRunner(_, args))
         nodeRunner(dests(0), newargs)
       case Renaming(vec) =>
-        nodeRunner(dests(0), vec.map(i => if(i >= 0) args(i) else Bottom))
+        nodeRunner(dests(0), vec.map(i => if(i >= 0 && i < args.size) args(i) else Bottom))
       case Tick() =>
         nodeRunner(dests(0), args)
       case Improvement() =>
@@ -162,7 +150,8 @@ case class Hyperedge(label: Label, source: Node, dests: List[Node]) {
   }
 }
 
-class Node(var marity: Int) {
+class Node(marity: Int) {
+  var mused = Set(0 until marity:_*)
   val mouts = collection.mutable.Set[Hyperedge]()
   val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: Node = null
@@ -170,10 +159,10 @@ class Node(var marity: Int) {
   var prettyDebug = ""
   
   def used: Set[Int] =
-    Set(0 until arity:_*)
+    if(gluedTo == null) mused else realNode.used
     
   def arity: Int =
-    if(gluedTo == null) marity else realNode.arity
+    (used + (-1)).max + 1
     
   def outs: Set[Hyperedge] = 
     if(gluedTo == null) mouts.toSet else realNode.outs
@@ -205,7 +194,7 @@ class InvalidFreeNodeUseException extends
   Exception("FreeNode should be glued and then dereferenced to be used safely")
 
 // An auxiliary node that cannot belong to a hypergraph
-class FreeNode(arity: Int) extends Node(arity) {
+class FreeNode(marity: Int) extends Node(marity) {
   override def uniqueName: String =
     "{" + super.uniqueName + "}"
     

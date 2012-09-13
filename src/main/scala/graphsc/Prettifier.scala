@@ -89,11 +89,16 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     case Id() => prettyfun(h.dests(0))
     case Tick() => "* " + prettyfun(h.dests(0))
     case Improvement() => ">= " + prettyfun(h.dests(0))
-    case Renaming(vec) =>
+    case ren@Renaming(_) =>
       val orig = prettyfun(h.dests(0))
       "v([0-9]+)v".r.replaceAllIn(orig, 
-          m => "v" + vec(m.group(1).toInt) + "v")
-    case Error() => "_[fail]_"
+          { m =>
+              val i = m.group(1).toInt
+              if(ren(i) < 0)
+                "_|_"
+              else
+                "v" + ren(i) + "v" })
+    case Error() => "_|_"
   }
   
   def prettyTwoHyperedges(h1: Hyperedge, h2: Hyperedge): String = {
@@ -111,9 +116,11 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     "\\l"
     
   def statistics() {
+    val hyperedges = allNodes.toList.flatMap(n => n.ins ++ n.outs).toSet
     val nodes = allNodes.toList.map(n => n.arity + "\n" + pretty(n))
     val mostpop = nodes.groupBy(identity).mapValues(_.size).maxBy(_._2)
     println("Nodes: " + allNodes.size + " should be: " + nodes.distinct.size)
+    println("Hyperedges: " + hyperedges.size)
     println("Most popular(" + mostpop._2 + "): arity " + mostpop._1 + "\n")
   }
 }

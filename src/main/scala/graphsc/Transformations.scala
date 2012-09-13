@@ -5,8 +5,14 @@ trait Transformations extends Hypergraph {
   private def isVar(n: Node): Boolean =
     n.outs.exists(h => h.label.isInstanceOf[Var])
   
+  private def isErr(n: Node): Boolean =
+    n.outs.exists(h => h.label.isInstanceOf[Error])
+    
   private def getVar(n: Node): Int =
-    n.outs.collectFirst{ case Hyperedge(Var(i), _, _) => i }.get
+    n.outs.collectFirst{ 
+      case Hyperedge(Var(i), _, _) => i
+      case Hyperedge(Error(), _, _) => -1
+    }.get
   
   private def isInj[T](l: Seq[T]): Boolean = 
     l.distinct == l
@@ -16,8 +22,16 @@ trait Transformations extends Hypergraph {
     case Nil => List(Nil)
   }
   
-  def isRenaming(es: List[Node]): Boolean =
-    es.forall(isVar(_)) && isInj(es.map(getVar(_)))
+  private def isRenaming(es: List[Node]): Boolean =
+    es.forall(e => isVar(e) || isErr(e)) && isInj(es.map(getVar(_)))
+    
+  private implicit def injectAt(l: List[Node]) = new {
+    def at(i: Int): Node =
+      if(i < 0 || i >= l.size)
+        add(Error(), Nil)
+      else
+        l(i)
+  }
     
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -38,10 +52,10 @@ trait Transformations extends Hypergraph {
   }
     
   def renamingVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
-    case (Hyperedge(Renaming(vec1), src1, List(f1)),
+    case (Hyperedge(r1@Renaming(vec1), src1, List(f1)),
           Hyperedge(Var(i), src2, Nil)) if f1 == src2 =>
-      if(vec1(i) >= 0)
-        add(Var(vec1(i)), src1, Nil)
+      if(r1(i) >= 0)
+        add(Var(r1(i)), src1, Nil)
       else
         add(Error(), src1, Nil)
   }
@@ -60,8 +74,7 @@ trait Transformations extends Hypergraph {
   def letRenaming: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(Let(), src1, f1 :: es1),
           Hyperedge(Renaming(vec), src2, List(f2))) if f1 == src2 =>
-      add(Let(), src1, f2 :: vec.map(i => 
-        if(i < 0 || i >= es1.size) add(Error(), Nil) else es1(i)))
+      add(Let(), src1, f2 :: vec.map(es1 at _))
   }
   
   def renamingRenaming: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
@@ -90,6 +103,14 @@ trait Transformations extends Hypergraph {
     if(ll.size == 0)
       println("")
     
+    if(ll.size > 120) {
+      val (l,n) = ll.zip(ns).maxBy(_._1.size)
+      println("Max: " + l.size)
+      println(n.prettyDebug)
+      readLine()
+      throw new TooManyNodesException("AAAA!!!")
+    }
+      
     for(hs <- ll) yield {
       val pairs = hs.collect { case Hyperedge(r: Renaming, _, List(n)) => (r,n) }
       assert(pairs.size == hs.size)
@@ -183,7 +204,7 @@ trait Transformations extends Hypergraph {
   def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(Let(), src1, f1 :: es1),
           Hyperedge(Var(i), src2, List())) if f1 == src2 =>
-      add(Id(), src1, List(es1(i)))
+      add(Id(), src1, List(es1 at i))
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           Hyperedge(Var(i), src2, List())) if es1.contains(src2) && 
                                               letToRenaming.isDefinedAt(h1) =>

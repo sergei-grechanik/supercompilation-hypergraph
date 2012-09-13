@@ -23,10 +23,10 @@ trait TransformManager extends Hypergraph {
     super.afterGlue(n)
   }
   
-  override def onArityReduced(n: Node) {
+  override def onUsedReduced(n: Node) {
     updatedHyperedges ++= n.outs
     updatedHyperedges ++= n.ins
-    super.onArityReduced(n)
+    super.onUsedReduced(n)
   }
   
   def transforming(hs: Hyperedge*) {
