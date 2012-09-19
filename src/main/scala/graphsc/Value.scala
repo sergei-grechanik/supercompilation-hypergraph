@@ -8,8 +8,12 @@ sealed trait Value {
 
 case class Ctr(constructor: String, args: List[Value]) extends Value {
   override def toString = constructor match {
-    case "S" if args.size == 1 && args(0).toString.startsWith("#") =>
-      "#" + (args(0).toString.tail.toInt + 1)
+    case "S" if args.size == 1 =>
+      val child = args(0).toString
+      if(child.startsWith("#"))
+        "#" + (child.tail.toInt + 1)
+      else
+        "S (" + child + ")"
     case "Z" if args.isEmpty => "#0"
     case _ => constructor + " " + args.map("(" + _ + ")").mkString(" ")
   }

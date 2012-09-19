@@ -15,16 +15,16 @@ trait HyperTester extends TheHypergraph {
     
   def depthLimit = 50
   
-  def runNode(n: Node, args: List[Value]): Value = {
+  def runNode(n: RenamedNode, args: List[Value]): Value = {
     val ctx = RunningContext()
     val res = runNode(ctx, n, args)
     res
   }
   
-  def runNode(ctx: RunningContext, n: Node, argsUncut: List[Value]): Value = {
-    require(n.realNode == n)
+  def runNode(ctx: RunningContext, node: RenamedNode, argsUncut: List[Value]): Value = {
+    val n = node.deref.node
     val args =
-      truncArgs(n, argsUncut).map(_ | Bottom) ++ (argsUncut.size until n.arity).map(_ => Bottom)
+      truncArgs(node.deref, argsUncut).map(_ | Bottom)
       
     val almost = runCache(n).get(args) match {
       case Some(v) => v
@@ -89,60 +89,63 @@ trait HyperTester extends TheHypergraph {
     lub
   }
   
-  def runHyperedgeUncached(ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): Value = {
-    val args =
-      if(argsUncut.size >= h.arity)
-        argsUncut.take(h.arity)
-      else
-        argsUncut ++ (argsUncut.size until h.arity).map(_ => Bottom)
+  // Note that this function runs arguments through h.source.renaming.inv
+  private def runHyperedgeUncached(
+      ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): Value = {
+    val args = 
+      truncArgs(h.source.renaming.inv comp h.asDummyNode, argsUncut)
         
     val res = h.run(args, this.runNode(ctx, _, _))
     res
   }
   
   override def onNewHyperedge(h: Hyperedge) {
-    val ctx = RunningContext()
-    for((a, r) <- runCache(h.source)) {
-      assert(runHyperedgeUncached(ctx, h, a) == r)
+    for((a, r) <- runCache(h.source.node)) {
+      val ctx = RunningContext()
+      val res = runHyperedgeUncached(ctx, h, a)
+      assert(res == r)
     }
     super.onNewHyperedge(h)
   }
   
-  override def beforeGlue(l: Node, r: Node) {
+  override def beforeGlue(l: RenamedNode, r: Node) {
     val ctx = RunningContext()
-    val data = for(n <- List(l,r); (a, _) <- runCache(n).toList) yield (n, a)
-    for((n,a) <- data) {
-      assert(runNode(ctx, l, a) == runNode(ctx, r, a))
+    val renamed_r = RenamedNode(l.renaming.inv, r).normal
+    val data = 
+      runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1))
+      runCache(r).toList.map(_._1)
+    for(a <- data) {
+      assert(runNode(ctx, l, a) == runNode(ctx, RenamedNode.fromNode(r), a))
     }
     super.beforeGlue(l, r)
   }
   
   override def onUsedReduced(n: Node) {
+    val node = RenamedNode.fromNode(n)
     val cache = runCache(n)
     val data = 
       cache.toList.map {
         case (as,r) => 
-          truncArgs(n, as) -> r
+          truncArgs(node, as) -> r
       }
         
     cache.clear()
     for((as,r) <- data) {
-      val newr = runNode(n, as)
+      val newr = runNode(node, as)
       assert(newr == r)
     }
     super.onUsedReduced(n)
   }
   
-  private def truncArgs(n:Node, as: List[Value]): List[Value] =
-    as.take(n.arity).zipWithIndex.map {
-      case (v,i) if n.used(i) => v
-      case _ => Bottom
-    }
+  private def truncArgs(n: RenamedNode, as: List[Value]): List[Value] = {
+    val norm = n.normal
+    norm.renaming.vector.map(i => if(i >= 0 && i < as.size) as(i) else Bottom)
+  }
   
   override def nodeDotLabel(n: Node): String = {
     super.nodeDotLabel(n) +
     "\\l" + 
-    (for((a,r) <- runCache(n) if a.forall(_.isBottomless)) yield
+    (for((a,r) <- runCache(n) /*if a.forall(_.isBottomless)*/) yield
         a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
   }
   

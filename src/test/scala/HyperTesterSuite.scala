@@ -30,19 +30,7 @@ class HyperTesterSuite extends FunSuite {
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) === list(4,3,2,1))
   }
   
-  test("evaluation with HyperTester with Canonizer") {
-    val g = 
-      new TheHypergraph 
-        with HyperTester
-        with Canonizer
-        with NamedNodes
-        with IntegrityCheckEnabled
-    
-    addSamples(g)
-    runSamples(g)
-  }
-  
-  test("evaluation with HyperTester without Canonizer") {
+  test("evaluation with HyperTester") {
     val g = 
       new TheHypergraph 
         with HyperTester
