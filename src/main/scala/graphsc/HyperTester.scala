@@ -8,6 +8,8 @@ case class RunningContext(depth: Int = 0, visited: List[(Node, List[Value])] = L
 }
 
 trait HyperTester extends TheHypergraph {
+  def onTheFlyTesting = false
+  
   val runCacheImpl = collection.mutable.Map[Node, collection.mutable.Map[List[Value], Value]]()
   
   def runCache(n: Node): collection.mutable.Map[List[Value], Value] =
@@ -100,39 +102,44 @@ trait HyperTester extends TheHypergraph {
   }
   
   override def onNewHyperedge(h: Hyperedge) {
-    for((a, r) <- runCache(h.source.node)) {
-      val ctx = RunningContext()
-      val res = runHyperedgeUncached(ctx, h, a)
-      assert(res == r)
-    }
+    if(onTheFlyTesting)
+      for((a, r) <- runCache(h.source.node)) {
+        val ctx = RunningContext()
+        val res = runHyperedgeUncached(ctx, h, a)
+        assert(res == r)
+      }
     super.onNewHyperedge(h)
   }
   
   override def beforeGlue(l: RenamedNode, r: Node) {
-    val ctx = RunningContext()
-    val renamed_r = RenamedNode(l.renaming.inv, r).normal
-    val data = 
-      runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1))
-      runCache(r).toList.map(_._1)
-    for(a <- data) {
-      assert(runNode(ctx, l, a) == runNode(ctx, RenamedNode.fromNode(r), a))
+    if(onTheFlyTesting) {
+      val ctx = RunningContext()
+      val renamed_r = RenamedNode(l.renaming.inv, r).normal
+      val data = 
+        runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1))
+        runCache(r).toList.map(_._1)
+      for(a <- data) {
+        assert(runNode(ctx, l, a) == runNode(ctx, RenamedNode.fromNode(r), a))
+      }
     }
     super.beforeGlue(l, r)
   }
   
   override def onUsedReduced(n: Node) {
-    val node = RenamedNode.fromNode(n)
-    val cache = runCache(n)
-    val data = 
-      cache.toList.map {
-        case (as,r) => 
-          truncArgs(node, as) -> r
+    if(onTheFlyTesting) {
+      val node = RenamedNode.fromNode(n)
+      val cache = runCache(n)
+      val data = 
+        cache.toList.map {
+          case (as,r) => 
+            truncArgs(node, as) -> r
+        }
+          
+      cache.clear()
+      for((as,r) <- data) {
+        val newr = runNode(node, as)
+        assert(newr == r)
       }
-        
-    cache.clear()
-    for((as,r) <- data) {
-      val newr = runNode(node, as)
-      assert(newr == r)
     }
     super.onUsedReduced(n)
   }
@@ -176,4 +183,8 @@ trait HyperTester extends TheHypergraph {
       }
     }
   }
+}
+
+trait OnTheFlyTesting extends HyperTester {
+  override def onTheFlyTesting = true
 }

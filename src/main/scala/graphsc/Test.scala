@@ -51,7 +51,7 @@ object Test {
   
   def transAll(g: Transformations): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitNodes(g, 50),
+    TransformationsToProcessor(limitNodes(g, 30),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
@@ -64,7 +64,7 @@ object Test {
   
   def transReduce(g: Transformations): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitNodes(g, 50),
+    TransformationsToProcessor(limitNodes(g, 30),
         "letVar" -> letVar,
         //"letLet" -> letLet,
         //"letCaseOf" -> letCaseOf,
@@ -90,6 +90,7 @@ object Test {
         with HyperTester
         with HyperLogger 
         with IntegrityCheckEnabled
+        //with OnTheFlyTesting
     
     implicit def peano(i: Int): Value =
       if(i == 0)
@@ -109,24 +110,26 @@ object Test {
     p("add3Right x y z = add x (add y z)")
     assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
     
-    
-    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
-    assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
-    p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
-    assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
-    p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
-    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))
     p("id x = case x of {Z -> Z; S x -> S (id x)}")
     assert(g.runNode(g("id"), List(3)) == peano(3))
-    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    assert(g.runNode(g("nrev"), List(2)) == peano(2))
+    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    //assert(g.runNode(g("nrev"), List(2)) == peano(2))
+    //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
+    //assert(g.runNode(g("fib"), List(6)) == peano(8))
+    
+    /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
     p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
-    assert(g.runNode(g("fac"), List(4)) == peano(24))
-    p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
-    assert(g.runNode(g("fib"), List(6)) == peano(8))
-    p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
+    assert(g.runNode(g("fac"), List(4)) == peano(24))*/
+    
+    /*p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
+    assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
+    p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
+    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))*/
+    
+    /*p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
-    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))
+    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
     {
       val out = new java.io.FileWriter("init.dot")

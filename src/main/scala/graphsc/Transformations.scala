@@ -34,10 +34,12 @@ trait Transformations extends Hypergraph {
           Hyperedge(Var(), src2, List())) if f1.plain == src2 =>
       val varnum = f1.renaming(0)
       add(Id(), src1, List(es1 at varnum))
-    case (h1@Hyperedge(Let(), src1, f1 :: es1),
+    // TODO: I don't know if we really need this transformation
+    // but at least it should make sure that there is no variable gluing
+    /*case (h1@Hyperedge(Let(), src1, f1 :: es1),
           Hyperedge(Var(), src2, List())) if es1.forall(_.plain == src2) =>
       val ren = Renaming(es1.map(_.renaming(0)))
-      add(Id(), src1, List(ren comp f1))
+      add(Id(), src1, List(ren comp f1))*/
   }
   
   def letLet: PartialFunction[(Hyperedge, Hyperedge), Unit] = {

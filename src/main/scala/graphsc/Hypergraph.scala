@@ -51,7 +51,11 @@ trait Hypergraph {
               case j => h.dests.tail(j)
             }
           }
-        Hyperedge(h.label, h.source, newhead :: newtail)
+        
+        if(newtail.isEmpty)
+          Hyperedge(Id(), h.source, List(newhead))
+        else
+          Hyperedge(Let(), h.source, newhead :: newtail)
       case _ => h
     }
   }
@@ -148,10 +152,10 @@ trait TheHypergraph extends Hypergraph {
     l match {
       case Id() =>
         addHyperedgeImpl(h)
-        // add the inverse hyperedge as well
+        // glue nodes if h is invertible
+        // TODO: Seems like it might not capture some cases
         val vec = ds(0).renaming.vector
         if(vec.toSet == (0 until vec.size).toSet) {
-          addHyperedgeImpl(normalize(Hyperedge(Id(), ds(0), List(src))))
           glueNodes(src, ds(0))
         }
         src.deref
@@ -196,7 +200,8 @@ trait TheHypergraph extends Hypergraph {
     assert(nodes.contains(l1.node) && nodes.contains(r1.node))
     
     // TODO: Just for testing, should sort according to some simplicity measure
-    val List(l2,r2) = List(l1, r1).sortBy(_ => Random.nextBoolean())
+    //val List(l2,r2) = List(l1, r1).sortBy(_ => Random.nextBoolean())
+    val List(l2,r2) = List(l1, r1).sortBy(x => (x.node.arity, -x.node.outs.size - x.node.ins.size))
     
     if(l2 != r2) {
       // We add temporary id hyperedges, so that HyperTester won't crash
@@ -234,6 +239,8 @@ trait TheHypergraph extends Hypergraph {
       //l.node.insMut -= Hyperedge(Id(), l.plain, List(l.plain))
         
       checkIntegrity()
+      
+      afterGlue(l.node)
       
       // maybe there appeared some more nodes to glue 
       glueParents(l.node)
