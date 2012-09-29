@@ -7,7 +7,8 @@ import org.scalatest.FunSuite
 class HyperTesterSuite extends FunSuite {
   import Samples._
   
-  val samples = List("add", "mul", "padd", "pmul", "id", "nrev", "fac", "fib", "append", "nrevL")
+  val samples = 
+    List("add", "mul", "padd", "pmul", "id", "nrev", "fac", "fib", "append", "nrevL", "ackermann")
   
   def addSamples(g: NamedNodes) {
     val parser = new ExprParser(g)
@@ -28,9 +29,12 @@ class HyperTesterSuite extends FunSuite {
     assert(g.runNode(g("fac"), List(4)) === peano(24))
     assert(g.runNode(g("fib"), List(6)) === peano(8))
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) === list(4,3,2,1))
+    // HyperTester has a depth limit, so we cannot use too large arguments
+    assert(g.runNode(g("ackermann"), List(2, 3)) === peano(9))
+    assert(g.runNode(g("ackermann"), List(3, 2)) === peano(29))
   }
   
-  test("evaluation with HyperTester") {
+  test("Evaluation with HyperTester") {
     val g = 
       new TheHypergraph 
         with HyperTester

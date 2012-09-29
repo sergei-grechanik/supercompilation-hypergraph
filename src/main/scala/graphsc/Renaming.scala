@@ -88,6 +88,12 @@ case class RenamedNode(renaming: Renaming, node: Node) {
         Renaming((0 until node.arity toList).map(i => 
           if(node.used(i)) renaming(i) else -1)).normal, 
         node)
+        
+  def getVar: Option[Int] =
+    if(node.outs.exists(_.label == Var()))
+      Some(renaming(0))
+    else
+      None
 }
 
 object RenamedNode {

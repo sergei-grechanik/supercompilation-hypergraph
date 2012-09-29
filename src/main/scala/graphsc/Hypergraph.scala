@@ -27,6 +27,13 @@ trait Hypergraph {
   def beforeGlue(l: RenamedNode, r: Node) {}
   def afterGlue(l: Node) {}
   
+  def glue(l: List[RenamedNode]): RenamedNode = l match {
+    case List(r) => r
+    case n1 :: n2 :: t => glue(add(Id(), n1, List(n2)) :: t) 
+    case Nil => 
+      throw new RuntimeException("List of nodes to glue must be non-empty")
+  }
+  
   // deprecated
   def allNodes: Set[Node] =
     null
@@ -151,13 +158,13 @@ trait TheHypergraph extends Hypergraph {
     val Hyperedge(l, src, ds) = h
     l match {
       case Id() =>
-        addHyperedgeImpl(h)
         // glue nodes if h is invertible
-        // TODO: Seems like it might not capture some cases
         val vec = ds(0).renaming.vector
-        if(vec.toSet == (0 until vec.size).toSet) {
+        if(ds(0).used.size == ds(0).node.used.size) {
           glueNodes(src, ds(0))
         }
+        else
+          addHyperedgeImpl(h)
         src.deref
       case _ =>
         addHyperedgeImpl(h)
@@ -234,9 +241,8 @@ trait TheHypergraph extends Hypergraph {
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
-      // TODO: ???
-      //l.node.outsMut -= Hyperedge(Id(), l.plain, List(l.plain))
-      //l.node.insMut -= Hyperedge(Id(), l.plain, List(l.plain))
+      l.node.outsMut -= canonize(normalize(Hyperedge(Id(), l.plain, List(l.plain))))._2
+      l.node.insMut -= canonize(normalize(Hyperedge(Id(), l.plain, List(l.plain))))._2
         
       checkIntegrity()
       
@@ -273,8 +279,9 @@ trait TheHypergraph extends Hypergraph {
         val nor = normalize(h)
         if(nor != h) {
           println("readd " + h)
-          h.source.node.outsMut -= h
-          h.dests.map(_.node.insMut -= h)
+          // h is not dereferenced, so we access its src/dst through nor
+          nor.source.node.outsMut -= h
+          nor.dests.map(_.node.insMut -= h)
           addHyperedge(nor)
         }
       }
@@ -292,7 +299,7 @@ trait TheHypergraph extends Hypergraph {
       for(h <- n.outs) {
         def short(i: Int) = {
           val s = prettyRename(h.dests(i).renaming, h.dests(i).node.prettyDebug)
-          if(s.size <= 4)
+          if(s.size <= 4 && s != "")
             s.replaceAll("\\|", "\\\\|")
           else
             h.dests(i).node.uniqueName.dropWhile(_ != '@').tail.take(3)
@@ -303,7 +310,8 @@ trait TheHypergraph extends Hypergraph {
         sb.append("\"" + h.toString + "\"[label=\"" + lab + "\", shape=record];\n")
         sb.append("\"" + n.uniqueName + "\" -> \"" + h.toString + "\";\n")
         for((d,i) <- h.dests.zipWithIndex 
-            if !d.node.outs.exists(h => h.label == Error() || h.label.isInstanceOf[Var])) {
+            if !d.node.outs.exists(h => h.label == Error() || h.label.isInstanceOf[Var]) ||
+               d.node.prettyDebug == "") {
           sb.append("\"" + h.toString + "\":" + i + " -> \"" + d + "\";\n")
           sb.append("\"" + d + "\"[label=\"" + d.renaming + "\", shape=box];\n")
           sb.append("\"" + d + "\"" + " -> \"" + d.node.uniqueName + "\";\n")
@@ -331,6 +339,10 @@ trait TheHypergraph extends Hypergraph {
       for(n <- nodes) {
         assert(n.deref.node == n)
         for(h <- n.ins) {
+          //TODO: Not true, in rare cases there may be unuselesss id endohyperedges
+          // but these cases should not be missed
+          if(h.label.isInstanceOf[Id])
+            assert(h.source.node != h.dests(0).node)
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.source.node.outs(h))

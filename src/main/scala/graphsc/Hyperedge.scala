@@ -1,10 +1,6 @@
 package graphsc
 
 case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]) {
-  // The renaming of source should preserve all used variables
-  require(source == null || source.used.size == source.node.used.size)
-  //require(source == null || source.used.size >= used.size)
-  
   label match {
     case _:Id => require(dests.size == 1)
     case _:Tick => require(dests.size == 1)

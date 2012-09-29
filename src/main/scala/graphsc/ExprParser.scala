@@ -3,21 +3,23 @@ package graphsc
 import scala.util.parsing.combinator._
 
 class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
-  def apply(s: String) {
-    val success = parseAll(prog, s).successful
+  def apply(s: String): Map[String, RenamedNode] = {
+    val parsed = parseAll(prog, s)
+    val success = parsed.successful
     assert(success) // We've modified the graph even if the parsing wasn't successful
     // it is better to rewrite it in a bit more functional style
+    parsed.get.toMap
   }
   
-  def prog: Parser[Any] = repsep(definition, ";") ~ opt(";")
+  def prog: Parser[List[(String, RenamedNode)]] = repsep(definition, ";") <~ opt(";")
   
-  def definition: Parser[RenamedNode] = 
+  def definition: Parser[(String, RenamedNode)] = 
     (sign <~ "=") ~! expr ^^
-    { case (n,table)~e => graph.add(Id(), n, List(e(table))) }
+    { case (name,node,table)~e => (name, graph.add(Id(), node, List(e(table)))) }
   
-  def sign: Parser[(RenamedNode, Map[String,Int])] =
+  def sign: Parser[(String, RenamedNode, Map[String,Int])] =
     fname ~ rep(fname) ^^
-    { case i~vs => (graph.newNode(i, vs.length.toInt), vs.zipWithIndex.toMap) }
+    { case name~vs => (name, graph.newNode(name, vs.length.toInt), vs.zipWithIndex.toMap) }
   
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
@@ -50,7 +52,13 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   
   def variable: Parser[Map[String,Int] => RenamedNode] =
     fname ^^
-    { case f => table => theVar(table(f))}
+    { case f => table =>
+        if(table.contains(f))
+          theVar(table(f))
+        else
+          // We assume undefined variables to be zero-arg function
+          graph.newNode(f, 0).deref
+    }
     
   def cons: Parser[Map[String,Int] => RenamedNode] =
     cname ~ rep1(argexpr) ^^

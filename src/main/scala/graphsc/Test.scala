@@ -89,7 +89,7 @@ object Test {
         //with Visualizer 
         with HyperTester
         with HyperLogger 
-        with IntegrityCheckEnabled
+        //with IntegrityCheckEnabled
         //with OnTheFlyTesting
     
     implicit def peano(i: Int): Value =
@@ -102,6 +102,7 @@ object Test {
       (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
     
     val p = new ExprParser(g)
+    p("const x y = x")
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
@@ -158,5 +159,19 @@ object Test {
     val out = new java.io.FileWriter("test.dot")
     out.write(g.toDot)
     out.close
+    
+    val resg = new Object with TheHypergraph
+    val tf = new TerminationFilter(resg)
+    val Some(filterednode) = tf(g("add3Left"))
+    
+    {
+      val out = new java.io.FileWriter("resid.dot")
+      out.write(resg.toDot)
+      out.close
+    }
+    
+    
+    assert(HyperRunner.run(filterednode, List(peano(2),peano(4),peano(3))) == 
+           g.runNode(g("add3Left"), List(peano(2),peano(4),peano(3))))
   }
 }
