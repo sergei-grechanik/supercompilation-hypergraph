@@ -39,31 +39,31 @@ trait HyperLogger extends Hypergraph {
 
 
 object Test {
-  def limitDepth(g: DepthTracker, d: Int): (Hyperedge, Hyperedge, String) => Boolean = {
+  def limitDepth(g: DepthTracker with TransformManager, d: Int): (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
       if(g.allNodes.size > 1000)
         throw new TooManyNodesException("")
       if(g.depths(h1.source.node) >= d) {
         println("\t" + h1 + "\n\t" + h2 + "\n")
-        println("Nodes: " + g.allNodes.size + " depth: " + g.depths(h1.source.node))
+        println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
         true
       }
       else {
         println("*** " + name + " ***")
         println("\t" + h1 + "\n\t" + h2 + "\n")
-        println("Nodes: " + g.allNodes.size + " depth: " + g.depths(h1.source.node))
+        println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
         false
       }
   }
   
-  def transAll(g: Transformations with DepthTracker): (Hyperedge, Hyperedge) => Unit = {
+  def transAll(g: Transformations with DepthTracker with TransformManager): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 9),
+    TransformationsToProcessor(limitDepth(g, 5),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      "caseReduce" -> caseReduceTick,
+      "caseReduce" -> caseReduce(false),
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick
@@ -99,37 +99,38 @@ object Test {
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
-    p("add3Left x y z = add (add x y) z")
-    assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
-    p("add3Right x y z = add x (add y z)")
-    assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
+    //p("add3Left x y z = add (add x y) z")
+    //assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
+    //p("add3Right x y z = add x (add y z)")
+    //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
     
-    p("id x = case x of {Z -> Z; S x -> S (id x)}")
-    assert(g.runNode(g("id"), List(3)) == peano(3))
+    //p("id x = case x of {Z -> Z; S x -> S (id x)}")
+    //assert(g.runNode(g("id"), List(3)) == peano(3))
     //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
     //assert(g.runNode(g("nrev"), List(2)) == peano(2))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
-    //p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
     //assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
     /*p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
     assert(g.runNode(g("fac"), List(4)) == peano(24))*/
     
-    p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
+    /*p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
     assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
     p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
-    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))
+    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))*/
     
     /*p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
-    g.updateDepth(g("add3Left").node, 0)
-    g.updateDepth(g("add3Right").node, 0)
-    g.updateDepth(g("id").node, 0)
+    //g.updateDepth(g("add3Left").node, 0)
+    //g.updateDepth(g("add3Right").node, 0)
+    //g.updateDepth(g("id").node, 0)
     //g.updateDepth(g("nrev").node, 0)
-    g.updateDepth(g("pmul").node, 0)
+    //g.updateDepth(g("pmul").node, 0)
+    g.updateDepth(g("mul").node, 0)
     
     {
       val out = new java.io.FileWriter("init.dot")
@@ -138,7 +139,14 @@ object Test {
     }
     
     try {
-      for(_ <- 0 to 50 if g.updatedHyperedges.nonEmpty) {
+      while(g.updatedHyperedges.nonEmpty) {
+        println("nodes: " + g.allNodes.size)
+        g.transform(transAll(g))
+      }
+      println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+      readLine()
+      g.updateAll()
+      while(g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
         g.transform(transAll(g))
       }
@@ -153,11 +161,13 @@ object Test {
     
     g.statistics()
     
-    println(g("add3Left").node == g("add3Right").node)
     
     val out = new java.io.FileWriter("test.dot")
     out.write(g.toDot)
     out.close
+    
+    
+    println(g("add3Left").node == g("add3Right").node)
     
     val resg = new Object with TheHypergraph
     val tf = new TerminationFilter(resg)

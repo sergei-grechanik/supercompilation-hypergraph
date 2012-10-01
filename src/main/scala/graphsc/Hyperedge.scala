@@ -41,16 +41,16 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
    from((new FreeNode(used)).deref)
   
   // Replace a node in source and destination nodes
-  def replace(old: Node, n: Node): Hyperedge = {
+  def replace(old: Node, n: RenamedNode): Hyperedge = {
     val newsrc = 
       if(source.node == old) 
-        RenamedNode(source.renaming, n)
+        source.renaming comp n
       else 
         source
         
     val newdst = 
       for(d <- dests)
-        yield if(d.node == old) RenamedNode(d.renaming, n) else d
+        yield if(d.node == old) d.renaming comp n else d
         
     Hyperedge(label, newsrc, newdst)
   }

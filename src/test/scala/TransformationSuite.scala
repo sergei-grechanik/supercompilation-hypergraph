@@ -69,7 +69,8 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
     assert(g.allNodes.size === nodes1)
     assert(g.allHyperedges.size === hyperedges1)
   
-    info("There were " + nodes1 + " nodes, " + hyperedges1 + " hyperedges")
+    info("maxdepth: " + maxdepth)
+    info(nodes1 + " nodes, " + hyperedges1 + " hyperedges")
     
     if(residuate) {
       val g_filtered = new TheHypergraph with IntegrityCheckEnabled with TransformManager

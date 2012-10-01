@@ -262,6 +262,8 @@ trait TheHypergraph extends Hypergraph {
         
       checkIntegrity()
       
+      normalizeIncident(l.node)
+      
       afterGlue(l.node)
       
       // maybe there appeared some more nodes to glue 
@@ -312,6 +314,19 @@ trait TheHypergraph extends Hypergraph {
     case _ => false
   }
   
+  // Normalize incident hyperedges which for some reason (gluing, used reduction) became non-normal
+  def normalizeIncident(node: Node) {
+    for(h <- node.ins ++ node.outs) {
+        val nor = normalize(h)
+        if(nor != h) {
+          // h is not dereferenced, so we access its src/dst through nor
+          nor.source.node.outsMut -= h
+          nor.dests.map(_.node.insMut -= h)
+          addHyperedge(nor)
+        }
+      }
+  }
+  
   def reduceUsed(node: Node, set: Set[Int]) {
     require(nodes(node))
     val newused = node.used & set
@@ -321,16 +336,7 @@ trait TheHypergraph extends Hypergraph {
       
       // TODO: I don't know whether we should call it here or after re-adding hyperedges 
       onUsedReduced(node)
-      
-      for(h <- node.ins ++ node.outs) {
-        val nor = normalize(h)
-        if(nor != h) {
-          // h is not dereferenced, so we access its src/dst through nor
-          nor.source.node.outsMut -= h
-          nor.dests.map(_.node.insMut -= h)
-          addHyperedge(nor)
-        }
-      }
+      normalizeIncident(node)
     }
   }
   

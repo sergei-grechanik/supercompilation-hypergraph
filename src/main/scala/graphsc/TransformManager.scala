@@ -20,6 +20,7 @@ trait TransformManager extends Hypergraph {
   
   override def afterGlue(n: Node) {
     updatedHyperedges ++= n.outs
+    updatedHyperedges ++= n.ins
     super.afterGlue(n)
   }
   
