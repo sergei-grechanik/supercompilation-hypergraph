@@ -7,8 +7,8 @@ case class Renaming(vector: List[Int]) {
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
   
-  def isId =
-    vector.zipWithIndex.forall{ case (a,b) => a == b }
+  def isId(used: Set[Int]) =
+    vector.zipWithIndex.forall{ case (a,b) => !used(b) || a == b }
   
   def apply(i: Int): Int =
     if(i >= 0 && i < vector.size)
@@ -39,7 +39,7 @@ case class Renaming(vector: List[Int]) {
     case Tick() => Hyperedge(h.label, h.source, List(this comp h.dests(0)))
     case Improvement() => Hyperedge(h.label, h.source, List(this comp h.dests(0)))
     case Var() =>
-      if(isId) h
+      if(this(0) == 0) h
       else throw new RuntimeException("Composing a renaming with a Var is not a good idea")
     case Construct(_) => Hyperedge(h.label, h.source, h.dests.map(this comp _))
     case Let() => 
@@ -78,7 +78,7 @@ object Renaming {
 
 // theta . node
 case class RenamedNode(renaming: Renaming, node: Node) {
-  def isPlain = renaming.isId
+  def isPlain = renaming.isId(node.used)
   def plain = RenamedNode.fromNode(node)
   def arity: Int = (used + (-1)).max + 1
   def used: Set[Int] = renaming comp node.used
@@ -89,9 +89,20 @@ case class RenamedNode(renaming: Renaming, node: Node) {
           if(node.used(i)) renaming(i) else -1)).normal, 
         node)
         
+  def isInvertible =
+    node.used.size == used.size
+        
   def getVar: Option[Int] =
     if(node.outs.exists(_.label == Var()))
       Some(renaming(0))
+    else
+      None
+      
+  def getVarErr: Option[Int] =
+    if(node.outs.exists(_.label == Var()))
+      Some(renaming(0))
+    else if(node.outs.exists(_.label == Error()))
+      Some(-1)
     else
       None
 }

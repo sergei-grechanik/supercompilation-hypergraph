@@ -39,44 +39,36 @@ trait HyperLogger extends Hypergraph {
 
 
 object Test {
-  def limitNodes(g: Hypergraph, l: Int): (Hyperedge, Hyperedge, String) => Unit = {
-    val init = g.allNodes.size
+  def limitDepth(g: DepthTracker, d: Int): (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
-      println("*** " + name + " ***")
-      println("\t" + h1 + "\n\t" + h2 + "\n")
-      println("Nodes: " + g.allNodes.size + " limit: " + (init + l))
-      if(g.allNodes.size > init + l)
+      if(g.allNodes.size > 1000)
         throw new TooManyNodesException("")
+      if(g.depths(h1.source.node) >= d) {
+        println("\t" + h1 + "\n\t" + h2 + "\n")
+        println("Nodes: " + g.allNodes.size + " depth: " + g.depths(h1.source.node))
+        true
+      }
+      else {
+        println("*** " + name + " ***")
+        println("\t" + h1 + "\n\t" + h2 + "\n")
+        println("Nodes: " + g.allNodes.size + " depth: " + g.depths(h1.source.node))
+        false
+      }
   }
   
-  def transAll(g: Transformations): (Hyperedge, Hyperedge) => Unit = {
+  def transAll(g: Transformations with DepthTracker): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitNodes(g, 30),
+    TransformationsToProcessor(limitDepth(g, 9),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      "caseReduce" -> caseReduce,
+      "caseReduce" -> caseReduceTick,
       "caseVar" -> caseVar,
-      "caseCase" -> caseCase
+      "caseCase" -> caseCase,
+      "caseTick" -> caseTick
     )
   }
-  
-  def transReduce(g: Transformations): (Hyperedge, Hyperedge) => Unit = {
-    import g._
-    TransformationsToProcessor(limitNodes(g, 30),
-        "letVar" -> letVar,
-        //"letLet" -> letLet,
-        //"letCaseOf" -> letCaseOf,
-        //"letOther" -> letOther,
-        //"caseReduce" -> caseReduce,
-        //"caseVar" -> caseVar,
-        //"caseCase" -> caseCase,
-        "letVar" -> letVar
-        //"anyRenaming" -> anyRenaming
-    )
-  }
-  
         
   def main(args: Array[String]) {
     val g = new TheHypergraph
@@ -89,6 +81,7 @@ object Test {
         //with Visualizer 
         with HyperTester
         with HyperLogger 
+        with DepthTracker
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
     
@@ -102,7 +95,7 @@ object Test {
       (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
     
     val p = new ExprParser(g)
-    p("const x y = x")
+    //p("const x y = x")
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
@@ -118,19 +111,25 @@ object Test {
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
-    /*p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
-    assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
-    p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
+    //p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    //assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
+    /*p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
     assert(g.runNode(g("fac"), List(4)) == peano(24))*/
     
-    /*p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
+    p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
     assert(g.runNode(g("padd"), List(2, 3)) == peano(5))
     p("pmul x y = case x of { Z -> Z; S x -> padd y (pmul y x) }")
-    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))*/
+    assert(g.runNode(g("pmul"), List(2, 3)) == peano(6))
     
     /*p("append x y = case x of {N -> y; C a x -> C a (append x y)}")
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
+    
+    g.updateDepth(g("add3Left").node, 0)
+    g.updateDepth(g("add3Right").node, 0)
+    g.updateDepth(g("id").node, 0)
+    //g.updateDepth(g("nrev").node, 0)
+    g.updateDepth(g("pmul").node, 0)
     
     {
       val out = new java.io.FileWriter("init.dot")

@@ -79,7 +79,7 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   
-  def caseReduce: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseReduce(tick: Boolean = false): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(CaseOf(cases), src1, e :: hs),
           Hyperedge(Construct(name), src2, args)) if e.plain == src2 =>
       val ((_,n),h) = (cases zip hs).find(_._1._1 == name).get
@@ -87,9 +87,17 @@ trait Transformations extends Hypergraph {
       val bs = 
         args.map(e.renaming comp _) ++ 
         (n until h.arity).map(i => variable(i - n))
-      // TODO: Tick
-      add(Let(), src1, List(h) ++ bs)
+      
+      if(tick) {
+        val let = add(Let(), List(h) ++ bs)
+        add(Tick(), src1, List(let))
+      }
+      else
+        add(Let(), src1, List(h) ++ bs)
   }
+  
+  def caseReduceTick = caseReduce(true)
+  def caseReduceSimple = caseReduce(false)
   
   // propagate positive information
   def caseVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
@@ -131,6 +139,31 @@ trait Transformations extends Hypergraph {
             }
         add(CaseOf(cases2), src1, e2 :: newfs2)
       }
+  }
+  
+  // TODO: There will be a problem if src2 is a dest node of h1 several times
+  // Actually this problem holds for all transformations
+  def caseTick: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
+          h2@Hyperedge(Tick(), src2, List(e2))) if e1.plain == src2 =>
+      val caseof = add(CaseOf(cases1), e2 :: fs1)
+      add(Tick(), src1, List(src2.renaming comp caseof))
+    case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
+          h2@Hyperedge(Tick(), src2, List(e2))) if 
+            fs1.exists(_.plain == src2) && 
+            fs1.forall(f => f.plain == src2 || f.node.outs.exists(_.label.isInstanceOf[Tick])) =>
+      val newfs1list =
+        sequence(fs1.map(n =>
+          if(n.plain == src2) 
+            List(h2)
+          else
+            n.node.outs.toList.filter(_.label.isInstanceOf[Tick])))
+      for(l <- newfs1list) {
+        val newfs1 = 
+          (fs1,l).zipped.map((f,h) => f.renaming comp h.source.renaming.inv comp h.dests(0))
+        val caseof = add(CaseOf(cases1), e1 :: newfs1)
+        add(Tick(), src1, List(caseof))
+      }      
   }
   
   /////////////////////////////////////////////////////////////////////////////

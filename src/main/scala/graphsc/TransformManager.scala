@@ -35,7 +35,7 @@ trait TransformManager extends Hypergraph {
       println("    " + h)
   }
   
-  def transform(procHyperedge: Hyperedge => Unit) {
+  def transform(procHyperedge: Hyperedge => Unit): Boolean = {
     val set = updatedHyperedges.map(_.deref)
     updatedHyperedges.clear()
     val processed = collection.mutable.Set[Hyperedge]()
@@ -45,9 +45,10 @@ trait TransformManager extends Hypergraph {
       processed += h
       procHyperedge(h)
     }
+    updatedHyperedges.nonEmpty
   }
   
-  def transform(procHyperedge: (Hyperedge, Hyperedge) => Unit) {
+  def transform(procHyperedge: (Hyperedge, Hyperedge) => Unit): Boolean = {
     transform(HyperedgePairProcessor(procHyperedge))
   }
 }
@@ -65,18 +66,19 @@ object HyperedgePairProcessor {
 object TransformationsToProcessor { 
   def apply(pairs: (String, PartialFunction[(Hyperedge, Hyperedge), Unit])*): 
     (Hyperedge, Hyperedge) => Unit =
-      apply((_, _, _) => (), pairs:_*)
+      apply((_, _, _) => false, pairs:_*)
     
   def apply(
-      beforeTrans : (Hyperedge, Hyperedge, String) => Unit,
+      whistle : (Hyperedge, Hyperedge, String) => Boolean,
       pairs: (String, PartialFunction[(Hyperedge, Hyperedge), Unit])*): 
     (Hyperedge, Hyperedge) => Unit = { 
     (h1o, h2o) =>
       val(h1,h2) = simplifyPair(h1o, h2o)
       for((name,trans) <- pairs)
         if(trans.isDefinedAt((h1,h2))) {
-          beforeTrans(h1, h2, name)
-          trans((h1,h2))
+          if(!whistle(h1o, h2o, name)) {
+            trans((h1,h2))
+          }
         }
   }
     

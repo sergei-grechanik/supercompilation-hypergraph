@@ -8,7 +8,9 @@ class HyperTesterSuite extends FunSuite {
   import Samples._
   
   val samples = 
-    List("add", "mul", "padd", "pmul", "id", "nrev", "fac", "fib", "append", "nrevL", "ackermann")
+    List(
+      "const", "add", "mul", "padd", "pmul", "id", "nrev", 
+      "fac", "fib", "append", "nrevL", "ackermann")
   
   def addSamples(g: NamedNodes) {
     val parser = new ExprParser(g)
@@ -17,6 +19,7 @@ class HyperTesterSuite extends FunSuite {
   }
   
   def runSamples(g: HyperTester with NamedNodes) {
+    assert(g.runNode(g("const"), List(2, 3)) === peano(2))
     assert(g.runNode(g("add"), List(2, 3)) === peano(5))
     assert(g.runNode(g("add"), List(5, 1)) === peano(6))
     assert(g.runNode(g("mul"), List(2, 3)) === peano(6))

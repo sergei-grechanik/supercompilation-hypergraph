@@ -20,8 +20,8 @@ trait Hypergraph {
   
   // Nodes shouldn't be glued manually, they should be marked equal with 
   // an Id() hyperedge. Then the hypergraph should glue these nodes automatically.
-  // def glueNodes(l: Node, r: Node): Node
   
+  def onNewNode(n: Node) {}
   def onUsedReduced(n: Node) {}
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: RenamedNode, r: Node) {}
@@ -54,13 +54,18 @@ trait Hypergraph {
         val newtail = 
           (0 until newhead.arity toList).map { i =>
             h.dests(0).renaming(i) match {
-              case -1 => add(Error(), Nil)
+              case j if j < 0 || j >= h.dests.tail.size => add(Error(), Nil)
               case j => h.dests.tail(j)
             }
           }
         
-        if(newtail.isEmpty)
-          Hyperedge(Id(), h.source, List(newhead))
+        lazy val vec = newtail.map(_.getVarErr.get)
+        if(newtail.forall(_.getVarErr.isDefined) && 
+           vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size) {
+          // I'm not sure about consistency of this, but in most cases...
+          val ren = Renaming(vec).normal
+          Hyperedge(Id(), h.source, List(ren comp newhead))
+        }
         else
           Hyperedge(Let(), h.source, newhead :: newtail)
       case _ => h
@@ -120,7 +125,8 @@ trait TheHypergraph extends Hypergraph {
     res.source.node.outsMut += res
     res.dests.foreach(_.node.insMut.add(res))
     reduceUsed(res.source.node, sourcenode_used)
-    res
+    // after reduction of used sets res can become undereferenced
+    res.deref
   }
   
   def addHyperedgeImpl(h_uncanonized: Hyperedge): RenamedNode = {
@@ -156,16 +162,25 @@ trait TheHypergraph extends Hypergraph {
   override def addHyperedge(hUnnorm: Hyperedge): RenamedNode = {
     val h = normalize(hUnnorm)
     val Hyperedge(l, src, ds) = h
+    // a little note: if !src.isInvertible then the arity of src.node should be reduced
+    // that is src is always invertible in some sense
     l match {
       case Id() =>
         // glue nodes if h is invertible
-        val vec = ds(0).renaming.vector
-        if(ds(0).used.size == ds(0).node.used.size) {
+        if(ds(0).isInvertible) {
           glueNodes(src, ds(0))
         }
         else
           addHyperedgeImpl(h)
         src.deref
+      case _ if 
+          (l.isInstanceOf[Tick] || l.isInstanceOf[Construct]) && 
+          !src.node.isInstanceOf[FreeNode] =>
+        // If S e1 == S e2 then e1 == e2
+        if(glueChildren(h))
+          src.deref
+        else
+          addHyperedgeImpl(h)
       case _ =>
         addHyperedgeImpl(h)
     }
@@ -174,6 +189,7 @@ trait TheHypergraph extends Hypergraph {
   override def newNode(used: Set[Int]): RenamedNode = {
     val n = new Node(used)
     nodes.add(n)
+    onNewNode(n)
     n.deref
   }
   
@@ -265,6 +281,37 @@ trait TheHypergraph extends Hypergraph {
       g.toList.map(_.source).reduce(glueNodes)
   }
   
+  // glue children recursively
+  def glueChildren(n: Node) {
+    for(h <- n.outs)
+      glueChildren(h)
+  }
+  
+  def glueChildren(h: Hyperedge) = h.label match {
+    case l if 
+        (l.isInstanceOf[Tick] || l.isInstanceOf[Construct]) && 
+        !h.source.node.isInstanceOf[FreeNode] =>
+      var done = false
+      val src = h.source
+      val ds = h.dests
+      for {
+        e <- src.node.outs
+        if e != h
+        if e.label == l && e.dests.size == ds.size
+        val srcren = src.renaming comp e.source.renaming.inv
+        val rens = 
+          (ds,e.dests).zipped.map((d,d1) => d.renaming.inv comp srcren comp d1.renaming)
+        if (ds,rens,e.dests).zipped.forall((d,r,d1) => 
+              r.comp(d1.node).isInvertible && r.inv.comp(d.node).isInvertible)
+      } {
+        (ds,rens,e.dests).zipped.foreach((d,r,d1) => 
+          glueNodes(d.plain, r comp d1.node))
+        done = true
+      }
+      done
+    case _ => false
+  }
+  
   def reduceUsed(node: Node, set: Set[Int]) {
     require(nodes(node))
     val newused = node.used & set
@@ -278,7 +325,6 @@ trait TheHypergraph extends Hypergraph {
       for(h <- node.ins ++ node.outs) {
         val nor = normalize(h)
         if(nor != h) {
-          println("readd " + h)
           // h is not dereferenced, so we access its src/dst through nor
           nor.source.node.outsMut -= h
           nor.dests.map(_.node.insMut -= h)
@@ -353,6 +399,9 @@ trait TheHypergraph extends Hypergraph {
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.dests.forall(_.node.ins(h)))
           assert(h.source.node == n)
+          // h defines n. h cannot define n if its source has less variables than n
+          // that's why we have arity reduction
+          assert(h.source.isInvertible)
         }
       }
   }

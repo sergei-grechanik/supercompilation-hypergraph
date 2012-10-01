@@ -2,12 +2,13 @@ package graphsc
 
 object Samples {
   
-  private val defs = collection.mutable.Map[String, String]()
+  val defs = collection.mutable.Map[String, String]()
   
-  private def p(s: String) {
+  private def p(s: String, pairs: (List[Value], Value)*) {
     defs += s.takeWhile(_ != ' ') -> s
   }
   
+  p("const x y = x")
   p("add x y = case x of { Z -> y; S x -> S (add x y) }")
   p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
   p("padd x y = case x of { Z -> y; S x -> S (padd y x) }")
@@ -30,14 +31,14 @@ object Samples {
                   "S n1 -> ackermann k (ackermann m n1) }}")
   
   
-  def apply(n: String): String = defs(n)
+  def apply(n: String*): String = n.map(defs(_)).mkString(";")
   
   implicit def peano(i: Int): Value =
     if(i == 0)
       Ctr("Z", List())
     else
       Ctr("S", List(peano(i-1)))
-        
+      
   def list(vs: Value*): Value = 
     (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
 }
