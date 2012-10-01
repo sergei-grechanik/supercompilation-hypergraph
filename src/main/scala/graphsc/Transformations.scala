@@ -146,8 +146,8 @@ trait Transformations extends Hypergraph {
   def caseTick: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(Tick(), src2, List(e2))) if e1.plain == src2 =>
-      val caseof = add(CaseOf(cases1), e2 :: fs1)
-      add(Tick(), src1, List(src2.renaming comp caseof))
+      val caseof = add(CaseOf(cases1), (e1.renaming comp e2) :: fs1)
+      add(Tick(), src1, List(caseof))
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(Tick(), src2, List(e2))) if 
             fs1.exists(_.plain == src2) && 

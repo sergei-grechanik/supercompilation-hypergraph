@@ -1,4 +1,5 @@
 package graphsc
+import scala.util.Random
 
 trait TransformManager extends Hypergraph {
   val updatedHyperedges = collection.mutable.Set[Hyperedge]()
@@ -37,7 +38,8 @@ trait TransformManager extends Hypergraph {
   }
   
   def transform(procHyperedge: Hyperedge => Unit): Boolean = {
-    val set = updatedHyperedges.map(_.deref)
+    // TODO: Shuffling may be good for testing but...
+    val set = Random.shuffle(updatedHyperedges.map(_.deref).toList)
     updatedHyperedges.clear()
     val processed = collection.mutable.Set[Hyperedge]()
     for(h1 <- set; val h = h1.deref; 

@@ -63,7 +63,7 @@ object Test {
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      "caseReduce" -> caseReduce(false),
+      "caseReduce" -> caseReduce(true),
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick
@@ -106,12 +106,12 @@ object Test {
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
-    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
     //assert(g.runNode(g("nrev"), List(2)) == peano(2))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
-    p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
+    //p("mul x y = case x of { Z -> Z; S x -> add y (mul x y) }")
     //assert(g.runNode(g("mul"), List(2, 3)) == peano(6))
     /*p("fac x = case x of {Z -> S Z; S x -> mul (S x) (fac x)}")
     assert(g.runNode(g("fac"), List(4)) == peano(24))*/
@@ -128,9 +128,9 @@ object Test {
     //g.updateDepth(g("add3Left").node, 0)
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    //g.updateDepth(g("nrev").node, 0)
+    g.updateDepth(g("nrev").node, 0)
     //g.updateDepth(g("pmul").node, 0)
-    g.updateDepth(g("mul").node, 0)
+    //g.updateDepth(g("mul").node, 0)
     
     {
       val out = new java.io.FileWriter("init.dot")
