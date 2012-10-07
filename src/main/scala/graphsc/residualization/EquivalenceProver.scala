@@ -15,12 +15,13 @@ case class EquivalenceProver[S, L]
       hist: List[((Node, S), (Node, S))] = Nil): Option[Renaming] = {
     val lind = hist.indexWhere(_._1._1 == l)
     val rind = hist.indexWhere(_._2._1 == r)
-    
+
     if(l == r)
       ren | Renaming(r.used)
     else if(lind != -1 && rind != -1) {
       hist.find(p => p._1._1 == l && p._2._1 == r) match {
-        case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) => 
+        case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) =>
+          // TODO: I think we should add some variables to ren (if they guarantee correctness)
           Some(ren)
         case _ => None
       }
@@ -42,12 +43,11 @@ case class EquivalenceProver[S, L]
       var result: Option[Renaming] = None
         
       for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
+        val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
         val newss1 =
-          if(hist.isEmpty) lh.dests.map(_ => Nil)
-          else hist.map(p => cc.through(p._1._2, lh)).transpose
+          (newhisthead :: hist).map(p => cc.through(p._1._2, lh)).transpose
         val newss2 = 
-          if(hist.isEmpty) lh.dests.map(_ => Nil)
-          else hist.map(p => cc.through(p._2._2, lh)).transpose
+          (newhisthead :: hist).map(p => cc.through(p._2._2, rh)).transpose
         
         var curren: Option[Renaming] = 
           Some(lh.source.renaming comp ren1 comp rh.source.renaming.inv)
@@ -56,7 +56,7 @@ case class EquivalenceProver[S, L]
             ((lh.dests zip rh.dests) zip lh.shifts zip (newss1 zip newss2))) {
           if(curren != None) {
             val newhist =
-              ((l, cc(l.deref)), (r, cc(r.deref))) :: (hist zip (news1 zip news2)).map {
+              ((newhisthead :: hist) zip (news1 zip news2)).map {
                 case (((n1,_), (n2,_)), (s1, s2)) => 
                   ((n1, s1), (n2, s2)) 
               }

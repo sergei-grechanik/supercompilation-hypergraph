@@ -43,7 +43,7 @@ trait HyperLogger extends Hypergraph {
 object Test {
   def limitDepth(g: DepthTracker with TransformManager, d: Int): (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
-      if(g.allNodes.size > 1000)
+      if(g.allNodes.size > 50)
         throw new TooManyNodesException("")
       if(g.depths(h1.source.node) >= d) {
         println("\t" + h1 + "\n\t" + h2 + "\n")
@@ -60,7 +60,7 @@ object Test {
   
   def transAll(g: Transformations with DepthTracker with TransformManager): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 10),
+    TransformationsToProcessor(limitDepth(g, 5),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
@@ -98,17 +98,17 @@ object Test {
     
     val p = new ExprParser(g)
     //p("const x y = x")
-    p("add x y = case x of { Z -> y; S x -> S (add x y) }")
-    assert(g.runNode(g("add"), List(2, 3)) == peano(5))
+    //p("add x y = case x of { Z -> y; S x -> S (add x y) }")
+    //assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
-    p("add3Left x y z = add (add x y) z")
+    //p("add3Left x y z = add (add x y) z")
     //assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
-    p("add3Right x y z = add x (add y z)")
+    //p("add3Right x y z = add x (add y z)")
     //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
-    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
     //assert(g.runNode(g("nrev"), List(2)) == peano(2))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
@@ -127,10 +127,15 @@ object Test {
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
-    g.updateDepth(g("add3Left").node, 0)
-    g.updateDepth(g("add3Right").node, 0)
+    p("idle x = case x of {Z -> Z; S x -> idle (idle x)}")
+    p("constz x = case x of {Z -> Z; S x -> constz x}")
+    
+    g.updateDepth(g("idle").node, 0)
+    g.updateDepth(g("constz").node, 0)
+    //g.updateDepth(g("add3Left").node, 0)
+    //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    g.updateDepth(g("nrev").node, 0)
+    //g.updateDepth(g("nrev").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
     
@@ -177,16 +182,20 @@ object Test {
         (lkl,l1,r1)
       }
     
-    for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0) {
+    for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0 && l.deref.node != r.deref.node) {
+      val lpretty = l.prettyDebug
+      val rpretty = r.prettyDebug
       val eq = EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node)
       if(eq != None) {
         println("================================")
         println((i,ren))
-        println(l.prettyDebug)
-        println(r.prettyDebug)
+        println(lpretty)
+        println(rpretty)
         println(EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node))
       }
     }
+    
+    g.statistics()
     
     {
       val out = new java.io.FileWriter("test2.dot")
@@ -194,6 +203,7 @@ object Test {
       out.close
     }
     
+    println(g("idle").node == g("constz").node)
     println(g("add3Left").node == g("add3Right").node)
     
     val resg = new Object with TheHypergraph
