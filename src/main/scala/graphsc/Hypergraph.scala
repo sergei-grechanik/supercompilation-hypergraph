@@ -88,17 +88,14 @@ trait Hypergraph {
   }
   
   def canonize(h: Hyperedge): (Renaming, Hyperedge) = h.label match {
-    case CaseOf(cases) =>
-      val (r, newds) = canonize(h.dests, 0 :: cases.map(_._2))
-      (r, Hyperedge(CaseOf(cases), r.inv comp h.source, newds))
     case Let() =>
       val (r, newtail) = canonize(h.dests.tail, h.dests.tail.map(_ => 0))
       (r, Hyperedge(Let(), r.inv comp h.source, h.dests(0) :: newtail))
     case Var() =>
       val r = Renaming(h.used)
       (r, h)
-    case l =>
-      val (r, newds) = canonize(h.dests, h.dests.map(_ => 0))
+    case l => // CaseOf too
+      val (r, newds) = canonize(h.dests, h.shifts)
       (r, Hyperedge(l, r.inv comp h.source, newds))
   }
 }
@@ -291,7 +288,8 @@ trait TheHypergraph extends Hypergraph {
   
   def glueChildren(h: Hyperedge) = h.label match {
     case l if 
-        (l.isInstanceOf[Tick] || l.isInstanceOf[Construct]) && 
+        (l.isInstanceOf[Tick] || l.isInstanceOf[Construct] || 
+            l.isInstanceOf[CaseOf] && h.dests(0).getVar.isDefined) && 
         !h.source.node.isInstanceOf[FreeNode] =>
       var done = false
       val src = h.source

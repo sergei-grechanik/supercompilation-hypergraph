@@ -3,6 +3,7 @@ package graphsc
 // Should be injective, i.e. no gluing of variables
 case class Renaming(vector: List[Int]) {
   require(vector.filter(_ >= 0).distinct.size == vector.filter(_ >= 0).size)
+  require(vector.forall(_ >= -1))
   
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
@@ -47,7 +48,7 @@ case class Renaming(vector: List[Int]) {
     case CaseOf(cases) =>
       val newcasedests = 
         h.dests.tail.zip(cases).map {
-          case (d,(_,n)) => this.throughShift(n) comp d
+          case (d,(_,n)) => this.shift(n) comp d
         }
       Hyperedge(h.label, h.source, (this comp h.dests(0)) :: newcasedests)
     case Error() =>
@@ -59,8 +60,25 @@ case class Renaming(vector: List[Int]) {
     Hyperedge(l, this comp s, d)
   }
   
-  def throughShift(n: Int): Renaming =
+  def shift(n: Int): Renaming =
     Renaming((0 until n toList) ++ vector.map(i => if(i == -1) -1 else i + n)) 
+
+  def unshift(n: Int): Renaming =
+    Renaming(vector.drop(n).map(i => 
+      if(i == -1) -1 
+      else if(i >= n) i - n
+      else throw new Exception(
+        "Well, this case shouldn't take place, but may be this function should return an Option")))
+    
+  def |(r: Renaming): Option[Renaming] = {
+    val v1 = vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
+    val v2 = r.vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
+    val map = (v1 ++ v2).distinct.groupBy(_._1)
+    if(map.forall(_._2.size == 1))
+      Some(Renaming(map.iterator.map(_._2.head).toSeq: _*))
+    else
+      None
+  }
 }
 
 object Renaming {

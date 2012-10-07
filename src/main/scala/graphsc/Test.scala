@@ -1,5 +1,7 @@
 package graphsc
 
+import residualization._
+
 class TooManyNodesException(s: String) extends Exception(s)
 
 trait HyperLogger extends Hypergraph {
@@ -58,12 +60,12 @@ object Test {
   
   def transAll(g: Transformations with DepthTracker with TransformManager): (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 5),
+    TransformationsToProcessor(limitDepth(g, 10),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      "caseReduce" -> caseReduce(true),
+      "caseReduce" -> caseReduce(false),
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick
@@ -99,9 +101,9 @@ object Test {
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
-    //p("add3Left x y z = add (add x y) z")
+    p("add3Left x y z = add (add x y) z")
     //assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
-    //p("add3Right x y z = add x (add y z)")
+    p("add3Right x y z = add x (add y z)")
     //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
@@ -125,8 +127,8 @@ object Test {
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
-    //g.updateDepth(g("add3Left").node, 0)
-    //g.updateDepth(g("add3Right").node, 0)
+    g.updateDepth(g("add3Left").node, 0)
+    g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
     g.updateDepth(g("nrev").node, 0)
     //g.updateDepth(g("pmul").node, 0)
@@ -143,13 +145,13 @@ object Test {
         println("nodes: " + g.allNodes.size)
         g.transform(transAll(g))
       }
-      println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+      /*println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
       readLine()
       g.updateAll()
       while(g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
         g.transform(transAll(g))
-      }
+      }*/
     } catch { 
       case _:TooManyNodesException =>
         println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
@@ -166,6 +168,31 @@ object Test {
     out.write(g.toDot)
     out.close
     
+    println("\n\n")
+    
+    val like =
+      for(l <- g.allNodes; r <- g.allNodes; if l != r; 
+          lkl <- LikenessCalculator[Int].likenessN(l, r)) yield {
+        val List(l1,r1) = List(l,r).sortBy(_.hashCode())
+        (lkl,l1,r1)
+      }
+    
+    for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0) {
+      val eq = EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node)
+      if(eq != None) {
+        println("================================")
+        println((i,ren))
+        println(l.prettyDebug)
+        println(r.prettyDebug)
+        println(EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node))
+      }
+    }
+    
+    {
+      val out = new java.io.FileWriter("test2.dot")
+      out.write(g.toDot)
+      out.close
+    }
     
     println(g("add3Left").node == g("add3Right").node)
     
@@ -179,6 +206,10 @@ object Test {
       out.close
     }
     
+    
+    println(g("add3Left").used)
+    println(HyperRunner.run(filterednode, List(peano(2),peano(4),peano(3))))
+    println(g.runNode(g("add3Left"), List(peano(2),peano(4),peano(3))))
     
     assert(HyperRunner.run(filterednode, List(peano(2),peano(4),peano(3))) == 
            g.runNode(g("add3Left"), List(peano(2),peano(4),peano(3))))

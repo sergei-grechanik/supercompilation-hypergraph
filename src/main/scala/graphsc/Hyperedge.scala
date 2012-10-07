@@ -1,6 +1,10 @@
 package graphsc
 
 case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]) {
+  // if source is not invertible then this hyperedge reduces its used set
+  require(dests.forall(_.isInvertible))
+  // TODO: I suppose this requirement may fail sometimes when let is being converted to id
+  
   label match {
     case _:Id => require(dests.size == 1)
     case _:Tick => require(dests.size == 1)
@@ -28,6 +32,11 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
       (dests(0).used /: (dests.tail zip cases).map{ 
           case (d,(_,n)) => d.used.map(_ - n).filter(_ >= 0) })(_ | _)
     case Error() => Set()
+  }
+  
+  def shifts: List[Int] = label match {
+    case CaseOf(cases) => 0 :: cases.map(_._2)
+    case _ => dests.map(_ => 0)
   }
   
   def asDummyNode: RenamedNode =
