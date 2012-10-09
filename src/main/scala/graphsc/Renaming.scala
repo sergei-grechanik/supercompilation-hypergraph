@@ -60,16 +60,22 @@ case class Renaming(vector: List[Int]) {
     Hyperedge(l, this comp s, d)
   }
   
-  def shift(n: Int): Renaming =
-    Renaming((0 until n toList) ++ vector.map(i => if(i == -1) -1 else i + n)) 
+  def shift(n: Int): Renaming = {
+    // The zeroth dest of a Let has a shift -1 because there is no shifting in let, outer
+    // arguments are discarded
+    require(n >= 0)
+    Renaming((0 until n toList) ++ vector.map(i => if(i == -1) -1 else i + n))
+  }
 
-  def unshift(n: Int): Renaming =
+  def unshift(n: Int): Renaming = {
+    require(n >= 0)
     Renaming(vector.drop(n).map(i => 
       if(i == -1) -1 
       else if(i >= n) i - n
       else throw new Exception(
         "Well, this case shouldn't take place, but may be this function should return an Option")))
-    
+  }
+        
   def |(r: Renaming): Option[Renaming] = {
     val v1 = vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
     val v2 = r.vector.zipWithIndex.filter(_._1 != -1).map(_.swap)

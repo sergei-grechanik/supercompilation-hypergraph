@@ -91,7 +91,9 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
             
             val rens = 
               (chld.map(_.get._2), shift_rens, shifts).zipped.map(
-                  (a,b,n) => (a | b).map(_.unshift(n)))
+                  (a,b,n) => 
+                    if(n != -1) (a | b).map(_.unshift(n))
+                    else (a | b))
             
             val resren = 
               (Some(Renaming()).asInstanceOf[Option[Renaming]] /: rens)(_ | _)

@@ -185,13 +185,23 @@ object Test {
     for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0 && l.deref.node != r.deref.node) {
       val lpretty = l.prettyDebug
       val rpretty = r.prettyDebug
-      val eq = EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node)
+      val eq = EquivalenceProver().prove(l.deref.node, r.deref.node)
       if(eq != None) {
+        /*{
+          val out = new java.io.FileWriter("proof.dot")
+          out.write("digraph Proof {\n")
+          out.write(eq.get.toDot)
+          out.write("}")
+          out.close
+          throw new Exception("")
+        }*/
+        
+        eq.get.performGluing(g)
         println("================================")
         println((i,ren))
         println(lpretty)
         println(rpretty)
-        println(EquivalenceProver(g.addHyperedge _).prove(l.deref.node, r.deref.node))
+        println(eq)
       }
     }
     

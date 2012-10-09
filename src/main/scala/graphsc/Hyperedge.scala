@@ -36,6 +36,7 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
   
   def shifts: List[Int] = label match {
     case CaseOf(cases) => 0 :: cases.map(_._2)
+    case Let() => (-1) :: dests.tail.map(_ => 0)
     case _ => dests.map(_ => 0)
   }
   
