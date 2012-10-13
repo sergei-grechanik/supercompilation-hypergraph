@@ -33,6 +33,7 @@ class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
       val newtable = table.mapValues(_ + lsize) ++ (l zip (0 until lsize))
       ((n, lsize), e(newtable))}
   
+  // TODO: now we cannot parse "case fun x of"
   def caseof: Parser[Map[String,Int] => RenamedNode] =
     ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
     { case e~lst => table =>

@@ -65,7 +65,7 @@ object Test {
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      "caseReduce" -> caseReduce(false),
+      //"caseReduce" -> caseReduce(false),
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick
@@ -84,7 +84,7 @@ object Test {
         with HyperTester
         with HyperLogger 
         with DepthTracker
-        //with IntegrityCheckEnabled
+        with IntegrityCheckEnabled
         //with OnTheFlyTesting
     
     implicit def peano(i: Int): Value =
@@ -109,7 +109,7 @@ object Test {
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
     p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    //assert(g.runNode(g("nrev"), List(2)) == peano(2))
+    assert(g.runNode(g("nrev"), List(2)) == peano(2))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
@@ -127,6 +127,8 @@ object Test {
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
+    //p("two x = S (case (two x) of {Z -> Z; S x -> S Z})")
+    
     //p("idle x = case x of {Z -> Z; S x -> idle (idle x)}")
     //p("constz x = case x of {Z -> Z; S x -> constz x}")
     
@@ -142,6 +144,7 @@ object Test {
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
     g.updateDepth(g("nrev").node, 0)
+    //g.updateDepth(g("nrevL").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
     

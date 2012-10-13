@@ -77,8 +77,8 @@ trait Prettifier extends TheHypergraph with NamedNodes {
         "case " + prettyfun(h.dests(0)) + " of {\n" +
         indent((
           for(((n,k),e) <- cases zip h.dests.tail) yield
-            n + " " + (0 until k map (i => "b" + (i + e.arity - k) + "b")).mkString(" ") + " -> " +
-            indent1(prettyfun(e).replaceAll("v([0-9]+)v", "b$1b"))
+            n + " " + (0 until k map (i => "c" + (i + e.arity - k) + "c")).mkString(" ") + " -> " +
+            indent1(prettyUnshift(k, prettyfun(e)))
         ).mkString(";\n")) + "\n}"
       case Let() =>
         val vars = h.dests.tail.zipWithIndex.map {
@@ -102,6 +102,16 @@ trait Prettifier extends TheHypergraph with NamedNodes {
                 "_|_"
               else
                 "v" + r(i) + "v" })
+  }
+  
+  def prettyUnshift(sh: Int, orig: String): String = {
+    "v([0-9]+)v".r.replaceAllIn(orig, 
+          { m =>
+              val i = m.group(1).toInt
+              if(i < sh)
+                "c" + i + "c"
+              else
+                "v" + (i - sh) + "v" })
   }
                 
   def prettyTwoHyperedges(h1: Hyperedge, h2: Hyperedge): String = {

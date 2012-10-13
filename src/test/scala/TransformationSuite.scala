@@ -11,7 +11,6 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
   
   def transform(
       g: TransformManager with DepthTracker with Transformations,
-      withticks: Boolean = false,
       maxdepth: Int = Int.MaxValue) {
     def limitDepth: (Hyperedge, Hyperedge, String) => Boolean = {
       (h1,h2,name) =>
@@ -25,7 +24,6 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
         "letLet" -> letLet,
         "letCaseOf" -> letCaseOf,
         "letOther" -> letOther,
-        "caseReduce" -> caseReduce(withticks),
         "caseVar" -> caseVar,
         "caseCase" -> caseCase,
         "caseTick" -> caseTick
@@ -44,46 +42,43 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
     val name = code.takeWhile(_ != ' ')
     info(name + ":")
     
-    for(withticks <- List(false, true)) {
-      info("ticks " + withticks)
-      val g = 
-        new TheHypergraph 
-          with HyperTester
-          with NamedNodes
-          with TransformManager
-          with Transformations
-          with DepthTracker
-          with IntegrityCheckEnabled
-          with OnTheFlyTesting
-          with Prettifier
-          
-      val p = new ExprParser(g)
-      val main = p(code)(name)
-      // I'm always forgetting to call this function
-      g.updateDepth(main.node, 0)
-      val res = g.runNode(main, input)
-      
-      transform(g, withticks, maxdepth)
-      val nodes1 = g.allNodes.size
-      val hyperedges1 = g.allHyperedges.size
-      
-      // transform should be idempotent
-      transform(g, withticks, maxdepth)
-      assert(g.allNodes.size === nodes1)
-      assert(g.allHyperedges.size === hyperedges1)
-    
-      info("maxdepth: " + maxdepth)
-      info(nodes1 + " nodes, " + hyperedges1 + " hyperedges")
-      
-      if(residuate) {
-        val g_filtered = new TheHypergraph with IntegrityCheckEnabled with TransformManager
-        val tf = new TerminationFilter(g_filtered)
-        val Some(n_filtered) = tf(main)
-        assert(HyperRunner.run(n_filtered, input) === res)
+    val g = 
+      new TheHypergraph 
+        with HyperTester
+        with NamedNodes
+        with TransformManager
+        with Transformations
+        with DepthTracker
+        with IntegrityCheckEnabled
+        with OnTheFlyTesting
+        with Prettifier
         
-        info("After ''residualization'' " + g_filtered.allNodes.size + 
-              " nodes, " + g_filtered.allHyperedges.size + " hyperedges")
-      }
+    val p = new ExprParser(g)
+    val main = p(code)(name)
+    // I'm always forgetting to call this function
+    g.updateDepth(main.node, 0)
+    val res = g.runNode(main, input)
+    
+    transform(g, maxdepth)
+    val nodes1 = g.allNodes.size
+    val hyperedges1 = g.allHyperedges.size
+    
+    // transform should be idempotent
+    transform(g, maxdepth)
+    assert(g.allNodes.size === nodes1)
+    assert(g.allHyperedges.size === hyperedges1)
+  
+    info("maxdepth: " + maxdepth)
+    info(nodes1 + " nodes, " + hyperedges1 + " hyperedges")
+    
+    if(residuate) {
+      val g_filtered = new TheHypergraph with IntegrityCheckEnabled with TransformManager
+      val tf = new TerminationFilter(g_filtered)
+      val Some(n_filtered) = tf(main)
+      assert(HyperRunner.run(n_filtered, input) === res)
+      
+      info("After ''residualization'' " + g_filtered.allNodes.size + 
+            " nodes, " + g_filtered.allHyperedges.size + " hyperedges")
     }
       
     info("")

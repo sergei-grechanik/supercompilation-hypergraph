@@ -60,14 +60,32 @@ trait Hypergraph {
           }
         
         lazy val vec = newtail.map(_.getVarErr.get)
+        lazy val ren = Renaming(vec).normal
+        lazy val renhead = ren comp newhead
         if(newtail.forall(_.getVarErr.isDefined) && 
-           vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size) {
-          // I'm not sure about consistency of this, but in most cases...
-          val ren = Renaming(vec).normal
-          Hyperedge(Id(), h.source, List(ren comp newhead))
+           vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size &&
+           renhead.isInvertible) { 
+          // Sometimes we cannot transform let to id
+          // because it glues variables or assigns bottoms to some of them
+          Hyperedge(Id(), h.source, List(renhead))
         }
         else
           Hyperedge(Let(), h.source, newhead :: newtail)
+      case CaseOf(cases) =>
+        h.dests(0).node.outs.find(o => 
+          o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Error]) match {
+          case Some(Hyperedge(Error(), _, _)) =>
+            Hyperedge(Error(), h.source, Nil)
+          case Some(Hyperedge(Construct(name), src2, args)) =>
+            val ((_,n),branch) = (cases zip h.dests.tail).find(_._1._1 == name).get
+            assert(n == args.size)
+            val bs = 
+              args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
+              (n until branch.arity).map(i => variable(i - n))
+            
+            normalize(Hyperedge(Let(), h.source, List(branch) ++ bs))
+          case _ => h
+        }
       case _ => h
     }
   }
@@ -170,16 +188,12 @@ trait TheHypergraph extends Hypergraph {
         else
           addHyperedgeImpl(h)
         src.deref
-      case _ if 
-          (l.isInstanceOf[Tick] || l.isInstanceOf[Construct]) && 
-          !src.node.isInstanceOf[FreeNode] =>
+      case _ =>
         // If S e1 == S e2 then e1 == e2
         if(glueChildren(h))
           src.deref
         else
           addHyperedgeImpl(h)
-      case _ =>
-        addHyperedgeImpl(h)
     }
   }
   
@@ -286,10 +300,11 @@ trait TheHypergraph extends Hypergraph {
       glueChildren(h)
   }
   
-  def glueChildren(h: Hyperedge) = h.label match {
+  // Glue siblings of h that are equal to h 
+  def glueChildren(h: Hyperedge): Boolean = h.label match {
     case l if 
         (l.isInstanceOf[Tick] || l.isInstanceOf[Construct] || 
-            l.isInstanceOf[CaseOf] && h.dests(0).getVar.isDefined) && 
+            (l.isInstanceOf[CaseOf] && h.dests(0).getVar.isDefined)) && 
         !h.source.node.isInstanceOf[FreeNode] =>
       var done = false
       val src = h.source
@@ -298,6 +313,7 @@ trait TheHypergraph extends Hypergraph {
         e <- src.node.outs
         if e != h
         if e.label == l && e.dests.size == ds.size
+        if !e.label.isInstanceOf[CaseOf] || e.dests(0).getVar.isDefined
         val srcren = src.renaming comp e.source.renaming.inv
         val rens = 
           (ds,e.dests).zipped.map((d,d1) => d.renaming.inv comp srcren comp d1.renaming)
@@ -314,13 +330,16 @@ trait TheHypergraph extends Hypergraph {
   
   // Normalize incident hyperedges which for some reason (gluing, used reduction) became non-normal
   def normalizeIncident(node: Node) {
+    val isvar = node.outs.exists(_.label.isInstanceOf[Var])
     for(h <- node.ins ++ node.outs) {
         val nor = normalize(h)
         if(nor != h) {
-          // h is not dereferenced, so we access its src/dst through nor
-          nor.source.node.outsMut -= h
-          nor.dests.map(_.node.insMut -= h)
+          h.source.deref.node.outsMut -= h
+          h.dests.map(_.deref.node.insMut -= h)
           addHyperedge(nor)
+        } else if(isvar && h.label.isInstanceOf[CaseOf]) {
+          // here h is not non-normal but we can still perform important gluings
+          glueChildren(h.deref)
         }
       }
   }
@@ -387,6 +406,7 @@ trait TheHypergraph extends Hypergraph {
   def checkIntegrity() {
     if(integrityCheckEnabled)
       for(n <- nodes) {
+        //definingHyperedge(n)
         assert(n.deref.node == n)
         for(h <- n.ins) {
           //TODO: Not true, in rare cases there may be unuselesss id endohyperedges
@@ -409,8 +429,22 @@ trait TheHypergraph extends Hypergraph {
         }
       }
   }
+  
+  def definingHyperedge(n: Node): Option[Hyperedge] = {
+    val hypers = 
+      n.outs.filter(h => h.label match {
+        case Construct(_) => true
+        case Tick() => true
+        case Var() => true
+        case Error() => true
+        case CaseOf(_) if h.dests(0).node.outs.exists(_.label == Var()) => true 
+        case _ => false
+      })
+      
+    assert(hypers.size <= 1)
+    hypers.headOption
+  }
 }
-
 
 trait IntegrityCheckEnabled extends TheHypergraph {
   override def integrityCheckEnabled = true

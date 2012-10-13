@@ -28,24 +28,17 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
     
   // let x = e in x  ->  e
-  // let x = x, y = y in e  ->  theta e
   def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(Let(), src1, f1 :: es1),
           Hyperedge(Var(), src2, List())) if f1.plain == src2 =>
       val varnum = f1.renaming(0)
       add(Id(), src1, List(es1 at varnum))
-    // TODO: I don't know if we really need this transformation
-    // but at least it should make sure that there is no variable gluing
-    /*case (h1@Hyperedge(Let(), src1, f1 :: es1),
-          Hyperedge(Var(), src2, List())) if es1.forall(_.plain == src2) =>
-      val ren = Renaming(es1.map(_.renaming(0)))
-      add(Id(), src1, List(ren comp f1))*/
   }
   
   def letLet: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(Let(), src1, f1 :: es1),
-          Hyperedge(Let(), src2, f2 :: es2)) if f1 == src2 =>
-      val newes = es2.map(e => add(Let(), e :: es1))
+          Hyperedge(Let(), src2, f2 :: es2)) if f1.plain == src2 =>
+      val newes = es2.map(e => add(Let(), (f1.renaming comp e) :: es1))
       add(Let(), src1, f2 :: newes)
   }
   
@@ -79,7 +72,8 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   
-  def caseReduce(tick: Boolean = false): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  // This transformation is performed automatically during normalization, don't use it
+  def caseReduce: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (Hyperedge(CaseOf(cases), src1, e :: hs),
           Hyperedge(Construct(name), src2, args)) if e.plain == src2 =>
       val ((_,n),h) = (cases zip hs).find(_._1._1 == name).get
@@ -88,16 +82,8 @@ trait Transformations extends Hypergraph {
         args.map(e.renaming comp _) ++ 
         (n until h.arity).map(i => variable(i - n))
       
-      if(tick) {
-        val let = add(Let(), List(h) ++ bs)
-        add(Tick(), src1, List(let))
-      }
-      else
-        add(Let(), src1, List(h) ++ bs)
+      add(Let(), src1, List(h) ++ bs)
   }
-  
-  def caseReduceTick = caseReduce(true)
-  def caseReduceSimple = caseReduce(false)
   
   // propagate positive information
   def caseVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
@@ -143,6 +129,7 @@ trait Transformations extends Hypergraph {
   
   // TODO: There will be a problem if src2 is a dest node of h1 several times
   // Actually this problem holds for all transformations
+  // But TransformManager usually replaces the node between the hyperedges with a dummy node...
   def caseTick: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(Tick(), src2, List(e2))) if e1.plain == src2 =>
@@ -169,4 +156,16 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
 
+  // Move the let up, i.e. generalize
+  /*def letUp: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(l1, src1, es1),
+          h2@Hyperedge(Let(), src2, f2 :: es2)) if 
+            (if(l1 == Let()) es1.tail else es1).exists(_.plain == src2) =>
+      val (e1, shift) = (es1 zip h1.shifts).find(_._1.plain == src2).get
+      // if it is a head of a let then you've found a bug, congratulations
+      assert(shift != -1)
+      for(e2 <- es2) yield {
+        
+      }
+  }*/
 }

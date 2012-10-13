@@ -66,7 +66,9 @@ class TerminationFilterSuite extends FunSuite {
         "constloop = badconst Z constloop",
         "oneOrZero = case oneOrZero of {Z -> Z; S x -> S Z}",
         // well, this function can be evaluated (if a lazy evaluator is used)
-        "two = S (case two of {Z -> Z; S x -> S Z})"
+        // It looks strange because we should make sure that 
+        // the caseof is not optimized out by the edge normalizer
+        "two x = S (case (two (S x)) of {Z -> Z; S x -> S Z})"
         )
     
     val nodes = 

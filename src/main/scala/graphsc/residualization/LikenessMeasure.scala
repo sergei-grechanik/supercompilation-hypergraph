@@ -30,12 +30,12 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
   
   def definingHyperedge(n: Node): Option[Hyperedge] = {
     val hypers = 
-      n.outs.find(h => h.label match {
+      n.outs.filter(h => h.label match {
         case Construct(_) => true
         case Tick() => true
         case Var() => true
         case Error() => true
-        case CaseOf(_) if h.dests(0).node.outs.exists(_.label == Var()) => true 
+        case CaseOf(_) if h.dests(0).getVar.isDefined => true 
         case _ => false
       })
       
