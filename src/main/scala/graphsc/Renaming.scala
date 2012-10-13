@@ -80,7 +80,8 @@ case class Renaming(vector: List[Int]) {
     val v1 = vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
     val v2 = r.vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
     val map = (v1 ++ v2).distinct.groupBy(_._1)
-    if(map.forall(_._2.size == 1))
+    val comap = (v1 ++ v2).distinct.groupBy(_._2)
+    if(map.forall(_._2.size == 1) && comap.forall(_._2.size == 1))
       Some(Renaming(map.iterator.map(_._2.head).toSeq: _*))
     else
       None

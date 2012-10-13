@@ -98,7 +98,7 @@ object Test {
     
     val p = new ExprParser(g)
     //p("const x y = x")
-    //p("add x y = case x of { Z -> y; S x -> S (add x y) }")
+    p("add x y = case x of { Z -> y; S x -> S (add x y) }")
     //assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
     //p("add3Left x y z = add (add x y) z")
@@ -108,7 +108,7 @@ object Test {
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
-    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
     //assert(g.runNode(g("nrev"), List(2)) == peano(2))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
@@ -127,15 +127,21 @@ object Test {
     p("nrevL x = case x of {N -> N; C a x -> append (nrevL x) (C a N)}")
     assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) == list(4,3,2,1))*/
     
-    p("idle x = case x of {Z -> Z; S x -> idle (idle x)}")
-    p("constz x = case x of {Z -> Z; S x -> constz x}")
+    //p("idle x = case x of {Z -> Z; S x -> idle (idle x)}")
+    //p("constz x = case x of {Z -> Z; S x -> constz x}")
     
-    g.updateDepth(g("idle").node, 0)
-    g.updateDepth(g("constz").node, 0)
+    //p("deepseq x y = case x of {Z -> y; S x -> deepseq x y}")
+    //p("strictadd1 x y = deepseq x (deepseq y (add x y))")
+    //p("strictadd2 x y = deepseq x (deepseq y (add y x))")
+    
+    //g.updateDepth(g("idle").node, 0)
+    //g.updateDepth(g("constz").node, 0)
+    //g.updateDepth(g("strictadd1").node, 0)
+    //g.updateDepth(g("strictadd2").node, 0)
     //g.updateDepth(g("add3Left").node, 0)
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    //g.updateDepth(g("nrev").node, 0)
+    g.updateDepth(g("nrev").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
     
@@ -213,6 +219,7 @@ object Test {
       out.close
     }
     
+    //println(g("strictadd1").node == g("strictadd2").node)
     println(g("idle").node == g("constz").node)
     println(g("add3Left").node == g("add3Right").node)
     
