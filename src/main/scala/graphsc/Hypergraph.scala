@@ -313,10 +313,16 @@ trait TheHypergraph extends Hypergraph {
         e <- src.node.outs
         if e != h
         if e.label == l && e.dests.size == ds.size
-        if !e.label.isInstanceOf[CaseOf] || e.dests(0).getVar.isDefined
+        val vrbl = e.dests(0).getVar
+        if !e.label.isInstanceOf[CaseOf] || vrbl.isDefined
+        // We cannot glue caseof's dests if the information is not propagated
+        // so make sure that the scrutinized variable is not used
+        if !e.label.isInstanceOf[CaseOf] || 
+            (e.dests.tail, e.shifts.tail).zipped.forall((d,sh) => !d.used(vrbl.get + sh))
         val srcren = src.renaming comp e.source.renaming.inv
         val rens = 
-          (ds,e.dests).zipped.map((d,d1) => d.renaming.inv comp srcren comp d1.renaming)
+          (ds,e.dests,e.shifts).zipped.map((d, d1, sh) => 
+            d.renaming.inv comp srcren.shift(sh) comp d1.renaming)
         if (ds,rens,e.dests).zipped.forall((d,r,d1) => 
               r.comp(d1.node).isInvertible && r.inv.comp(d.node).isInvertible)
       } {
@@ -428,21 +434,6 @@ trait TheHypergraph extends Hypergraph {
           assert(h.source.isInvertible)
         }
       }
-  }
-  
-  def definingHyperedge(n: Node): Option[Hyperedge] = {
-    val hypers = 
-      n.outs.filter(h => h.label match {
-        case Construct(_) => true
-        case Tick() => true
-        case Var() => true
-        case Error() => true
-        case CaseOf(_) if h.dests(0).node.outs.exists(_.label == Var()) => true 
-        case _ => false
-      })
-      
-    assert(hypers.size <= 1)
-    hypers.headOption
   }
 }
 

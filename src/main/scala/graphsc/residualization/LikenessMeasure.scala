@@ -19,7 +19,7 @@ object LikenessMeasure {
   }
 }
 
-case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
+case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[L]) {
   import lm._
   
   implicit def injectOr(r: Option[Renaming]) = new {
@@ -28,7 +28,7 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
       for(x <- r; y <- l; k <- x | y) yield k 
   }
   
-  def definingHyperedge(n: Node): Option[Hyperedge] = {
+  def definingHyperedge(n: Node): List[Hyperedge] = {
     val hypers = 
       n.outs.filter(h => h.label match {
         case Construct(_) => true
@@ -39,8 +39,9 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
         case _ => false
       })
       
-    assert(hypers.size <= 1)
-    hypers.headOption
+    // only caseofs can be multiple (due to unpropagated information)
+    assert(hypers.size <= 1 || hypers.head.label.isInstanceOf[CaseOf])
+    hypers.toList
   }
   
   def likeness(
@@ -62,8 +63,15 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L]) {
       Some((infinity, Renaming(r.used)))
     else if(ldef.isEmpty || rdef.isEmpty || hist.exists(p => p._1 == l || p._2 == r))
       Some((zero, Renaming()))
-    else
-      likenessH(ldef.get, rdef.get, hist)
+    else {
+      val ress =
+        for(lh <- ldef; rh <- rdef) yield
+          likenessH(lh, rh, hist)
+      ress.filter(_.nonEmpty) match {
+        case Nil => None
+        case l => l.minBy(_.get._1)
+      }
+    }
   }  
   
   def likenessH(

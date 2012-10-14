@@ -72,7 +72,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   
   def prettyHyperedge(h: Hyperedge, prettyfun: RenamedNode => String = pretty _): String = 
     h.label match {
-      case Construct(name) => name + " " + h.dests.map("(" + prettyfun(_) + ")").mkString(" ")
+      case Construct(name) => name + h.dests.map("(" + prettyfun(_) + ")").mkString(" ", " ", "")
       case CaseOf(cases) =>
         "case " + prettyfun(h.dests(0)) + " of {\n" +
         indent((
