@@ -15,7 +15,7 @@ trait HyperTester extends TheHypergraph {
   def runCache(n: Node): collection.mutable.Map[List[Value], Value] =
     runCacheImpl.getOrElseUpdate(n, collection.mutable.Map())
     
-  def depthLimit = 50
+  def depthLimit = 150
   
   def runNode(n: RenamedNode, args: List[Value]): Value = {
     val ctx = RunningContext()

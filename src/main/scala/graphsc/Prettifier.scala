@@ -77,16 +77,27 @@ trait Prettifier extends TheHypergraph with NamedNodes {
         "case " + prettyfun(h.dests(0)) + " of {\n" +
         indent((
           for(((n,k),e) <- cases zip h.dests.tail) yield
-            n + " " + (0 until k map (i => "c" + (i + e.arity - k) + "c")).mkString(" ") + " -> " +
+            n + " " + (0 until k map (i => "c" + i + "c")).mkString(" ") + " -> " +
             indent1(prettyUnshift(k, prettyfun(e)))
         ).mkString(";\n")) + "\n}"
       case Let() =>
-        val vars = h.dests.tail.zipWithIndex.map {
-          case (e,i) => "b" + i + "b = " + indent1(prettyfun(e), "      ")
+        val args = h.dests.tail.map(prettyfun(_))
+        val vars = args.zipWithIndex.map {
+          case (e,i) => "b" + i + "b = " + indent1(e, "      ")
         }
         val in = indent1(prettyfun(h.dests(0)), "   ")
-        "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
-        in.replaceAll("v([0-9]+)v", "b$1b")
+        
+        val letres =
+          "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
+              in.replaceAll("v([0-9]+)v", "b$1b")
+        
+        lazy val callres =
+          "v([0-9]+)v".r.replaceAllIn(in, m => "(" + args(m.group(1).toInt) + ")" )
+            
+        if(args.forall(!_.contains("\n")) && callres.size < letres.size)
+          callres
+        else
+          letres
       case Var() => "v" + 0 + "v"
       case Id() => prettyfun(h.dests(0))
       case Tick() => "* " + prettyfun(h.dests(0))
@@ -131,11 +142,10 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     
   def statistics() {
     val hyperedges = allNodes.toList.flatMap(n => n.ins ++ n.outs).toSet
-    val nodes = allNodes.toList.map(n => n.arity + "\n" + pretty(n))
-    val mostpop = nodes.groupBy(identity).mapValues(_.size).maxBy(_._2)
-    println("Nodes: " + allNodes.size + " should be: " + nodes.distinct.size)
+    val mostgen = allNodes.maxBy(_.used.size)
+    println("Nodes: " + allNodes.size)
     println("Hyperedges: " + hyperedges.size)
-    println("Most popular(" + mostpop._2 + "): arity " + mostpop._1 + "\n")
+    println("Largest arity: " + mostgen.used.size + "\n" + mostgen + "\n" + pretty(mostgen) + "\n")
   }
 }
 

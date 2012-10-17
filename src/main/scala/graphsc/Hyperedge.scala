@@ -2,8 +2,14 @@ package graphsc
 
 case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]) {
   // if source is not invertible then this hyperedge reduces its used set
-  require(dests.forall(_.isInvertible))
-  // TODO: I suppose this requirement may fail sometimes when let is being converted to id
+  // if dests are not invertible then they won't consume some variables
+  // require(dests.forall(_.isInvertible))
+  
+  // it is possible that dests ignore some variables that are used by the source
+  // (in this case the used set of the source should be reduced)
+  // but dests cannot use variables that are not declared used by the source
+  // but we cannot test it here
+  // require(source == null || used.subsetOf(source.used))
   
   label match {
     case _:Id => require(dests.size == 1)
@@ -69,6 +75,10 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
   def deref: Hyperedge =
     Hyperedge(label, source.deref, dests.map(_.deref))
   
+  // Make dests' renamings non-invertible but consistent with the source's used set
+  def reduceDestRenamings: Hyperedge =
+    Renaming(source.used) comp this
+    
   override def toString =
     source + " -> " + label + " -> " + dests.mkString(" ")
     

@@ -36,29 +36,32 @@ case class Renaming(vector: List[Int]) {
     used.map(this(_)) - (-1)
     
   def compDests(h: Hyperedge): Hyperedge = h.label match {
-    case Id() => Hyperedge(h.label, h.source, List(this comp h.dests(0)))
-    case Tick() => Hyperedge(h.label, h.source, List(this comp h.dests(0)))
-    case Improvement() => Hyperedge(h.label, h.source, List(this comp h.dests(0)))
+    case Id() => Hyperedge(h.label, null, List(this comp h.dests(0)))
+    case Tick() => Hyperedge(h.label, null, List(this comp h.dests(0)))
+    case Improvement() => Hyperedge(h.label, null, List(this comp h.dests(0)))
     case Var() =>
       if(this(0) == 0) h
       else throw new RuntimeException("Composing a renaming with a Var is not a good idea")
-    case Construct(_) => Hyperedge(h.label, h.source, h.dests.map(this comp _))
+    case Construct(_) => Hyperedge(h.label, null, h.dests.map(this comp _))
     case Let() => 
-      Hyperedge(h.label, h.source, h.dests(0) :: h.dests.tail.map(this comp _))
+      Hyperedge(h.label, null, h.dests(0) :: h.dests.tail.map(this comp _))
     case CaseOf(cases) =>
       val newcasedests = 
         h.dests.tail.zip(cases).map {
           case (d,(_,n)) => this.shift(n) comp d
         }
-      Hyperedge(h.label, h.source, (this comp h.dests(0)) :: newcasedests)
+      Hyperedge(h.label, null, (this comp h.dests(0)) :: newcasedests)
     case Error() =>
-      Hyperedge(h.label, h.source, Nil)
+      Hyperedge(h.label, null, Nil)
   }
   
   def comp(h: Hyperedge): Hyperedge = {
-    val Hyperedge(l, s, d) = this compDests h
-    Hyperedge(l, this comp s, d)
+    val Hyperedge(l, _, d) = this compDests h
+    Hyperedge(l, this comp h.source, d)
   }
+  
+  def mapVars(f: Int => Int): Renaming =
+    Renaming(vector.map(i => if(i == -1) -1 else f(i))).normal
   
   def shift(n: Int): Renaming = {
     // The zeroth dest of a Let has a shift -1 because there is no shifting in let, outer

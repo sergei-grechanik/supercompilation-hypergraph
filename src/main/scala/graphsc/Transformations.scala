@@ -48,7 +48,7 @@ trait Transformations extends Hypergraph {
       if(!f.isPlain)
         letCaseOf((
           Hyperedge(Let(), src1, f.plain :: es),
-          f.renaming compDests h2))
+          (f.renaming compDests h2).from(src2)))
       else {
         val newg = add(Let(), g :: es)
         val newhs = (cases zip hs).map { case ((_,n),h) =>
@@ -112,7 +112,7 @@ trait Transformations extends Hypergraph {
       if(!e1.isPlain)
         caseCase((
           Hyperedge(CaseOf(cases1), src1, e1.plain :: fs1),
-          e1.renaming compDests h2))
+          (e1.renaming compDests h2).from(src2)))
       else {
         val newfs2 =
           (cases2 zip fs2).map { case ((_,n),f) =>
@@ -127,9 +127,9 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  // TODO: There will be a problem if src2 is a dest node of h1 several times
-  // Actually this problem holds for all transformations
-  // But TransformManager usually replaces the node between the hyperedges with a dummy node...
+  // You might think that there will be a problem if src2 is a dest node of h1 several times
+  // but TransformManager replaces the node between the hyperedges with a dummy node, so 
+  // there is no problem
   def caseTick: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(Tick(), src2, List(e2))) if e1.plain == src2 =>
@@ -157,15 +157,38 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
 
   // Move the let up, i.e. generalize
-  /*def letUp: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letUp(maxarity: Int = Int.MaxValue): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(l1, src1, es1),
           h2@Hyperedge(Let(), src2, f2 :: es2)) if 
             (if(l1 == Let()) es1.tail else es1).exists(_.plain == src2) =>
       val (e1, shift) = (es1 zip h1.shifts).find(_._1.plain == src2).get
       // if it is a head of a let then you've found a bug, congratulations
       assert(shift != -1)
-      for(e2 <- es2) yield {
-        
+      var arity = h1.arity
+      var extexprs = (0 until arity).map(variable(_)).toList
+      val newes2 =
+        for(e2 <- es2) yield {
+          val e2prime = e1.renaming comp e2
+          if(e2prime.used.forall(_ >= shift)) {
+            extexprs ++= 
+              List(e2prime.renaming.mapVars(_ - shift) comp e2.node)
+            var vrbl = variable(arity + shift)
+            arity += 1
+            vrbl
+          } else {
+            // we cannot move this expression up because it uses bound variables
+            e2prime
+          }
+        }
+      
+      // We need these dummy hyperedges to compute the real arity of the result
+      val newlet_h = Hyperedge(Let(), null, f2 :: newes2)
+      val newl1_h = Hyperedge(l1, null, es1.map(e => if(e == e1) newlet_h.asDummyNode else e))
+      
+      if(newl1_h.used.size <= maxarity) {
+        val newlet = add(Let(), f2 :: newes2)
+        val newl1 = add(l1, es1.map(e => if(e == e1) newlet else e))
+        add(Let(), src1, newl1 :: extexprs)
       }
-  }*/
+  }
 }

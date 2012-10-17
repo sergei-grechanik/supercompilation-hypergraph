@@ -3,6 +3,9 @@ package graphsc
 trait DepthTracker extends Hypergraph {
   val depths = collection.mutable.Map[Node, Int]()
   
+  def depth(n: RenamedNode): Int =
+    depths(n.deref.node)
+  
   def onDepthChanged(n: Node, d: Int) {}
   
   def updateDepth(n: Node, d: Int) {

@@ -2,7 +2,7 @@ package graphsc
 
 import scala.util.parsing.combinator._
 
-class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
+case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def apply(s: String): Map[String, RenamedNode] = {
     val parsed = parseAll(prog, s)
     val success = parsed.successful

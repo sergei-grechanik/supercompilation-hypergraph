@@ -44,17 +44,30 @@ trait Hypergraph {
     assert(res.used.size == 1)
     res
   }
+  
+  // RenamedNode representing error
+  def error: RenamedNode =
+    add(Error(), Nil)
+    
+  // Replace vars which son't receive input with errors
+  def varsToErrs(h: Hyperedge): Hyperedge = {
+    val newdests =
+      h.dests.map(d =>
+        if(d.getVar == Some(-1)) error
+        else d)
+    Hyperedge(h.label, h.source, newdests)
+  }
     
   // Hyperedge normalizer
   def normalize(h_underef: Hyperedge): Hyperedge = {
-    val h = h_underef.deref
+    val h = varsToErrs(h_underef.deref.reduceDestRenamings)
     h.label match {
       case Let() => 
         val newhead = h.dests(0).plain
         val newtail = 
           (0 until newhead.arity toList).map { i =>
             h.dests(0).renaming(i) match {
-              case j if j < 0 || j >= h.dests.tail.size => add(Error(), Nil)
+              case j if j < 0 || j >= h.dests.tail.size => error
               case j => h.dests.tail(j)
             }
           }
@@ -123,6 +136,22 @@ trait TheHypergraph extends Hypergraph {
   
   override def allNodes: Set[Node] = nodes.toSet
   
+  protected var varNode: RenamedNode = null
+  protected var errNode: RenamedNode = null 
+  
+  override def variable(i: Int): RenamedNode = {
+    if(varNode == null)
+      varNode = super.variable(0)
+    Renaming(0 -> i) comp varNode.deref
+  }
+  
+  // RenamedNode representing error
+  override def error: RenamedNode = {
+    if(errNode == null)
+      errNode = super.error
+    errNode.deref
+  }
+  
   def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     val rinv = h.source.renaming.inv
     val sourcenode_used = rinv comp h.used
@@ -136,11 +165,14 @@ trait TheHypergraph extends Hypergraph {
       else {
         h
       }
-        
+       
+    assert(res.used.subsetOf(res.source.used))
+    
     res.source.node.outsMut += res
     res.dests.foreach(_.node.insMut.add(res))
     reduceUsed(res.source.node, sourcenode_used)
     // after reduction of used sets res can become undereferenced
+    assert(res.deref.used.subsetOf(res.deref.source.used))
     res.deref
   }
   
@@ -240,8 +272,8 @@ trait TheHypergraph extends Hypergraph {
     if(l2 != r2) {
       // We add temporary id hyperedges, so that HyperTester won't crash
       // This will also take care of arity reduction
-      addHyperedgeSimple(canonize(Hyperedge(Id(), l2, List(r2)))._2)
-      addHyperedgeSimple(canonize(Hyperedge(Id(), r2, List(l2)))._2)
+      addHyperedgeSimple(canonize(Hyperedge(Id(), l2, List(r2)).reduceDestRenamings)._2)
+      addHyperedgeSimple(canonize(Hyperedge(Id(), r2, List(l2)).reduceDestRenamings)._2)
       
       // Adding this hyperedges might trigger used set reduction
       // which in turn might perform node gluing
@@ -262,9 +294,9 @@ trait TheHypergraph extends Hypergraph {
       
       // Readd hyperedges. This may lead to gluing of parent nodes. 
       for(h <- r_node.mouts)
-        addHyperedgeSimple(canonize(normalize(h))._2)
+        addHyperedgeSimple(canonize(normalize(h.reduceDestRenamings))._2)
       for(h <- r_node.mins)
-        addHyperedgeSimple(canonize(normalize(h))._2)
+        addHyperedgeSimple(canonize(normalize(h.reduceDestRenamings))._2)
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
@@ -275,10 +307,10 @@ trait TheHypergraph extends Hypergraph {
       
       normalizeIncident(l.node)
       
-      afterGlue(l.node)
+      afterGlue(l.node.deref.node)
       
       // maybe there appeared some more nodes to glue 
-      glueParents(l.node)
+      glueParents(l.node.deref.node)
       
       // Now l may be glued to something else
       l.deref
@@ -337,17 +369,20 @@ trait TheHypergraph extends Hypergraph {
   // Normalize incident hyperedges which for some reason (gluing, used reduction) became non-normal
   def normalizeIncident(node: Node) {
     val isvar = node.outs.exists(_.label.isInstanceOf[Var])
+    var todo: List[() => Unit] = Nil
     for(h <- node.ins ++ node.outs) {
-        val nor = normalize(h)
+        val nor = normalize(h.reduceDestRenamings)
         if(nor != h) {
+          todo = {() => addHyperedge(nor); ()} :: todo
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
-          addHyperedge(nor)
         } else if(isvar && h.label.isInstanceOf[CaseOf]) {
           // here h is not non-normal but we can still perform important gluings
-          glueChildren(h.deref)
+          todo = {() => glueChildren(h.deref); ()} :: todo
         }
       }
+    // we perform these actions after removing bad hyperedges
+    todo.foreach(_())
   }
   
   def reduceUsed(node: Node, set: Set[Int]) {
@@ -374,10 +409,10 @@ trait TheHypergraph extends Hypergraph {
       for(h <- n.outs) {
         def short(i: Int) = {
           val s = prettyRename(h.dests(i).renaming, h.dests(i).node.prettyDebug)
-          if(s.size <= 4 && s != "")
+          if(s.size <= 6 && s != "")
             s.replaceAll("\\|", "\\\\|")
           else
-            h.dests(i).node.uniqueName.dropWhile(_ != '@').tail.take(3)
+            "@" + h.dests(i).node.uniqueName.dropWhile(_ != '@').tail.take(3)
         }
         
         val lab = "{" + h.source.renaming + "\\l" + h.label + "\\l|{" + 
@@ -412,13 +447,12 @@ trait TheHypergraph extends Hypergraph {
   def checkIntegrity() {
     if(integrityCheckEnabled)
       for(n <- nodes) {
-        //definingHyperedge(n)
         assert(n.deref.node == n)
         for(h <- n.ins) {
           //TODO: Not true, in rare cases there may be unuselesss id endohyperedges
           // but these cases should not be missed
-          if(h.label.isInstanceOf[Id])
-            assert(h.source.node != h.dests(0).node)
+          //if(h.label.isInstanceOf[Id])
+          //  assert(h.source.node != h.dests(0).node)
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.source.node.outs(h))
@@ -432,6 +466,9 @@ trait TheHypergraph extends Hypergraph {
           // h defines n. h cannot define n if its source has less variables than n
           // that's why we have arity reduction
           assert(h.source.isInvertible)
+          assert(h.used.subsetOf(h.source.used))
+          if(h.label.isInstanceOf[CaseOf])
+            assert(h.dests(0).getVar != Some(-1))
         }
       }
   }

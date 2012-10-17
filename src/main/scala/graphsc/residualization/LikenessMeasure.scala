@@ -69,7 +69,7 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
           likenessH(lh, rh, hist)
       ress.filter(_.nonEmpty) match {
         case Nil => None
-        case l => l.minBy(_.get._1)
+        case l => l.maxBy(_.get._1)
       }
     }
   }  
