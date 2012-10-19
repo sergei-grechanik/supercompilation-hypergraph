@@ -5,15 +5,27 @@ trait Hypergraph {
   // h should connect nodes known to the hypergraph
   // h.source may be a free node, in this case the function should add or find an appropriate node 
   // This function may perform transformations
-  def addHyperedge(h: Hyperedge): RenamedNode
+  def addHyperedge(h: Hyperedge)
   
   // add a hyperedge, shortcut
-  def add(l: Label, src: RenamedNode, ds: List[RenamedNode]): RenamedNode =
+  def add(l: Label, src: RenamedNode, ds: List[RenamedNode]): RenamedNode = {
     addHyperedge(Hyperedge(l, src, ds))
+    src.deref
+  }
   
   // Create a node with a hyperedge (or return an existing one)
-  def add(l: Label, ds: List[RenamedNode]): RenamedNode =
-    addHyperedge(Hyperedge(l, null, ds).freeSource)
+  def add(l: Label, ds: List[RenamedNode]): RenamedNode = {
+    val h = Hyperedge(l, null, ds).freeSource
+    addHyperedge(h)
+    h.source.deref
+  }
+  
+  // Returns also a hyperedge
+  def addH(l: Label, ds: List[RenamedNode]): (RenamedNode, Hyperedge) = {
+    val h = Hyperedge(l, null, ds).freeSource
+    addHyperedge(h)
+    (h.source.deref, normalize(h))
+  }
   
   // Create a node without any connections
   def newNode(used: Set[Int]): RenamedNode
@@ -57,9 +69,12 @@ trait Hypergraph {
         else d)
     Hyperedge(h.label, h.source, newdests)
   }
+  
+  def normalize(h: Hyperedge): Hyperedge =
+    canonize(simplify(h))._2
     
-  // Hyperedge normalizer
-  def normalize(h_underef: Hyperedge): Hyperedge = {
+  // Hyperedge simplifier
+  def simplify(h_underef: Hyperedge): Hyperedge = {
     val h = varsToErrs(h_underef.deref.reduceDestRenamings)
     h.label match {
       case Let() => 
@@ -96,7 +111,7 @@ trait Hypergraph {
               args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
               (n until branch.arity).map(i => variable(i - n))
             
-            normalize(Hyperedge(Let(), h.source, List(branch) ++ bs))
+            simplify(Hyperedge(Let(), h.source, List(branch) ++ bs))
           case _ => h
         }
       case _ => h
@@ -152,7 +167,7 @@ trait TheHypergraph extends Hypergraph {
     errNode.deref
   }
   
-  def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
+  protected def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
     val rinv = h.source.renaming.inv
     val sourcenode_used = rinv comp h.used
     
@@ -176,37 +191,31 @@ trait TheHypergraph extends Hypergraph {
     res.deref
   }
   
-  def addHyperedgeImpl(h_uncanonized: Hyperedge): RenamedNode = {
-    val (ren, h) = canonize(h_uncanonized)
+  protected def addHyperedgeImpl(h: Hyperedge) {
     require(h.source.node.isInstanceOf[FreeNode] || nodes(h.source.node))
     
-    val pre_res = 
-      if(h.dests.nonEmpty)
-        h.dests(0).node.ins.find(x => x.label == h.label && x.dests == h.dests) match {
-          case Some(x) if h.source.node == x.source.node => h.source
-          case Some(x) => glueNodes(x.source, h.source)
-          case None => 
-            val newh = addHyperedgeSimple(h)
-            checkIntegrity()
-            onNewHyperedge(newh)
-            newh.source
-        }
-      else
-        nodes.find(_.outs.exists(_.label == h.label)) match {
-          case Some(n) =>
-            val src = n.outs.find(_.label == h.label).get.source
-            glueNodes(src, h.source)
-          case None => 
-            val newh = addHyperedgeSimple(h)
-            checkIntegrity()
-            onNewHyperedge(newh)
-            newh.source
-        }
-    
-    ren comp pre_res
+    if(h.dests.nonEmpty)
+      h.dests(0).node.ins.find(x => x.label == h.label && x.dests == h.dests) match {
+        case Some(x) if h.source.node == x.source.node => h.source
+        case Some(x) => glueNodes(x.source, h.source)
+        case None => 
+          val newh = addHyperedgeSimple(h)
+          checkIntegrity()
+          onNewHyperedge(newh)
+      }
+    else
+      nodes.find(_.outs.exists(_.label == h.label)) match {
+        case Some(n) =>
+          val src = n.outs.find(_.label == h.label).get.source
+          glueNodes(src, h.source)
+        case None => 
+          val newh = addHyperedgeSimple(h)
+          checkIntegrity()
+          onNewHyperedge(newh)
+      }
   }
   
-  override def addHyperedge(hUnnorm: Hyperedge): RenamedNode = {
+  override def addHyperedge(hUnnorm: Hyperedge) {
     val h = normalize(hUnnorm)
     val Hyperedge(l, src, ds) = h
     // a little note: if !src.isInvertible then the arity of src.node should be reduced
@@ -272,8 +281,8 @@ trait TheHypergraph extends Hypergraph {
     if(l2 != r2) {
       // We add temporary id hyperedges, so that HyperTester won't crash
       // This will also take care of arity reduction
-      addHyperedgeSimple(canonize(Hyperedge(Id(), l2, List(r2)).reduceDestRenamings)._2)
-      addHyperedgeSimple(canonize(Hyperedge(Id(), r2, List(l2)).reduceDestRenamings)._2)
+      addHyperedgeSimple(normalize(Hyperedge(Id(), l2, List(r2))))
+      addHyperedgeSimple(normalize(Hyperedge(Id(), r2, List(l2))))
       
       // Adding this hyperedges might trigger used set reduction
       // which in turn might perform node gluing
@@ -294,14 +303,14 @@ trait TheHypergraph extends Hypergraph {
       
       // Readd hyperedges. This may lead to gluing of parent nodes. 
       for(h <- r_node.mouts)
-        addHyperedgeSimple(canonize(normalize(h.reduceDestRenamings))._2)
+        addHyperedgeSimple(normalize(h.reduceDestRenamings))
       for(h <- r_node.mins)
-        addHyperedgeSimple(canonize(normalize(h.reduceDestRenamings))._2)
+        addHyperedgeSimple(normalize(h.reduceDestRenamings))
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
-      l.node.outsMut -= canonize(normalize(Hyperedge(Id(), l.plain, List(l.plain))))._2
-      l.node.insMut -= canonize(normalize(Hyperedge(Id(), l.plain, List(l.plain))))._2
+      l.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      l.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
         
       checkIntegrity()
       

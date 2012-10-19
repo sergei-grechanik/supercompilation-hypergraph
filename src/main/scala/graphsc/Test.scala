@@ -2,14 +2,65 @@ package graphsc
 
 import residualization._
 
+object Trace {
+  var suppressedFrom: Int = Int.MaxValue
+  var indent: Int = 0
+  
+  def enter(): this.type = {
+    indent += 2
+    this
+  }
+  
+  def enterIf(cond: Boolean, header: String = "") = {
+    if(cond)
+      enter(header)
+    else {
+      enter
+      if(suppressedFrom > indent)
+        suppressedFrom = indent
+      this
+    }
+  }
+  
+  def leave = {
+    indent -= 2
+    if(suppressedFrom > indent)
+      suppressedFrom = Int.MaxValue
+    this
+  }
+  
+  def enter(header: String): this.type = {
+    this(header)
+    enter
+  }
+  
+  def ->:[T](value: T): T = {
+    if(suppressed)
+      leave
+    else {
+      leave
+      this("> " + value)
+    }
+    value
+  }
+  
+  def suppressed: Boolean =
+    indent >= suppressedFrom
+  
+  def apply(s: String) = {
+    if(!suppressed)
+      println(("" /: List.fill(indent)(" "))(_ + _) + s)
+    this
+  }
+}
+
 class TooManyNodesException(s: String) extends Exception(s)
 
 trait HyperLogger extends Hypergraph {
-  abstract override def addHyperedge(h: Hyperedge): RenamedNode = {
+  abstract override def addHyperedge(h: Hyperedge) {
     println("\nhyper " + h)
-    val n = super.addHyperedge(h)
-    println("=> " + n + "\n")
-    n
+    super.addHyperedge(h)
+    println("=> " + normalize(h) + "\n")
   }
   
   override def onNewHyperedge(h: Hyperedge) {
@@ -56,13 +107,13 @@ trait SelfLetAdder extends Hypergraph {
 
 
 object Test {
-  def limitDepth(g: TheHypergraph with DepthTracker with TransformManager, d: Int): 
+  def limitDepth(g: TheHypergraph with DepthTracker with TransformManager, d: Int, c: Int): 
         (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
       g.checkIntegrity()
-      if(g.allNodes.size > 50)
+      if(g.allNodes.size > 300)
         throw new TooManyNodesException("")
-      if(g.depths(h1.source.node) >= d) {
+      if(g.depths(h1.source.node) > d || g.codepths(h1.source.node) > c) {
         println("\t" + h1 + "\n\t" + h2 + "\n")
         //println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
         true
@@ -79,7 +130,7 @@ object Test {
   def transAll(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
         (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 4),
+    TransformationsToProcessor(limitDepth(g, 3, 3),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
@@ -106,7 +157,10 @@ object Test {
         with DepthTracker
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
-        with SelfLetAdder
+        with SelfLetAdder {
+          override def nodeDotLabel(n: Node): String =
+            super.nodeDotLabel(n) + "\\l" + depths(n) + " " + codepths(n) + "\\l"
+        }
     
     implicit def peano(i: Int): Value =
       if(i == 0)
@@ -162,20 +216,15 @@ object Test {
     //p("strictadd2 x y = deepseq x (deepseq y (add y x))")
     
     p("nrevto x y = add (nrev x) y")
-    //g.updateDepth(g("nrevto").node, 0)
     
     p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
-    g.updateDepth(g("nrevto_plus_1").node, 0)
     
     p("nrevto_1 x = nrevto x (S Z)")
     
     p("add_plus_1 x y = add (add (x) (S (Z ))) ((y))")
-    g.updateDepth(g("add_plus_1").node, 0)
     
     p("add_1_to y = add (S Z) y")
-    g.updateDepth(g("add_1_to").node, 0)
     p("add_0_to y = add Z y")
-    g.updateDepth(g("add_0_to").node, 0)
     
     //g.updateDepth(g("idle").node, 0)
     //g.updateDepth(g("constz").node, 0)
@@ -184,11 +233,18 @@ object Test {
     //g.updateDepth(g("add3Left").node, 0)
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    //g.updateDepth(g("nrev").node, 0)
-    //g.updateDepth(g("rev").node, 0)
+    g.zeroBoth(g("nrev"))
+    g.zeroBoth(g("rev"))
     //g.updateDepth(g("nrevL").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
+    
+    
+    p.assume("forall x y . nrevto_plus_1 x y = nrevto x (S y)")
+    //p.assume("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}")
+    
+    for(n <- g.allNodes)
+      g.updateCodepth(n, 0)
     
     {
       val out = new java.io.FileWriter("init.dot")
@@ -225,8 +281,16 @@ object Test {
       out.close
     }
     
+    {
+      val out = new java.io.FileWriter("depths")
+      for(n <- g.allNodes) {
+        out.write(g.depth(n.deref) + " " + g.codepth(n.deref) + " " + g.pretty(n).size + "\n")
+      }
+      out.close()
+    }
+    
     println("[][][][][][][][[][[][][][][][][][][][][]")
-    //println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))
+    println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))
     println("[][][][][][][][[][[][][][][][][][][][][]")
     
     val like =

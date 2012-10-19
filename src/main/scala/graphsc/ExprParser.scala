@@ -5,11 +5,21 @@ import scala.util.parsing.combinator._
 case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def apply(s: String): Map[String, RenamedNode] = {
     val parsed = parseAll(prog, s)
-    val success = parsed.successful
-    assert(success) // We've modified the graph even if the parsing wasn't successful
-    // it is better to rewrite it in a bit more functional style
+    assert(parsed.successful) // We've modified the graph even if the parsing wasn't successful
     parsed.get.toMap
   }
+  
+  def assume(s: String) {
+    val parsed = parseAll(equality, s)
+    assert(parsed.successful)
+  }
+  
+  // TODO: Get rid of forall
+  def equality: Parser[Unit] = 
+    ("forall" ~> rep(fname) <~ ".") ~ (expr <~ "=") ~! expr ^^
+    { case vs~e1~e2 =>
+        val table = vs.zipWithIndex.toMap
+        graph.glue(List(e1(table), e2(table))) }
   
   def prog: Parser[List[(String, RenamedNode)]] = repsep(definition, ";") <~ opt(";")
   

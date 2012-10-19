@@ -42,7 +42,7 @@ trait TransformManager extends Hypergraph with DepthTracker {
     val set = Random.shuffle(updatedHyperedges.map(_.deref).toList).sortBy(h => depth(h.source))
     updatedHyperedges.clear()
     val processed = collection.mutable.Set[Hyperedge]()
-    for(h1 <- set; val h = canonize(normalize(h1.reduceDestRenamings))._2; 
+    for(h1 <- set; val h = normalize(h1.reduceDestRenamings); 
         if !processed(h) && !processed(h1) && 
             allNodes(h.source.node) && h.source.node.outs(h)) {
       processed += h
