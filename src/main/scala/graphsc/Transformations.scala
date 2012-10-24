@@ -5,8 +5,8 @@ trait Transformations extends Hypergraph {
   private def isVar(n: Node): Boolean =
     n.outs.exists(h => h.label.isInstanceOf[Var])
   
-  private def isErr(n: Node): Boolean =
-    n.outs.exists(h => h.label.isInstanceOf[Error])
+  private def isUnused(n: Node): Boolean =
+    n.outs.exists(h => h.label.isInstanceOf[Unused])
   
   private def isInj[T](l: Seq[T]): Boolean = 
     l.distinct == l
@@ -19,9 +19,20 @@ trait Transformations extends Hypergraph {
   private implicit def injectAt(l: List[RenamedNode]) = new {
     def at(i: Int): RenamedNode =
       if(i < 0 || i >= l.size)
-        add(Error(), Nil)
+        add(Unused(), Nil)
       else
         l(i)
+  }
+  
+  def applyTransformation(
+        trans: PartialFunction[(Hyperedge, Hyperedge), Unit], 
+        h1o: Hyperedge, h2o: Hyperedge): Boolean = {
+    var done = false
+    val tlifted = trans.lift
+    for((h1,h2) <- TransformationsToProcessor.transformablePairs(normalize(h1o), normalize(h2o)))
+      if(tlifted((h1,h2)).isDefined)
+        done |= true
+    done
   }
   
   /////////////////////////////////////////////////////////////////////////////
@@ -191,4 +202,45 @@ trait Transformations extends Hypergraph {
         add(Let(), src1, newl1 :: extexprs)
       }
   }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  
+  def drive(n: Node): Hyperedge = {
+    definingHyperedge(n.deref.node) match {
+      case Some(h) => h
+      case None =>
+        val caseofs = n.outs.filter(_.label.isInstanceOf[CaseOf]).toList
+        if(caseofs.nonEmpty) {
+          for(c <- caseofs) {
+            val childdef = drive(c.dests(0).node)
+            if(childdef.label.isInstanceOf[CaseOf])
+              applyTransformation(caseCase, c, childdef)
+            else if(childdef.label.isInstanceOf[Var])
+              applyTransformation(caseVar, c, childdef)
+            else if(childdef.label.isInstanceOf[Tick])
+              applyTransformation(caseTick, c, childdef)
+          }
+          drive(n)
+        }
+        else {
+          for(l <- n.outs) {
+            assert(l.label == Let())
+            val childdef = drive(l.dests(0).node)
+            if(childdef.label.isInstanceOf[CaseOf])
+              applyTransformation(letCaseOf, l, childdef)
+            else if(childdef.label.isInstanceOf[Var])
+              applyTransformation(letVar, l, childdef)
+            else if(childdef.label.isInstanceOf[Let])
+              applyTransformation(letLet, l, childdef)
+            else
+              applyTransformation(letOther, l, childdef)
+          }
+          drive(n)
+        }
+    }
+  }
+  
 }
+
+

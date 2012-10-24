@@ -102,7 +102,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       case Id() => prettyfun(h.dests(0))
       case Tick() => "* " + prettyfun(h.dests(0))
       case Improvement() => ">= " + prettyfun(h.dests(0))
-      case Error() => "_|_"
+      case Unused() => "_"
     }
   
   def prettyRename(r: Renaming, orig: String): String = {
@@ -143,9 +143,11 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   def statistics() {
     val hyperedges = allNodes.toList.flatMap(n => n.ins ++ n.outs).toSet
     val mostgen = allNodes.maxBy(_.used.size)
+    val biggest = pretty(allNodes.maxBy(pretty(_).size))
     println("Nodes: " + allNodes.size)
     println("Hyperedges: " + hyperedges.size)
     println("Largest arity: " + mostgen.used.size + "\n" + mostgen + "\n" + pretty(mostgen) + "\n")
+    println("biggest prettified representation:\n" + biggest + "\n")
   }
 }
 

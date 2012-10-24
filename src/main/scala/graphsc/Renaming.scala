@@ -51,7 +51,7 @@ case class Renaming(vector: List[Int]) {
           case (d,(_,n)) => this.shift(n) comp d
         }
       Hyperedge(h.label, null, (this comp h.dests(0)) :: newcasedests)
-    case Error() =>
+    case Unused() =>
       Hyperedge(h.label, null, Nil)
   }
   
@@ -126,10 +126,10 @@ case class RenamedNode(renaming: Renaming, node: Node) {
     else
       None
       
-  def getVarErr: Option[Int] =
+  def getVarUnused: Option[Int] =
     if(node.outs.exists(_.label == Var()))
       Some(renaming(0))
-    else if(node.outs.exists(_.label == Error()))
+    else if(node.outs.exists(_.label == Unused()))
       Some(-1)
     else
       None

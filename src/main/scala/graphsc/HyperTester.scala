@@ -162,7 +162,7 @@ trait HyperTester extends TheHypergraph {
     val nv =
       for(n <- nodes) yield
         (n, runCache(n).toMap)
-    
+        
     println(
         "statistics: " + nodes.size + 
         " should be " + fun(Set(), nv.toList).size + 
@@ -175,7 +175,7 @@ trait HyperTester extends TheHypergraph {
           if(m1.isEmpty)
             empty += 1
           for((n, m) <- s) {
-            if(m == m1 || (m.toSet & m1.toSet).size >= 2) //m == m1
+            if(m == m1)
               return fun(s, tl)
           }
           fun(s + (n1 -> m1), tl)

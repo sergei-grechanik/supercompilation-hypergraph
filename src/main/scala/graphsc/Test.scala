@@ -107,13 +107,15 @@ trait SelfLetAdder extends Hypergraph {
 
 
 object Test {
-  def limitDepth(g: TheHypergraph with DepthTracker with TransformManager, d: Int, c: Int): 
+  def limitDepth(g: TheHypergraph with DepthTracker with TransformManager, c: Int, maxn: Int = 1000): 
         (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
       g.checkIntegrity()
-      if(g.allNodes.size > 300)
+      if(g.allNodes.size > maxn)
         throw new TooManyNodesException("")
-      if(g.depths(h1.source.node) > d || g.codepths(h1.source.node) > c) {
+      val num1 = g.depths(h1.source.node) + g.codepths(h1.source.node)
+      val num2 = g.depths(h2.source.node) + g.codepths(h2.source.node)
+      if(num1 > c || num2 > c) {
         println("\t" + h1 + "\n\t" + h2 + "\n")
         //println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
         true
@@ -130,15 +132,36 @@ object Test {
   def transAll(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
         (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 3, 3),
+    TransformationsToProcessor(limitDepth(g, 6, 50),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
       "letOther" -> letOther,
-      //"caseReduce" -> caseReduce(false),
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick,
+      "letUp" -> letUp(3)
+    )
+  }
+        
+  def transDrive(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
+        (Hyperedge, Hyperedge) => Unit = {
+    import g._
+    TransformationsToProcessor(limitDepth(g, 10, 100),
+      "letVar" -> letVar,
+      "letLet" -> letLet,
+      "letCaseOf" -> letCaseOf,
+      "letOther" -> letOther,
+      "caseVar" -> caseVar,
+      "caseCase" -> caseCase,
+      "caseTick" -> caseTick
+    )
+  }
+        
+  def transGen(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
+        (Hyperedge, Hyperedge) => Unit = {
+    import g._
+    TransformationsToProcessor(limitDepth(g, 3, 5000),
       "letUp" -> letUp(3)
     )
   }
@@ -181,9 +204,9 @@ object Test {
     //p("add3Right x y z = add x (add y z)")
     //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
     
-    p("revto x y = case x of {Z -> y; S x -> revto x (S y)}")
-    p("rev x = case x of {Z -> Z; S x -> revto x (S Z)}")
-    assert(g.runNode(g("rev"), List(3)) == peano(3))
+    //p("revto x y = case x of {Z -> y; S x -> revto x (S y)}")
+    //p("rev x = case x of {Z -> Z; S x -> revto x (S Z)}")
+    //assert(g.runNode(g("rev"), List(3)) == peano(3))
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
@@ -234,13 +257,19 @@ object Test {
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
     g.zeroBoth(g("nrev"))
-    g.zeroBoth(g("rev"))
+    //g.zeroBoth(g("rev"))
     //g.updateDepth(g("nrevL").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
     
     
-    p.assume("forall x y . nrevto_plus_1 x y = nrevto x (S y)")
+    //p.assume("forall x y . nrevto_plus_1 x y = nrevto x (S y)")
+    //val (_,(_,hy1)) = p.assume("forall x y . add_plus_1 x y = add x (S y)")
+    //val (_,(_,hy2)) = p.assume("forall x y . nrevto_plus_1 x y = add_plus_1 (rev x) y")
+    
+    //for((h1,h2) <- TransformationsToProcessor.transformablePairs(g.normalize(hy2),g.normalize(hy1)))
+    //  g.letLet((h1,h2))
+    
     //p.assume("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}")
     
     for(n <- g.allNodes)
@@ -255,29 +284,57 @@ object Test {
     try {
       while(g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
-        g.transform(transAll(g))
+        g.transform(transGen(g))
       }
-      /*println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
-      readLine()
-      g.updateAll()
-      while(g.updatedHyperedges.nonEmpty) {
-        println("nodes: " + g.allNodes.size)
-        g.transform(transAll(g))
-      }*/
+      println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
     } catch { 
       case _:TooManyNodesException =>
         println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
-    }
+    }/*
+    try {
+      g.updateAll()
+      while(g.updatedHyperedges.nonEmpty) {
+        println("nodes: " + g.allNodes.size)
+        g.transform(transDrive(g))
+      }
+    } catch { 
+      case _:TooManyNodesException =>
+        println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
+    }*/
      
     println("**********************************************")
     //g.writeDotFrames
     
+    //assert(g.runNode(g("nrev"), List(5)) == peano(5))
+    //g.statisticsTester()
     
+    /*for(n <- g.allNodes)
+      if(g.depths(n) + g.codepths(n) > 6)
+        g.removeNode(n)*/
+    
+    /*for(n <- g.allNodes)
+      g.drive(n.deref.node)*/
+    
+    assert(g.runNode(g("nrev"), List(5)) == peano(5))
+    g.statisticsTester()
+      
     g.statistics()
     
     {
       val out = new java.io.FileWriter("test.dot")
       out.write(g.toDot)
+      out.close
+    }
+    
+    {
+      val out = new java.io.FileWriter("rough.dot")
+      out.write("digraph Rough {\n")
+      for(n <- g.allNodes) {
+        out.write("\"" + n + "\"[label=\"" + n.prettyDebug.replace("\n", "\\l") + "\\l" + "\"];\n")
+        for(o <- n.outs; d <- o.dests)
+          out.write("\"" + n + "\" -> \"" + d.node + "\";\n")
+      }
+      out.write("}")
       out.close
     }
     
@@ -288,6 +345,15 @@ object Test {
       }
       out.close()
     }
+    
+    println("nrevto driven:")
+    println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
+    println("add_plus_1 simplified:")
+    println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
+    println("nrevto_plus_1 in terms of add_plus_1:")
+    println(p.check("forall x y . nrevto_plus_1 x y = add_plus_1 (rev x) y"))
+    println("nrevto_plus_1 in terms of nrevto:")
+    println(p.check("forall x y . nrevto_plus_1 x y = nrevto x (S y)"))
     
     println("[][][][][][][][[][[][][][][][][][][][][]")
     println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))

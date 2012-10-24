@@ -28,22 +28,6 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
       for(x <- r; y <- l; k <- x | y) yield k 
   }
   
-  def definingHyperedge(n: Node): List[Hyperedge] = {
-    val hypers = 
-      n.outs.filter(h => h.label match {
-        case Construct(_) => true
-        case Tick() => true
-        case Var() => true
-        case Error() => true
-        case CaseOf(_) if h.dests(0).getVar.isDefined => true 
-        case _ => false
-      })
-      
-    // only caseofs can be multiple (due to unpropagated information)
-    assert(hypers.size <= 1 || hypers.head.label.isInstanceOf[CaseOf])
-    hypers.toList
-  }
-  
   def likeness(
         l: RenamedNode, r: RenamedNode,
         hist: List[(Node, Node)] = Nil): Option[(L, Renaming)] = {
@@ -56,8 +40,8 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
   def likenessN(
         l: Node, r: Node,
         hist: List[(Node, Node)] = Nil): Option[(L, Renaming)] = {
-    val ldef = definingHyperedge(l)
-    val rdef = definingHyperedge(r)
+    val ldef = definingHyperedgesNonStrict(l)
+    val rdef = definingHyperedgesNonStrict(r)
  
     if(l == r)
       Some((infinity, Renaming(r.used)))

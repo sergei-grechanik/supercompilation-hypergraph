@@ -6,15 +6,12 @@ sealed trait Label {
     case Tick() => true
     case Improvement() => true
     case Construct(_) => true
-    case Error() => true
+    case Unused() => true
     case _ => false
   }
 }
 
 case class Construct(name: String)
-  extends Label
-  
-case class Error()
   extends Label
 
 case class CaseOf(cases: List[(String, Int)])
@@ -33,4 +30,7 @@ case class Improvement()
   extends Label
 
 case class Var()
+  extends Label
+  
+case class Unused()
   extends Label

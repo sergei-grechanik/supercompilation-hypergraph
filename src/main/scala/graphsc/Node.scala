@@ -5,6 +5,8 @@ class Node(initial_used: Set[Int]) {
   val mouts = collection.mutable.Set[Hyperedge]()
   val mins = collection.mutable.Set[Hyperedge]()
   var gluedTo: RenamedNode = null
+  // Indicated that this node is in the process of gluing
+  var beingGlued: Boolean = false
   
   var prettyDebug = ""
   

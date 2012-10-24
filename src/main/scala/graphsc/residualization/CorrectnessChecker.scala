@@ -120,7 +120,7 @@ case class GuardedOrStructural(
             rename(h.dests(0).renaming, args1), origargs, preguarded, guarded))
       case Var() =>
         Nil
-      case Error() =>
+      case Unused() =>
         Nil
     }
   }

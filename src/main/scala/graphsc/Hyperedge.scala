@@ -37,7 +37,7 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
     case CaseOf(cases) =>
       (dests(0).used /: (dests.tail zip cases).map{ 
           case (d,(_,n)) => d.used.map(_ - n).filter(_ >= 0) })(_ | _)
-    case Error() => Set()
+    case Unused() => Set()
   }
   
   def shifts: List[Int] = label match {
@@ -111,7 +111,7 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
         nodeRunner(dests(0), args)
       case Var() =>
         args(0)
-      case Error() =>
+      case Unused() =>
         Bottom
     }
   }

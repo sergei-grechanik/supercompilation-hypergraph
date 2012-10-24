@@ -21,6 +21,12 @@ trait Hypergraph {
   }
   
   // Returns also a hyperedge
+  def addH(l: Label, src: RenamedNode, ds: List[RenamedNode]): (RenamedNode, Hyperedge) = {
+    val h = Hyperedge(l, src, ds)
+    addHyperedge(h)
+    (src.deref, normalize(h))
+  }
+  
   def addH(l: Label, ds: List[RenamedNode]): (RenamedNode, Hyperedge) = {
     val h = Hyperedge(l, null, ds).freeSource
     addHyperedge(h)
@@ -57,15 +63,15 @@ trait Hypergraph {
     res
   }
   
-  // RenamedNode representing error
-  def error: RenamedNode =
-    add(Error(), Nil)
+  // RenamedNode representing unused expression
+  def unused: RenamedNode =
+    add(Unused(), Nil)
     
-  // Replace vars which son't receive input with errors
-  def varsToErrs(h: Hyperedge): Hyperedge = {
+  // Replace vars which don't receive input with unused
+  def varsToUnused(h: Hyperedge): Hyperedge = {
     val newdests =
       h.dests.map(d =>
-        if(d.getVar == Some(-1)) error
+        if(d.getVar == Some(-1)) unused
         else d)
     Hyperedge(h.label, h.source, newdests)
   }
@@ -75,22 +81,22 @@ trait Hypergraph {
     
   // Hyperedge simplifier
   def simplify(h_underef: Hyperedge): Hyperedge = {
-    val h = varsToErrs(h_underef.deref.reduceDestRenamings)
+    val h = varsToUnused(h_underef.deref.reduceDestRenamings)
     h.label match {
       case Let() => 
         val newhead = h.dests(0).plain
         val newtail = 
           (0 until newhead.arity toList).map { i =>
             h.dests(0).renaming(i) match {
-              case j if j < 0 || j >= h.dests.tail.size => error
+              case j if j < 0 || j >= h.dests.tail.size => unused
               case j => h.dests.tail(j)
             }
           }
         
-        lazy val vec = newtail.map(_.getVarErr.get)
+        lazy val vec = newtail.map(_.getVarUnused.get)
         lazy val ren = Renaming(vec).normal
         lazy val renhead = ren comp newhead
-        if(newtail.forall(_.getVarErr.isDefined) && 
+        if(newtail.forall(_.getVarUnused.isDefined) && 
            vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size &&
            renhead.isInvertible) { 
           // Sometimes we cannot transform let to id
@@ -101,9 +107,9 @@ trait Hypergraph {
           Hyperedge(Let(), h.source, newhead :: newtail)
       case CaseOf(cases) =>
         h.dests(0).node.outs.find(o => 
-          o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Error]) match {
-          case Some(Hyperedge(Error(), _, _)) =>
-            Hyperedge(Error(), h.source, Nil)
+          o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Unused]) match {
+          case Some(Hyperedge(Unused(), _, _)) =>
+            Hyperedge(Unused(), h.source, Nil)
           case Some(Hyperedge(Construct(name), src2, args)) =>
             val ((_,n),branch) = (cases zip h.dests.tail).find(_._1._1 == name).get
             assert(n == args.size)
@@ -152,7 +158,7 @@ trait TheHypergraph extends Hypergraph {
   override def allNodes: Set[Node] = nodes.toSet
   
   protected var varNode: RenamedNode = null
-  protected var errNode: RenamedNode = null 
+  protected var unusedNode: RenamedNode = null 
   
   override def variable(i: Int): RenamedNode = {
     if(varNode == null)
@@ -161,10 +167,10 @@ trait TheHypergraph extends Hypergraph {
   }
   
   // RenamedNode representing error
-  override def error: RenamedNode = {
-    if(errNode == null)
-      errNode = super.error
-    errNode.deref
+  override def unused: RenamedNode = {
+    if(unusedNode == null)
+      unusedNode = super.unused
+    unusedNode.deref
   }
   
   protected def addHyperedgeSimple(h: Hyperedge): Hyperedge = {
@@ -222,13 +228,9 @@ trait TheHypergraph extends Hypergraph {
     // that is src is always invertible in some sense
     l match {
       case Id() =>
-        // glue nodes if h is invertible
-        if(ds(0).isInvertible) {
-          glueNodes(src, ds(0))
-        }
-        else
-          addHyperedgeImpl(h)
-        src.deref
+        // glue nodes even if ds(0) is not invertible
+        // because unspecified variables of ds(0) are really unused
+        glueNodes(src, ds(0))
       case _ =>
         // If S e1 == S e2 then e1 == e2
         if(glueChildren(h))
@@ -279,6 +281,11 @@ trait TheHypergraph extends Hypergraph {
     val List(l2,r2) = List(l1, r1).sortBy(x => (x.node.arity, -x.node.outs.size - x.node.ins.size))
     
     if(l2 != r2) {
+      checkIntegrity()
+      
+      l2.node.beingGlued = true
+      r2.node.beingGlued = true
+      
       // We add temporary id hyperedges, so that HyperTester won't crash
       // This will also take care of arity reduction
       addHyperedgeSimple(normalize(Hyperedge(Id(), l2, List(r2))))
@@ -297,7 +304,6 @@ trait TheHypergraph extends Hypergraph {
       val r_node = r.node
       beforeGlue(l_renamed, r_node)
       
-      checkIntegrity()
       removeNode(r_node)
       r_node.gluedTo = l_renamed
       
@@ -311,6 +317,8 @@ trait TheHypergraph extends Hypergraph {
       // Id endohyperedges are always redundant if they have id renamings
       l.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
       l.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      
+      l.node.beingGlued = false
         
       checkIntegrity()
       
@@ -320,6 +328,7 @@ trait TheHypergraph extends Hypergraph {
       
       // maybe there appeared some more nodes to glue 
       glueParents(l.node.deref.node)
+      glueChildren(l.node.deref.node)
       
       // Now l may be glued to something else
       l.deref
@@ -343,10 +352,7 @@ trait TheHypergraph extends Hypergraph {
   
   // Glue siblings of h that are equal to h 
   def glueChildren(h: Hyperedge): Boolean = h.label match {
-    case l if 
-        (l.isInstanceOf[Tick] || l.isInstanceOf[Construct] || 
-            (l.isInstanceOf[CaseOf] && h.dests(0).getVar.isDefined)) && 
-        !h.source.node.isInstanceOf[FreeNode] =>
+    case l if isDefining(h) && !h.source.node.isInstanceOf[FreeNode] =>
       var done = false
       val src = h.source
       val ds = h.dests
@@ -354,18 +360,11 @@ trait TheHypergraph extends Hypergraph {
         e <- src.node.outs
         if e != h
         if e.label == l && e.dests.size == ds.size
-        val vrbl = e.dests(0).getVar
-        if !e.label.isInstanceOf[CaseOf] || vrbl.isDefined
-        // We cannot glue caseof's dests if the information is not propagated
-        // so make sure that the scrutinized variable is not used
-        if !e.label.isInstanceOf[CaseOf] || 
-            (e.dests.tail, e.shifts.tail).zipped.forall((d,sh) => !d.used(vrbl.get + sh))
+        if isDefining(e)
         val srcren = src.renaming comp e.source.renaming.inv
         val rens = 
           (ds,e.dests,e.shifts).zipped.map((d, d1, sh) => 
             d.renaming.inv comp srcren.shift(sh) comp d1.renaming)
-        if (ds,rens,e.dests).zipped.forall((d,r,d1) => 
-              r.comp(d1.node).isInvertible && r.inv.comp(d.node).isInvertible)
       } {
         (ds,rens,e.dests).zipped.foreach((d,r,d1) => 
           glueNodes(d.plain, r comp d1.node))
@@ -429,7 +428,7 @@ trait TheHypergraph extends Hypergraph {
         sb.append("\"" + h.toString + "\"[label=\"" + lab + "\", shape=record];\n")
         sb.append("\"" + n.uniqueName + "\" -> \"" + h.toString + "\";\n")
         for((d,i) <- h.dests.zipWithIndex 
-            if !d.node.outs.exists(h => h.label == Error() || h.label.isInstanceOf[Var]) ||
+            if !d.node.outs.exists(h => h.label == Unused() || h.label.isInstanceOf[Var]) ||
                d.node.prettyDebug == "") {
           sb.append("\"" + h.toString + "\":" + i + " -> \"" + d + "\";\n")
           sb.append("\"" + d + "\"[label=\"" + d.renaming + "\", shape=box];\n")
@@ -458,10 +457,8 @@ trait TheHypergraph extends Hypergraph {
       for(n <- nodes) {
         assert(n.deref.node == n)
         for(h <- n.ins) {
-          //TODO: Not true, in rare cases there may be unuselesss id endohyperedges
-          // but these cases should not be missed
-          //if(h.label.isInstanceOf[Id])
-          //  assert(h.source.node != h.dests(0).node)
+          assert(!h.label.isInstanceOf[Id] || 
+              (h.source.node.beingGlued && h.dests(0).node.beingGlued))
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.source.node.outs(h))
