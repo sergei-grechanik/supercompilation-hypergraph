@@ -3,13 +3,15 @@ package graphsc
 case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]) {
   // if source is not invertible then this hyperedge reduces its used set
   // if dests are not invertible then they won't consume some variables
-  // require(dests.forall(_.isInvertible))
+  // But non-invertible dests lead to problems during generalization,
+  // so we require them to be invertible (the only exception is when we are gluing)
+  require(label == Id() || dests.forall(_.isInvertible))
   
-  // it is possible that dests ignore some variables that are used by the source
-  // (in this case the used set of the source should be reduced)
-  // but dests cannot use variables that are not declared used by the source
-  // but we cannot test it here
-  // require(source == null || used.subsetOf(source.used))
+  // A hyperedge should be read as a universally quantified statement
+  // forall x y z . f(x,y) = C[g(x), h(y,z)]
+  // TODO: Should something like this be allowed?
+  // forall x y . f(x) = E[g(x,y), f(y)]
+  // (note that there are two occurrences of y in the rhs)
   
   label match {
     case _:Id => require(dests.size == 1)
@@ -74,10 +76,6 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
   // Dereference all glued nodes
   def deref: Hyperedge =
     Hyperedge(label, source.deref, dests.map(_.deref))
-  
-  // Make dests' renamings non-invertible but consistent with the source's used set
-  def reduceDestRenamings: Hyperedge =
-    Renaming(source.used) comp this
     
   override def toString =
     source + " -> " + label + " -> " + dests.mkString(" ")

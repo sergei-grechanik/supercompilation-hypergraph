@@ -8,6 +8,9 @@ case class Renaming(vector: List[Int]) {
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
   
+  def arity: Int =
+    (-1 :: vector).max + 1
+    
   def isId(used: Set[Int]) =
     vector.zipWithIndex.forall{ case (a,b) => !used(b) || a == b }
   
@@ -121,18 +124,36 @@ case class RenamedNode(renaming: Renaming, node: Node) {
     node.used.size == used.size
         
   def getVar: Option[Int] =
-    if(node.outs.exists(_.label == Var()))
+    if(node.outsMut.exists(_.label == Var()))
       Some(renaming(0))
     else
       None
       
   def getVarUnused: Option[Int] =
-    if(node.outs.exists(_.label == Var()))
+    if(node.outsMut.exists(_.label == Var()))
       Some(renaming(0))
-    else if(node.outs.exists(_.label == Unused()))
+    else if(node.outsMut.exists(_.label == Unused()))
       Some(-1)
     else
       None
+   
+  // Assign numbers to the variables used by node but marked unused by renaming
+  def restoreUnused(fromvar: Int): (Int, RenamedNode) = {
+    var curvar = fromvar
+    val u = node.used
+    val newvec =
+      (0 until (renaming.vector.size max ((node.used + (-1)).max + 1))).map {
+        case j =>
+          val i = renaming(j)
+          if(i != -1) i
+          else if(u(j)) {
+            curvar += 1
+            curvar
+          }
+          else -1
+      }
+    (curvar, Renaming(newvec.toList) comp node)
+  }
 }
 
 object RenamedNode {

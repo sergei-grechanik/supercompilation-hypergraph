@@ -167,6 +167,14 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
 
+  // Move the let up through let, a special case of letUp
+  def letLetUp(maxarity: Int = Int.MaxValue): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(Let(), src1, es1),
+          h2@Hyperedge(Let(), src2, f2 :: es2)) if 
+            es1.tail.exists(_.plain == src2) =>
+      letUp(maxarity)((h1,h2))
+  }
+  
   // Move the let up, i.e. generalize
   def letUp(maxarity: Int = Int.MaxValue): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(l1, src1, es1),
@@ -175,8 +183,25 @@ trait Transformations extends Hypergraph {
       val (e1, shift) = (es1 zip h1.shifts).find(_._1.plain == src2).get
       // if it is a head of a let then you've found a bug, congratulations
       assert(shift != -1)
+      
       var arity = h1.arity
       var extexprs = (0 until arity).map(variable(_)).toList
+      
+      // We don't need this piece of code anymore as I solved this
+      // problem by preprocessing hyperedges in transformablePairs.
+      //// extend e1.renaming so that it won't ignore variables used in es2
+      //val allused = (Set[Int]() /: es2.map(_.used))(_ | _)
+      //val e1ren_ar = e1.renaming.arity
+      //val e1ren_newvec =
+      //  (0 until (e1.renaming.vector.size max ((allused + (-1)).max + 1))).map {
+      //    case j =>
+      //      val i = e1.renaming(j)
+      //      if(i != -1) i
+      //      else if(allused(j)) e1ren_ar + j
+      //      else -1
+      //  }
+      //val new_e1ren = Renaming(e1ren_newvec.toList).normal
+      
       val newes2 =
         for(e2 <- es2) yield {
           val e2prime = e1.renaming comp e2
@@ -201,6 +226,16 @@ trait Transformations extends Hypergraph {
         val newl1 = add(l1, es1.map(e => if(e == e1) newlet else e))
         add(Let(), src1, newl1 :: extexprs)
       }
+  }
+  
+  // case e of {...}  ->  let x = e in case x of {...}
+  def caseGen: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(CaseOf(cases), src1, es1), _) if 
+            es1(0).deref.getVar.isEmpty =>
+      var arity = h1.arity
+      var extexprs = (0 until arity).map(variable(_)).toList
+      val newcaseof = add(CaseOf(cases), variable(arity) :: es1.tail)
+      add(Let(), src1, newcaseof :: extexprs ++ List(es1(0)))
   }
   
   /////////////////////////////////////////////////////////////////////////////

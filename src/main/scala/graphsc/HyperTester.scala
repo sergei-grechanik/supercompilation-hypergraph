@@ -165,7 +165,7 @@ trait HyperTester extends TheHypergraph {
         
     println(
         "statistics: " + nodes.size + 
-        " should be " + fun(Set(), nv.toList).size + 
+        " should be " + (fun(Set(), nv.toList).size + empty) + 
         " empty: " + empty)
     
     def fun(s: Set[(Node, Map[List[Value], Value])], 

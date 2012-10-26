@@ -107,7 +107,7 @@ trait SelfLetAdder extends Hypergraph {
 
 
 object Test {
-  def limitDepth(g: TheHypergraph with DepthTracker with TransformManager, c: Int, maxn: Int = 1000): 
+  def limitDepth(g: TheHypergraph with DepthTracker, c: Int, maxn: Int = 1000): 
         (Hyperedge, Hyperedge, String) => Boolean = {
     (h1,h2,name) =>
       g.checkIntegrity()
@@ -115,8 +115,8 @@ object Test {
         throw new TooManyNodesException("")
       val num1 = g.depths(h1.source.node) + g.codepths(h1.source.node)
       val num2 = g.depths(h2.source.node) + g.codepths(h2.source.node)
-      if(num1 > c || num2 > c) {
-        println("\t" + h1 + "\n\t" + h2 + "\n")
+      if(g.depths(h1.source.node) > c || g.codepths(h1.source.node) > c) {
+        //println("\t" + h1 + "\n\t" + h2 + "\n")
         //println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
         true
       }
@@ -129,10 +129,10 @@ object Test {
       }
   }
   
-  def transAll(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
+  def transAll(g: TheHypergraph with Transformations with DepthTracker): 
         (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 6, 50),
+    TransformationsToProcessor(limitDepth(g, 5, 1000),
       "letVar" -> letVar,
       "letLet" -> letLet,
       "letCaseOf" -> letCaseOf,
@@ -140,11 +140,13 @@ object Test {
       "caseVar" -> caseVar,
       "caseCase" -> caseCase,
       "caseTick" -> caseTick,
-      "letUp" -> letUp(3)
+      "caseGen" -> caseGen,
+      "letUp" -> letUp(3),
+      "letLetUp" -> letLetUp(3)
     )
   }
         
-  def transDrive(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
+  def transDrive(g: TheHypergraph with Transformations with DepthTracker): 
         (Hyperedge, Hyperedge) => Unit = {
     import g._
     TransformationsToProcessor(limitDepth(g, 10, 100),
@@ -158,11 +160,12 @@ object Test {
     )
   }
         
-  def transGen(g: TheHypergraph with Transformations with DepthTracker with TransformManager): 
+  def transGen(g: TheHypergraph with Transformations with DepthTracker): 
         (Hyperedge, Hyperedge) => Unit = {
     import g._
-    TransformationsToProcessor(limitDepth(g, 3, 5000),
-      "letUp" -> letUp(3)
+    TransformationsToProcessor(limitDepth(g, 3, 700),
+      //"letUp" -> letUp(3)
+      "letLetUp" -> letLetUp(3)
     )
   }
         
@@ -197,12 +200,26 @@ object Test {
     val p = new ExprParser(g)
     //p("const x y = x")
     p("add x y = case x of { Z -> y; S x -> S (add x y) }")
+    g.zeroBoth(g("add"))
     //assert(g.runNode(g("add"), List(2, 3)) == peano(5))
     
     //p("add3Left x y z = add (add x y) z")
+    //g.zeroBoth(g("add3Left"))
     //assert(g.runNode(g("add3Left"), List(3, 2, 1)) == peano(6))
     //p("add3Right x y z = add x (add y z)")
+    //g.zeroBoth(g("add3Right"))
     //assert(g.runNode(g("add3Right"), List(3, 2, 1)) == peano(6))
+    
+    //p("even x = case x of {Z -> T; S x -> odd x}")
+    //p("odd x = case x of {Z -> F; S x -> even x}")
+    //g.zeroBoth(g("even"))
+    //g.zeroBoth(g("odd"))
+    
+    //p("doubleTo x y = case x of {Z -> y; S x -> doubleTo x (S (S y))}")
+    //g.zeroBoth(g("doubleTo"))
+    
+    //p("even_double x = even (doubleTo x Z)")
+    //g.zeroBoth(g("even_double"))
     
     //p("revto x y = case x of {Z -> y; S x -> revto x (S y)}")
     //p("rev x = case x of {Z -> Z; S x -> revto x (S Z)}")
@@ -211,6 +228,7 @@ object Test {
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
     p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    g.zeroBoth(g("nrev"))
     assert(g.runNode(g("nrev"), List(3)) == peano(3))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
@@ -256,7 +274,6 @@ object Test {
     //g.updateDepth(g("add3Left").node, 0)
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    g.zeroBoth(g("nrev"))
     //g.zeroBoth(g("rev"))
     //g.updateDepth(g("nrevL").node, 0)
     //g.updateDepth(g("pmul").node, 0)
@@ -281,10 +298,12 @@ object Test {
       out.close
     }
     
+    //g.processor = HyperedgePairProcessor(transAll(g))
+    //g.updateAll()
     try {
       while(g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
-        g.transform(transGen(g))
+        g.transform(transAll(g))
       }
       println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
     } catch { 
@@ -316,6 +335,7 @@ object Test {
       g.drive(n.deref.node)*/
     
     assert(g.runNode(g("nrev"), List(5)) == peano(5))
+    println("ok")
     g.statisticsTester()
       
     g.statistics()
@@ -358,6 +378,7 @@ object Test {
     println("[][][][][][][][[][[][][][][][][][][][][]")
     println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))
     println("[][][][][][][][[][[][][][][][][][][][][]")
+    
     
     val like =
       for(l <- g.allNodes; r <- g.allNodes; if l != r; 

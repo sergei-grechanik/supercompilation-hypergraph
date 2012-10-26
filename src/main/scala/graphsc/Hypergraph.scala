@@ -56,6 +56,11 @@ trait Hypergraph {
   def allNodes: Set[Node] =
     null
   
+  def allHyperedges: Set[Hyperedge] = {
+    val sets = allNodes.toList.map(n => n.ins ++ n.outs)
+    (Set[Hyperedge]() /: sets)(_ | _)
+  }
+  
   // RenamedNode representing ith variable
   def variable(i: Int): RenamedNode = {
     val res = Renaming(0 -> i) comp add(Var(), Nil)
@@ -81,7 +86,7 @@ trait Hypergraph {
     
   // Hyperedge simplifier
   def simplify(h_underef: Hyperedge): Hyperedge = {
-    val h = varsToUnused(h_underef.deref.reduceDestRenamings)
+    val h = varsToUnused(h_underef.deref)
     h.label match {
       case Let() => 
         val newhead = h.dests(0).plain
@@ -177,6 +182,8 @@ trait TheHypergraph extends Hypergraph {
     val rinv = h.source.renaming.inv
     val sourcenode_used = rinv comp h.used
     
+    assert(h.source.node.beingGlued || !h.label.isInstanceOf[Id])
+    
     val res =
       if(h.source.node.isInstanceOf[FreeNode]) {
         val n = newNode(sourcenode_used)
@@ -186,22 +193,20 @@ trait TheHypergraph extends Hypergraph {
       else {
         h
       }
-       
-    assert(res.used.subsetOf(res.source.used))
     
     res.source.node.outsMut += res
     res.dests.foreach(_.node.insMut.add(res))
     reduceUsed(res.source.node, sourcenode_used)
     // after reduction of used sets res can become undereferenced
-    assert(res.deref.used.subsetOf(res.deref.source.used))
-    res.deref
+    val ultimate = normalize(res)
+    ultimate
   }
   
   protected def addHyperedgeImpl(h: Hyperedge) {
     require(h.source.node.isInstanceOf[FreeNode] || nodes(h.source.node))
     
     if(h.dests.nonEmpty)
-      h.dests(0).node.ins.find(x => x.label == h.label && x.dests == h.dests) match {
+      h.dests(0).node.insMut.find(x => x.label == h.label && x.dests == h.dests) match {
         case Some(x) if h.source.node == x.source.node => h.source
         case Some(x) => glueNodes(x.source, h.source)
         case None => 
@@ -210,9 +215,9 @@ trait TheHypergraph extends Hypergraph {
           onNewHyperedge(newh)
       }
     else
-      nodes.find(_.outs.exists(_.label == h.label)) match {
+      nodes.find(_.outsMut.exists(_.label == h.label)) match {
         case Some(n) =>
-          val src = n.outs.find(_.label == h.label).get.source
+          val src = n.outsMut.find(_.label == h.label).get.source
           glueNodes(src, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
@@ -281,6 +286,9 @@ trait TheHypergraph extends Hypergraph {
     val List(l2,r2) = List(l1, r1).sortBy(x => (x.node.arity, -x.node.outs.size - x.node.ins.size))
     
     if(l2 != r2) {
+      val nodesbefore = nodes.size
+      val prettyl = l2.node.prettyDebug
+      val prettyr = r2.node.prettyDebug
       checkIntegrity()
       
       l2.node.beingGlued = true
@@ -307,11 +315,11 @@ trait TheHypergraph extends Hypergraph {
       removeNode(r_node)
       r_node.gluedTo = l_renamed
       
-      // Readd hyperedges. This may lead to gluing of parent nodes. 
+      // Readd hyperedges. We just deref them, they will be normalized in normalizeIncident
       for(h <- r_node.mouts)
-        addHyperedgeSimple(normalize(h.reduceDestRenamings))
+        addHyperedgeSimple(canonize(h.deref)._2)
       for(h <- r_node.mins)
-        addHyperedgeSimple(normalize(h.reduceDestRenamings))
+        addHyperedgeSimple(canonize(h.deref)._2)
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
@@ -330,6 +338,14 @@ trait TheHypergraph extends Hypergraph {
       glueParents(l.node.deref.node)
       glueChildren(l.node.deref.node)
       
+      if(nodesbefore - nodes.size >= 20) {
+        println("This gluing was awesome:")
+        println(prettyl)
+        println("===")
+        println(prettyr)
+        println("difference " + (nodesbefore - nodes.size) + "\n")
+      }
+      
       // Now l may be glued to something else
       l.deref
     }
@@ -347,7 +363,7 @@ trait TheHypergraph extends Hypergraph {
   // glue children recursively
   def glueChildren(n: Node) {
     for(h <- n.outs)
-      glueChildren(h)
+      glueChildren(normalize(h))
   }
   
   // Glue siblings of h that are equal to h 
@@ -379,7 +395,7 @@ trait TheHypergraph extends Hypergraph {
     val isvar = node.outs.exists(_.label.isInstanceOf[Var])
     var todo: List[() => Unit] = Nil
     for(h <- node.ins ++ node.outs) {
-        val nor = normalize(h.reduceDestRenamings)
+        val nor = normalize(h)
         if(nor != h) {
           todo = {() => addHyperedge(nor); ()} :: todo
           h.source.deref.node.outsMut -= h
@@ -456,15 +472,16 @@ trait TheHypergraph extends Hypergraph {
     if(integrityCheckEnabled)
       for(n <- nodes) {
         assert(n.deref.node == n)
-        for(h <- n.ins) {
-          assert(!h.label.isInstanceOf[Id] || 
-              (h.source.node.beingGlued && h.dests(0).node.beingGlued))
+        /*for(h <- n.ins) {
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.source.node.outs(h))
           assert(h.dests.forall(_.node.ins(h)))
-        }
+        }*/
         for(h <- n.outs) {
+          // Ids can be present in the hypergraph only during gluing
+          assert(!h.label.isInstanceOf[Id] || 
+              (h.source.node.beingGlued && h.dests(0).node.beingGlued))
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.dests.forall(_.node.ins(h)))
@@ -472,7 +489,7 @@ trait TheHypergraph extends Hypergraph {
           // h defines n. h cannot define n if its source has less variables than n
           // that's why we have arity reduction
           assert(h.source.isInvertible)
-          assert(h.used.subsetOf(h.source.used))
+          //assert(h.used.subsetOf(h.source.used)) // not true currently
           if(h.label.isInstanceOf[CaseOf])
             assert(h.dests(0).getVar != Some(-1))
         }
