@@ -40,6 +40,23 @@ trait DepthTracker extends Hypergraph {
     updateCodepth(n.deref.node, 0)
   }
   
+  def limitDepth(maxd: Int): (Hyperedge, Hyperedge) => Boolean = {
+    (h1,h2) =>
+      nodesOf(h1,h2).map(depths(_)).max <= maxd
+  }
+  
+  def limitCodepth(maxc: Int): (Hyperedge, Hyperedge) => Boolean = {
+    (h1,h2) =>
+      nodesOf(h1,h2).map(codepths(_)).max <= maxc
+  }
+  
+  def limitDepthCodepth(f: (Int,Int) => Boolean):(Hyperedge, Hyperedge) => Boolean = {
+    (h1,h2) =>
+      val d = nodesOf(h1,h2).map(depths(_)).max
+      val c = nodesOf(h1,h2).map(codepths(_)).max
+      f(d,c)
+  } 
+  
   override def onNewHyperedge(h: Hyperedge) {
     val d = depths(h.source.node)
     h.dests.map(n => updateDepth(n.node, d + 1))

@@ -30,4 +30,10 @@ package object graphsc {
     assert(lst.size <= 1)
     lst.headOption
   }
+  
+  def nodesOf(h: Hyperedge): List[Node] =
+    h.source.deref.node :: h.dests.map(_.deref.node)
+  
+  def nodesOf(h1: Hyperedge, h2: Hyperedge): List[Node] =
+    nodesOf(h1) ++ nodesOf(h2)
 }

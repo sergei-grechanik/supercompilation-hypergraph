@@ -1,4 +1,5 @@
 package graphsc
+package transformation
 
 trait Transformations extends Hypergraph {
   
@@ -29,11 +30,14 @@ trait Transformations extends Hypergraph {
         h1o: Hyperedge, h2o: Hyperedge): Boolean = {
     var done = false
     val tlifted = trans.lift
-    for((h1,h2) <- TransformationsToProcessor.transformablePairs(normalize(h1o), normalize(h2o)))
+    for((h1,h2) <- transformablePairs(normalize(h1o), normalize(h2o)))
       if(tlifted((h1,h2)).isDefined)
         done |= true
     done
   }
+  
+  def transDrive =
+    letVar & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
   
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -242,10 +246,11 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   
   def drive(n: Node): Hyperedge = {
-    definingHyperedge(n.deref.node) match {
+    val node = n.deref.node
+    definingHyperedge(node) match {
       case Some(h) => h
       case None =>
-        val caseofs = n.outs.filter(_.label.isInstanceOf[CaseOf]).toList
+        val caseofs = node.outs.filter(_.label.isInstanceOf[CaseOf]).toList
         if(caseofs.nonEmpty) {
           for(c <- caseofs) {
             val childdef = drive(c.dests(0).node)
@@ -259,7 +264,7 @@ trait Transformations extends Hypergraph {
           drive(n)
         }
         else {
-          for(l <- n.outs) {
+          for(l <- node.outs) {
             assert(l.label == Let())
             val childdef = drive(l.dests(0).node)
             if(childdef.label.isInstanceOf[CaseOf])

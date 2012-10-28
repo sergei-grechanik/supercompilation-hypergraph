@@ -1,4 +1,5 @@
 import graphsc._
+import transformation._
 import residualization._
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -12,22 +13,16 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
   def transform(
       g: TransformManager with DepthTracker with Transformations,
       maxdepth: Int = Int.MaxValue) {
-    def limitDepth: (Hyperedge, Hyperedge, String) => Boolean = {
-      (h1,h2,name) =>
-        g.depths(h1.source.node) >= maxdepth
-    }
     
-    def transAll: (Hyperedge, Hyperedge) => Unit = {
+    val transAll: BiHProcessor = {
       import g._
-      TransformationsToProcessor(limitDepth,
-        "letVar" -> letVar,
-        "letLet" -> letLet,
-        "letCaseOf" -> letCaseOf,
-        "letOther" -> letOther,
-        "caseVar" -> caseVar,
-        "caseCase" -> caseCase,
-        "caseTick" -> caseTick
-      )
+        (letVar &
+        letLet &
+        letCaseOf &
+        letOther &
+        caseVar &
+        caseCase &
+        caseTick).cond(g.limitDepth(maxdepth))
     }
     
     g.updateAll()

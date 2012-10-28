@@ -102,7 +102,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       case Id() => prettyfun(h.dests(0))
       case Tick() => "* " + prettyfun(h.dests(0))
       case Improvement() => ">= " + prettyfun(h.dests(0))
-      case Unused() => "_"
+      case Unused() => "_|_"
     }
   
   def prettyRename(r: Renaming, orig: String): String = {

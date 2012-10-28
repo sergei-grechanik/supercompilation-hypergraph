@@ -1,5 +1,6 @@
 package graphsc
 
+import transformation._
 import residualization._
 
 object Trace {
@@ -105,70 +106,20 @@ trait SelfLetAdder extends Hypergraph {
   }
 }
 
-
 object Test {
-  def limitDepth(g: TheHypergraph with DepthTracker, c: Int, maxn: Int = 1000): 
-        (Hyperedge, Hyperedge, String) => Boolean = {
-    (h1,h2,name) =>
-      g.checkIntegrity()
-      if(g.allNodes.size > maxn)
+  
+  def myLimit(g: Hypergraph, maxnodes: Int = 1000): (Hyperedge,Hyperedge) => Boolean = {
+    (h1,h2) =>
+      if(g.allNodes.size > maxnodes)
         throw new TooManyNodesException("")
-      val num1 = g.depths(h1.source.node) + g.codepths(h1.source.node)
-      val num2 = g.depths(h2.source.node) + g.codepths(h2.source.node)
-      if(g.depths(h1.source.node) > c || g.codepths(h1.source.node) > c) {
-        //println("\t" + h1 + "\n\t" + h2 + "\n")
-        //println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
-        true
-      }
       else {
-        println("*** " + name + " ***")
-        println("\t" + h1 + "\n\t" + h2 + "\n")
         println("Nodes: " + g.allNodes.size)
-        //println("Nodes: " + g.allNodes.size + " hypers: " + g.allHyperedges.size)
-        false
+        println(h1)
+        println(h2)
+        true
       }
   }
   
-  def transAll(g: TheHypergraph with Transformations with DepthTracker): 
-        (Hyperedge, Hyperedge) => Unit = {
-    import g._
-    TransformationsToProcessor(limitDepth(g, 5, 1000),
-      "letVar" -> letVar,
-      "letLet" -> letLet,
-      "letCaseOf" -> letCaseOf,
-      "letOther" -> letOther,
-      "caseVar" -> caseVar,
-      "caseCase" -> caseCase,
-      "caseTick" -> caseTick,
-      "caseGen" -> caseGen,
-      "letUp" -> letUp(3),
-      "letLetUp" -> letLetUp(3)
-    )
-  }
-        
-  def transDrive(g: TheHypergraph with Transformations with DepthTracker): 
-        (Hyperedge, Hyperedge) => Unit = {
-    import g._
-    TransformationsToProcessor(limitDepth(g, 10, 100),
-      "letVar" -> letVar,
-      "letLet" -> letLet,
-      "letCaseOf" -> letCaseOf,
-      "letOther" -> letOther,
-      "caseVar" -> caseVar,
-      "caseCase" -> caseCase,
-      "caseTick" -> caseTick
-    )
-  }
-        
-  def transGen(g: TheHypergraph with Transformations with DepthTracker): 
-        (Hyperedge, Hyperedge) => Unit = {
-    import g._
-    TransformationsToProcessor(limitDepth(g, 3, 700),
-      //"letUp" -> letUp(3)
-      "letLetUp" -> letLetUp(3)
-    )
-  }
-        
   def main(args: Array[String]) {
     val g = new TheHypergraph
         //with HyperTester
@@ -227,9 +178,9 @@ object Test {
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
-    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    g.zeroBoth(g("nrev"))
-    assert(g.runNode(g("nrev"), List(3)) == peano(3))
+    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    //g.zeroBoth(g("nrev"))
+    //assert(g.runNode(g("nrev"), List(3)) == peano(3))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
@@ -256,11 +207,11 @@ object Test {
     //p("strictadd1 x y = deepseq x (deepseq y (add x y))")
     //p("strictadd2 x y = deepseq x (deepseq y (add y x))")
     
-    p("nrevto x y = add (nrev x) y")
+    //p("nrevto x y = add (nrev x) y")
     
-    p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
+    //p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
     
-    p("nrevto_1 x = nrevto x (S Z)")
+    //p("nrevto_1 x = nrevto x (S Z)")
     
     p("add_plus_1 x y = add (add (x) (S (Z ))) ((y))")
     
@@ -290,7 +241,7 @@ object Test {
     //p.assume("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}")
     
     for(n <- g.allNodes)
-      g.updateCodepth(n, 0)
+      g.zeroBoth(n.deref)
     
     {
       val out = new java.io.FileWriter("init.dot")
@@ -303,7 +254,7 @@ object Test {
     try {
       while(g.updatedHyperedges.nonEmpty) {
         println("nodes: " + g.allNodes.size)
-        g.transform(transAll(g))
+        g.transform(g.transDrive.cond(g.limitDepth(4) & myLimit(g, 1000)))
       }
       println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
     } catch { 
@@ -324,19 +275,16 @@ object Test {
     println("**********************************************")
     //g.writeDotFrames
     
-    //assert(g.runNode(g("nrev"), List(5)) == peano(5))
-    //g.statisticsTester()
-    
     /*for(n <- g.allNodes)
       if(g.depths(n) + g.codepths(n) > 6)
         g.removeNode(n)*/
     
-    /*for(n <- g.allNodes)
-      g.drive(n.deref.node)*/
+    //for(n <- g.allNodes)
+    //  g.drive(n.deref.node)
     
-    assert(g.runNode(g("nrev"), List(5)) == peano(5))
-    println("ok")
-    g.statisticsTester()
+    //assert(g.runNode(g("nrev"), List(5)) == peano(5))
+    //println("ok")
+    //g.statisticsTester()
       
     g.statistics()
     
@@ -361,13 +309,14 @@ object Test {
     {
       val out = new java.io.FileWriter("depths")
       for(n <- g.allNodes) {
-        out.write(g.depth(n.deref) + " " + g.codepth(n.deref) + " " + g.pretty(n).size + "\n")
+        out.write(g.depth(n.deref) + " " + g.codepth(n.deref) + " " + g.pretty(n).size + " " +
+            g.pretty(n).replace("\n", "\t") + "\n")
       }
       out.close()
     }
     
     println("nrevto driven:")
-    println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
+    //println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
     println("add_plus_1 simplified:")
     println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
     println("nrevto_plus_1 in terms of add_plus_1:")
@@ -376,7 +325,7 @@ object Test {
     println(p.check("forall x y . nrevto_plus_1 x y = nrevto x (S y)"))
     
     println("[][][][][][][][[][[][][][][][][][][][][]")
-    println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))
+    //println(EquivalenceProver().prove(g("revto").deref.node, g("nrevto").deref.node))
     println("[][][][][][][][[][[][][][][][][][][][][]")
     
     
@@ -410,6 +359,9 @@ object Test {
         eq.get.performGluing(g)
       }
     }
+    
+    println("add_plus_1 simplified:")
+    println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
     
     g.statistics()
     
