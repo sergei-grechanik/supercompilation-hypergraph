@@ -1,17 +1,39 @@
 package graphsc
 package residualization
 
-case class EquivalenceProver[S, L]
+class EquivalenceProver[S, L](scc: SCC = null)
     (implicit cc: CorrectnessChecker[S], lm: LikenessMeasure[L], ord: Ordering[L]) {
   val likenesscalc = LikenessCalculator[L]()
   import lm._
   import likenesscalc._
   
+  type Hist = List[((Node, S), (Node, S))]
+  
+  val cache = collection.mutable.Map[(Node, Node, Renaming, Hist), Option[EqProofTree]]()
+  
   def prove(
       l: Node, 
       r: Node, 
       ren: Renaming = Renaming(), 
-      hist: List[((Node, S), (Node, S))] = Nil): Option[EqProofTree] = {
+      hist1: Hist = Nil): Option[EqProofTree] = {
+    val hist = 
+      if(scc != null) {
+        val lcompid = scc.componentOf(l)
+        val rcompid = scc.componentOf(r) 
+        hist1.takeWhile(p => 
+          scc.componentOf(p._1._1) == lcompid && scc.componentOf(p._2._1) == rcompid) 
+      } else
+        hist1
+      
+    val args = (l, r, ren, hist)
+    cache.getOrElseUpdate(args, proveUncached(l, r, ren, hist))
+  }
+    
+  def proveUncached(
+      l: Node, 
+      r: Node, 
+      ren: Renaming = Renaming(), 
+      hist: Hist = Nil): Option[EqProofTree] = {
     val lind = hist.indexWhere(_._1._1 == l)
     val rind = hist.indexWhere(_._2._1 == r)
 
@@ -24,6 +46,9 @@ case class EquivalenceProver[S, L]
           Some(EqProofTree(ren, (l,r)))
         case _ => None
       }
+    } else if(lind != -1 || rind != -1) {
+      // Well, we trade precision for efficiency here
+      None
     } else {
       val louts = l.outs.groupBy(_.label)
       val routs = r.outs.groupBy(_.label)

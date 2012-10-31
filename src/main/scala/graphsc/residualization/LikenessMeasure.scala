@@ -71,15 +71,15 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
         case Var() =>
           Some((infinity, lh1.source.renaming comp rh1.source.renaming.inv))
         case _ =>
-          val lh = lh1.source.renaming.inv.compDests(lh1)
-          val rh = rh1.source.renaming.inv.compDests(rh1)
+          val ldests = lh1.source.renaming.inv.compDests(lh1)
+          val rdests = rh1.source.renaming.inv.compDests(rh1)
           
-          if(lh.label == Let()) {
+          if(lh1.label == Let()) {
             // If it's a let, we need to rearrange arguments
-            likeness(lh.dests(0), rh.dests(0), (ln,rn) :: hist).flatMap {
+            likeness(ldests(0), rdests(0), (ln,rn) :: hist).flatMap {
               case (head_score, headren) =>
-                val ltail = lh.dests.tail
-                val rtail = rh.dests.tail
+                val ltail = ldests.tail
+                val rtail = rdests.tail
                 
                 val chld =
                   for((i,j) <- headren.vector.zipWithIndex if i != -1) yield
@@ -95,7 +95,7 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
                     rr =>
                       // if our head renaming doesn't cover all used variables
                       // then we cannot return the full score
-                      if(chld.size < (lh.dests(0).used.size max rh.dests(0).used.size))
+                      if(chld.size < (ldests(0).used.size max rdests(0).used.size))
                         (combine(lm.zero :: head_score :: chld.map(_.get._1)), rr)
                       else
                         (combine(head_score :: chld.map(_.get._1)), rr)
@@ -104,14 +104,14 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
             }
           }
           else { // if it's not a let
-            val chld = (lh.dests,rh.dests).zipped.map(likeness(_, _, (ln,rn) :: hist))
+            val chld = (ldests,rdests).zipped.map(likeness(_, _, (ln,rn) :: hist))
             
             if(!chld.forall(_.isDefined))
               None
             else {
               // here we have to unshift our renamings
               
-              val shifts = lh.shifts
+              val shifts = lh1.shifts
               // these renamings make sure that bound varibales match
               val shift_rens = shifts.map(n => Renaming(0 until n toSet))
               

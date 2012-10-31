@@ -125,7 +125,7 @@ object Test {
         //with HyperTester
         //with Canonizer
         with NamedNodes
-        with Transformations
+        //with Transformations
         with TransformManager
         with Prettifier
         //with Visualizer 
@@ -137,6 +137,11 @@ object Test {
         with SelfLetAdder {
           override def nodeDotLabel(n: Node): String =
             super.nodeDotLabel(n) + "\\l" + depths(n) + " " + codepths(n) + "\\l"
+            
+          override def onNewNode(n: Node) {
+            assert(n.used.size <= 3)
+            super.onNewNode(n)
+          }
         }
     
     implicit def peano(i: Int): Value =
@@ -240,6 +245,9 @@ object Test {
     
     //p.assume("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}")
     
+    
+    //assert(g.runNode(g("add_plus_1"), List(2,3)) == peano(6))
+    
     for(n <- g.allNodes)
       g.zeroBoth(n.deref)
     
@@ -249,18 +257,72 @@ object Test {
       out.close
     }
     
+    val buf = HyperBuffer(g)
+    val tr = new PostFilter(buf, h => h.arity <= 3) with Transformations
+    
     //g.processor = HyperedgePairProcessor(transAll(g))
     //g.updateAll()
     try {
-      while(g.updatedHyperedges.nonEmpty) {
-        println("nodes: " + g.allNodes.size)
-        g.transform(g.transDrive.cond(g.limitDepth(4) & myLimit(g, 1000)))
+      var stop = false
+      while(!stop) {
+        while(g.updatedHyperedges.nonEmpty) {
+          println("nodes: " + g.allNodes.size)
+          g.transform(
+              (tr.transDrive & tr.letUp(3).cond(g.limitDepthCodepth((d,c) => c + d <= 1))).cond(
+                  g.limitDepth(3) & g.limitCodepth(3) & myLimit(g, 500)).onSuccess(
+                      () => { tr.commit(); println("buf size: " + buf.buffer.size) } ))
+        }
+        buf.commit()
+        println("After commit nodes: " + g.nodes.size + " hypers: " + g.allHyperedges.size)
+        
+        //readLine()
+        
+        for(n <- g.nodes) {
+          println(n)
+          println(n.prettyDebug)
+        }
+        
+        val like =
+          for(l <- g.allNodes; r <- g.allNodes; if l != r; 
+              lkl <- LikenessCalculator[Int].likenessN(l, r)) yield {
+            val List(l1,r1) = List(l,r).sortBy(_.hashCode())
+            (lkl,l1,r1)
+          }
+        
+        var eprover = new EquivalenceProver(g)
+        
+        for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0 && l.deref.node != r.deref.node) {
+          val lpretty = l.prettyDebug
+          val rpretty = r.prettyDebug
+          println("=======================")
+          println((i,ren))
+          println(lpretty)
+          println(rpretty)
+          val eq = eprover.prove(l.deref.node, r.deref.node)
+          println(eq)
+          if(eq != None) {
+            eq.get.performGluing(g)
+            eprover = new EquivalenceProver(g)
+          }
+        }
+        
+        println("add_plus_1 simplified:")
+        println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
+        
+        
+        println("After eqproof: " + g.nodes.size + " hypers: " + g.allHyperedges.size)
+        
+        if(readLine().startsWith("s"))
+          stop = true
       }
       println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
     } catch { 
       case _:TooManyNodesException =>
         println("\n\n\nTOO MANY NODES!!!!!!!!!!!!!!!!!\n\n\n")
-    }/*
+    }
+    
+    
+    /*
     try {
       g.updateAll()
       while(g.updatedHyperedges.nonEmpty) {
@@ -282,9 +344,6 @@ object Test {
     //for(n <- g.allNodes)
     //  g.drive(n.deref.node)
     
-    //assert(g.runNode(g("nrev"), List(5)) == peano(5))
-    //println("ok")
-    //g.statisticsTester()
       
     g.statistics()
     
@@ -309,11 +368,25 @@ object Test {
     {
       val out = new java.io.FileWriter("depths")
       for(n <- g.allNodes) {
-        out.write(g.depth(n.deref) + " " + g.codepth(n.deref) + " " + g.pretty(n).size + " " +
+        out.write(n.used.size + " " + g.depth(n.deref) + " " + g.codepth(n.deref) + " " + g.pretty(n).size + " " +
             g.pretty(n).replace("\n", "\t") + "\n")
       }
       out.close()
     }
+    
+    {
+      val out = new java.io.FileWriter("hypers")
+      for(h <- g.allHyperedges) {
+        out.write(h.label + " " + h.dests.size + " " + h.source.arity + " " + h.arity + " " +
+            h.dests.map(_.arity).mkString(" ") + "\n")
+      }
+      out.close()
+    }
+    
+    //assert(g.runNode(g("nrev"), List(5)) == peano(5))
+    assert(g.runNode(g("add_plus_1"), List(2,3)) == peano(6))
+    println("ok")
+    g.statisticsTester()
     
     println("nrevto driven:")
     //println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
@@ -339,7 +412,7 @@ object Test {
     for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0 && l.deref.node != r.deref.node) {
       val lpretty = l.prettyDebug
       val rpretty = r.prettyDebug
-      val eq = EquivalenceProver().prove(l.deref.node, r.deref.node)
+      val eq = (new EquivalenceProver(g)).prove(l.deref.node, r.deref.node)
       if(i > 2 || eq != None) {
         println("=======================")
         println((i,ren))

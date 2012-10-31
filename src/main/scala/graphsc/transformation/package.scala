@@ -16,6 +16,9 @@ package transformation {
           self(h1, h2)
           other(h1, h2)
         }
+        
+        override def onSuccess(f: () => Unit): BiHProcessor =
+          self.onSuccess(f) & other.onSuccess(f)
       }
     }
     
@@ -26,8 +29,13 @@ package transformation {
           if(c(h1, h2))
             self(h1, h2)
         }
+        
+        override def onSuccess(f: () => Unit): BiHProcessor =
+          self.onSuccess(f).cond(c)
       }
     }
+    
+    def onSuccess(f: () => Unit): BiHProcessor
   }
   
   case class BiHProc2HProc(proc: BiHProcessor) extends HProcessor {
@@ -42,15 +50,18 @@ package transformation {
     }
   }
   
-  case class Fun2BiHProc(fun: (Hyperedge, Hyperedge) => Unit) 
+  case class Fun2BiHProc(funs: List[PartialFunction[(Hyperedge, Hyperedge), Unit]]) 
       extends BiHProcessor {
     override def apply(h1o: Hyperedge, h2o: Hyperedge) {
       for((h1,h2) <- transformablePairs(h1o, h2o))
-        fun(h1,h2)
+        funs.foreach(_.lift((h1,h2)))
     }
     
     def &(other: Fun2BiHProc): Fun2BiHProc =
-      Fun2BiHProc((h1,h2) => { fun(h1, h2); other.fun(h1, h2) })
+      Fun2BiHProc(funs ++ other.funs)
+      
+    override def onSuccess(f: () => Unit): Fun2BiHProc =
+      Fun2BiHProc(funs.map(_.andThen(_ => f())))
   }
 }
 
@@ -60,7 +71,7 @@ package object transformation {
     BiHProc2HProc(p)
  
   implicit def partFun2BiHProc(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): Fun2BiHProc =
-    Fun2BiHProc((h1,h2) => fun.lift((h1,h2)))
+    Fun2BiHProc(List(fun))
     
   implicit def fun2BiHFilter(f: (Hyperedge, Hyperedge) => Boolean): BiHFilter =
     new BiHFilter {
@@ -75,7 +86,7 @@ package object transformation {
     val node = new Node(src2.used | h2.used)
     val rnode = RenamedNode(src2.renaming.inv, node)
     
-    val maxvar = h1.arity + h1.shifts.max
+    val maxvar = (0 :: h1.dests.map(_.arity)).max + h1.shifts.max
     
     // as there may be several occurences of src2 in ds1, we should consider them one by one
     val pairs = 

@@ -63,7 +63,7 @@ trait Transformations extends Hypergraph {
       if(!f.isPlain)
         letCaseOf((
           Hyperedge(Let(), src1, f.plain :: es),
-          (f.renaming compDests h2).from(src2)))
+          Hyperedge(h2.label, src2, f.renaming compDests h2)))
       else {
         val newg = add(Let(), g :: es)
         val newhs = (cases zip hs).map { case ((_,n),h) =>
@@ -127,7 +127,7 @@ trait Transformations extends Hypergraph {
       if(!e1.isPlain)
         caseCase((
           Hyperedge(CaseOf(cases1), src1, e1.plain :: fs1),
-          (e1.renaming compDests h2).from(src2)))
+          Hyperedge(h2.label, src2, e1.renaming compDests h2)))
       else {
         val newfs2 =
           (cases2 zip fs2).map { case ((_,n),f) =>
