@@ -1,4 +1,5 @@
 package graphsc
+package interpretation
 
 class NonTerminationException(s: String = "") extends Exception(s)
 
@@ -97,7 +98,7 @@ trait HyperTester extends TheHypergraph {
     val args = 
       truncArgs(h.source.renaming.inv comp h.asDummyNode, argsUncut)
         
-    val res = h.run(args, this.runNode(ctx, _, _))
+    val res = runHyperedge(h, args, this.runNode(ctx, _, _))
     res
   }
   

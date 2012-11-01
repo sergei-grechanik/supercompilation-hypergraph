@@ -1,5 +1,7 @@
 package graphsc
 
+import interpretation._
+
 object Samples {
   
   val defs = collection.mutable.Map[String, String]()

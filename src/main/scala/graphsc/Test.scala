@@ -1,5 +1,6 @@
 package graphsc
 
+import interpretation._
 import transformation._
 import residualization._
 
@@ -177,14 +178,15 @@ object Test {
     //p("even_double x = even (doubleTo x Z)")
     //g.zeroBoth(g("even_double"))
     
-    //p("revto x y = case x of {Z -> y; S x -> revto x (S y)}")
-    //p("rev x = case x of {Z -> Z; S x -> revto x (S Z)}")
+    p("revto x y = case x of {Z -> y; S x -> revto x (S y)}")
+    p("rev x = case x of {Z -> Z; S x -> revto x (S Z)}")
+    g.zeroBoth(g("rev"))
     //assert(g.runNode(g("rev"), List(3)) == peano(3))
     
     //p("id x = case x of {Z -> Z; S x -> S (id x)}")
     //assert(g.runNode(g("id"), List(3)) == peano(3))
-    //p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
-    //g.zeroBoth(g("nrev"))
+    p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
+    g.zeroBoth(g("nrev"))
     //assert(g.runNode(g("nrev"), List(3)) == peano(3))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
@@ -212,16 +214,6 @@ object Test {
     //p("strictadd1 x y = deepseq x (deepseq y (add x y))")
     //p("strictadd2 x y = deepseq x (deepseq y (add y x))")
     
-    //p("nrevto x y = add (nrev x) y")
-    
-    //p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
-    
-    //p("nrevto_1 x = nrevto x (S Z)")
-    
-    p("add_plus_1 x y = add (add (x) (S (Z ))) ((y))")
-    
-    p("add_1_to y = add (S Z) y")
-    p("add_0_to y = add Z y")
     
     //g.updateDepth(g("idle").node, 0)
     //g.updateDepth(g("constz").node, 0)
@@ -230,7 +222,6 @@ object Test {
     //g.updateDepth(g("add3Left").node, 0)
     //g.updateDepth(g("add3Right").node, 0)
     //g.updateDepth(g("id").node, 0)
-    //g.zeroBoth(g("rev"))
     //g.updateDepth(g("nrevL").node, 0)
     //g.updateDepth(g("pmul").node, 0)
     //g.updateDepth(g("mul").node, 0)
@@ -247,9 +238,21 @@ object Test {
     
     
     //assert(g.runNode(g("add_plus_1"), List(2,3)) == peano(6))
+
+    p("nrevto x y = add (nrev x) y")
+   
+    p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
     
     for(n <- g.allNodes)
       g.zeroBoth(n.deref)
+      
+    
+    p("nrevto_1 x = nrevto x (S Z)")
+    
+    p("add_plus_1 x y = add (add (x) (S (Z ))) ((y))")
+    
+    p("add_1_to y = add (S Z) y")
+    p("add_0_to y = add Z y")
     
     {
       val out = new java.io.FileWriter("init.dot")
@@ -275,12 +278,8 @@ object Test {
         buf.commit()
         println("After commit nodes: " + g.nodes.size + " hypers: " + g.allHyperedges.size)
         
-        //readLine()
-        
-        for(n <- g.nodes) {
-          println(n)
-          println(n.prettyDebug)
-        }
+        println("nrev = rev, our goal:")
+        println(p.check("forall x . nrev x = rev x"))
         
         val like =
           for(l <- g.allNodes; r <- g.allNodes; if l != r; 
@@ -291,7 +290,8 @@ object Test {
         
         var eprover = new EquivalenceProver(g)
         
-        for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1) if i > 0 && l.deref.node != r.deref.node) {
+        for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1)
+              if i > 0 && l.deref.node != r.deref.node) {
           val lpretty = l.prettyDebug
           val rpretty = r.prettyDebug
           println("=======================")
@@ -306,8 +306,19 @@ object Test {
           }
         }
         
+        val nrt = g("nrevto")
+        println("nrevto: " + g.depth(nrt) + " " + g.codepth(nrt))
+        
+        println("nrevto driven:")
+        println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
         println("add_plus_1 simplified:")
         println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
+        println("nrevto_plus_1 in terms of add_plus_1:")
+        println(p.check("forall x y . nrevto_plus_1 x y = add_plus_1 (rev x) y"))
+        println("nrevto_plus_1 in terms of nrevto:")
+        println(p.check("forall x y . nrevto_plus_1 x y = nrevto x (S y)"))
+        println("nrev = rev, our goal:")
+        println(p.check("forall x . nrev x = rev x"))
         
         
         println("After eqproof: " + g.nodes.size + " hypers: " + g.allHyperedges.size)
@@ -389,7 +400,7 @@ object Test {
     g.statisticsTester()
     
     println("nrevto driven:")
-    //println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
+    println(p.check("forall x y . nrevto x y = case x of {Z -> y; S x -> nrevto_plus_1 x y}"))
     println("add_plus_1 simplified:")
     println(p.check("forall x y . add_plus_1 x y = add x (S y)"))
     println("nrevto_plus_1 in terms of add_plus_1:")

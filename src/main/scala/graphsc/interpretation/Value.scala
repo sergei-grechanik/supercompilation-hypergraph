@@ -1,4 +1,5 @@
 package graphsc
+package interpretation
 
 sealed trait Value {
   def size: Int

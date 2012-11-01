@@ -1,4 +1,5 @@
 package graphsc
+package interpretation
 
 // Simple strict node runner, doesn't cache results, doesn't perform nontermination checks
 object HyperRunner {
@@ -12,7 +13,7 @@ object HyperRunner {
   }
   
   def run(n: Node, as: List[Value]): Value = {
-    val ress = n.outs.map(h => h.run(run(h.source.renaming.inv, as), run _))
+    val ress = n.outs.map(h => runHyperedge(h, run(h.source.renaming.inv, as), run _))
     assert(ress.size == 1)
     ress.head
   }
