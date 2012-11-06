@@ -422,6 +422,21 @@ trait TheHypergraph extends Hypergraph {
     }
   }
   
+  // TODO: Move this function somewhere, it's very auxiliary
+  def removeUnreachable(from: Node*) {
+    val reachable = collection.mutable.Set[Node]()
+    from.foreach(mark(_))
+    def mark(n: Node) {
+      if(!reachable(n)) {
+        reachable += n
+        for(h <- n.outs; d <- h.dests)
+          mark(d.node)
+      }
+    }
+    for(n <- nodes if !reachable(n))
+      removeNode(n)
+  }
+  
   def nodeDotLabel(n: Node): String =
     n.uniqueName
   

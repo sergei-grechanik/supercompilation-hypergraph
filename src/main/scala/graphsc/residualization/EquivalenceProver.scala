@@ -11,22 +11,44 @@ class EquivalenceProver[S, L](scc: SCC = null)
   
   val cache = collection.mutable.Map[(Node, Node, Renaming, Hist), Option[EqProofTree]]()
   
+  var stats = collection.mutable.Map[(Node, Node), Int]()
+  
   def prove(
-      l: Node, 
-      r: Node, 
-      ren: Renaming = Renaming(), 
-      hist1: Hist = Nil): Option[EqProofTree] = {
-    val hist = 
+      l1: Node, 
+      r1: Node, 
+      ren1: Renaming = Renaming(), 
+      hist2: Hist = Nil): Option[EqProofTree] = {
+    
+    val hist1 = 
       if(scc != null) {
-        val lcompid = scc.componentOf(l)
-        val rcompid = scc.componentOf(r) 
-        hist1.takeWhile(p => 
+        val lcompid = scc.componentOf(l1)
+        val rcompid = scc.componentOf(r1) 
+        hist2.takeWhile(p => 
           scc.componentOf(p._1._1) == lcompid && scc.componentOf(p._2._1) == rcompid) 
-      } else
-        hist1
+      } else {
+        hist2
+      }
+    
+    val swap = l1.hashCode > r1.hashCode
+    
+    val args@(l, r, ren, hist) =
+      if(!swap) (l1, r1, ren1, hist1)
+      else {
+        val (lh,rh) = hist1.unzip
+        (r1, l1, ren1.inv, rh zip lh)
+      }
+    
+    cache.getOrElseUpdate(args, {
+      val res = proveUncached(l, r, ren, hist)
       
-    val args = (l, r, ren, hist)
-    cache.getOrElseUpdate(args, proveUncached(l, r, ren, hist))
+      if(res == None && likeness(l.deref,r.deref) != None)
+        if(stats.contains((l,r)))
+          stats((l,r)) += 1
+        else
+          stats += (l,r) -> 1
+        
+      res
+    })
   }
     
   def proveUncached(
@@ -131,6 +153,9 @@ case class EqProofTree(
     renaming: Renaming, 
     nodes: (Node, Node), 
     out: Option[(Hyperedge, Hyperedge, List[EqProofTree])] = None) {
+  
+  // Why can we glue child nodes too, not only roots?
+  // Because they are defined in terms of themselves and the roots.
   def performGluing(g: Hypergraph) {
     for((_,_,l) <- out; t <- l)
       t.performGluing(g)

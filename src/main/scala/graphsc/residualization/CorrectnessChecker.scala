@@ -5,6 +5,17 @@ trait CorrectnessChecker[S] {
   def apply(n: RenamedNode): S
   def through(s: S, h: Hyperedge): List[S]
   def safe(s: S): Boolean
+  
+  final def listThrough(list: List[S], h: Hyperedge): List[List[S]] =
+    if(list == Nil)
+      h.dests.map(_ => Nil)
+    else
+      list.map(through(_, h)).transpose
+  
+  final def histThrough[N](hist: List[(N, S)], h: Hyperedge): List[List[(N, S)]] = {
+    val safeties = listThrough(hist.map(_._2), h)
+    safeties.map((hist, _).zipped.map((p,s) => (p._1,s)))
+  } 
 }
 
 object CorrectnessChecker {

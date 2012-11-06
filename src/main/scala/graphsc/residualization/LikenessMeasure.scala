@@ -43,7 +43,10 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
     val ldef = definingHyperedgesNonStrict(l)
     val rdef = definingHyperedgesNonStrict(r)
  
-    if(l == r)
+    if(l.used.size != r.used.size)
+      // TODO: Sometimes there may be unused variables that are hard to get rid of
+      None
+    else if(l == r)
       Some((infinity, Renaming(r.used)))
     else if(ldef.isEmpty || rdef.isEmpty || hist.exists(p => p._1 == l || p._2 == r))
       Some((zero, Renaming()))

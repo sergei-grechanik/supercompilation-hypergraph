@@ -109,6 +109,14 @@ trait SelfLetAdder extends Hypergraph {
 
 object Test {
   
+  def time[R](block: => R): R = {
+    val t0 = System.nanoTime()
+    val result = block
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0)/1000000 + "ms")
+    result
+  }
+  
   def myLimit(g: Hypergraph, maxnodes: Int = 1000): (Hyperedge,Hyperedge) => Boolean = {
     (h1,h2) =>
       if(g.allNodes.size > maxnodes)
@@ -126,7 +134,7 @@ object Test {
         //with HyperTester
         //with Canonizer
         with NamedNodes
-        //with Transformations
+        with Transformations
         with TransformManager
         with Prettifier
         //with Visualizer 
@@ -140,7 +148,7 @@ object Test {
             super.nodeDotLabel(n) + "\\l" + depths(n) + " " + codepths(n) + "\\l"
             
           override def onNewNode(n: Node) {
-            assert(n.used.size <= 3)
+            //assert(n.used.size <= 3)
             super.onNewNode(n)
           }
         }
@@ -187,7 +195,7 @@ object Test {
     //assert(g.runNode(g("id"), List(3)) == peano(3))
     p("nrev x = case x of {Z -> Z; S x -> add (nrev x) (S Z)}")
     g.zeroBoth(g("nrev"))
-    //assert(g.runNode(g("nrev"), List(3)) == peano(3))
+    assert(g.runNode(g("nrev"), List(3)) == peano(3))
     //p("fib x = case x of {Z -> Z; S x -> case x of {Z -> S Z; S x -> add (fib (S x)) (fib x)}}")
     //assert(g.runNode(g("fib"), List(6)) == peano(8))
     
@@ -239,13 +247,16 @@ object Test {
     
     //assert(g.runNode(g("add_plus_1"), List(2,3)) == peano(6))
 
-    p("nrevto x y = add (nrev x) y")
+    //p("nrevto x y = add (nrev x) y")
    
-    p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
+    //p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
     
     for(n <- g.allNodes)
       g.zeroBoth(n.deref)
-      
+   
+    p("nrevto x y = add (nrev x) y")
+   
+    p("nrevto_plus_1 x y = add (add (nrev x) (S Z)) y")
     
     p("nrevto_1 x = nrevto x (S Z)")
     
@@ -253,6 +264,32 @@ object Test {
     
     p("add_1_to y = add (S Z) y")
     p("add_0_to y = add Z y")
+    
+    {
+    val gresid = new TheHypergraph with Prettifier {}
+    val residualizer = new Residualizer(gresid, SCC(g))
+    val resid = time(residualizer(g("rev")))
+    gresid.setName(resid.get.node.node, "main")
+    gresid.removeUnreachable(resid.get.node.node)
+    gresid.nameUnnamed()
+    println("misses: " + residualizer.misses)
+    println("Resid cost: " + resid.get.cost)
+    println("Graph size: " + gresid.nodes.size)
+    println(gresid.prettyProgram)
+    }
+    {
+    val gresid = new TheHypergraph with Prettifier {}
+    val residualizer = new Residualizer(gresid, SCC(g))
+    val resid = time(residualizer(g("nrev")))
+    gresid.setName(resid.get.node.node, "main")
+    gresid.removeUnreachable(resid.get.node.node)
+    gresid.nameUnnamed()
+    println("misses: " + residualizer.misses)
+    println("Resid cost: " + resid.get.cost)
+    println("Graph size: " + gresid.nodes.size)
+    println(gresid.prettyProgram)
+    }
+    readLine()
     
     {
       val out = new java.io.FileWriter("init.dot")
@@ -271,7 +308,7 @@ object Test {
         while(g.updatedHyperedges.nonEmpty) {
           println("nodes: " + g.allNodes.size)
           g.transform(
-              (tr.transDrive & tr.letUp(3).cond(g.limitDepthCodepth((d,c) => c + d <= 1))).cond(
+              (tr.transDrive & tr.letUp(3).cond(g.limitDepthCodepth((d,c) => c == 0 || c + d <= 1))).cond(
                   g.limitDepth(3) & g.limitCodepth(3) & myLimit(g, 500)).onSuccess(
                       () => { tr.commit(); println("buf size: " + buf.buffer.size) } ))
         }
@@ -281,12 +318,42 @@ object Test {
         println("nrev = rev, our goal:")
         println(p.check("forall x . nrev x = rev x"))
         
+        val parnodes = g.allNodes.toList.par
         val like =
-          for(l <- g.allNodes; r <- g.allNodes; if l != r; 
-              lkl <- LikenessCalculator[Int].likenessN(l, r)) yield {
-            val List(l1,r1) = List(l,r).sortBy(_.hashCode())
-            (lkl,l1,r1)
+          for(l <- parnodes; r <- parnodes; if l != r && l.hashCode <= r.hashCode; 
+              lkl <- LikenessCalculator[Int].likenessN(l, r); if lkl._1 > 0) yield {
+            (lkl,l,r)
           }
+        
+        println("Computed likeness")
+        
+        
+        /*val scc = SCC(g)
+        val proofs =
+          for(((i,ren),l,r) <- like) yield {
+            val eprover = new EquivalenceProver(scc)
+            val proof = eprover.prove(l.deref.node, r.deref.node)
+            (proof, eprover.stats, l.prettyDebug, r.prettyDebug)
+          }
+        
+        val stats = collection.mutable.Map[(Node, Node), Int]()
+        
+        for((p, s, lpretty, rpretty) <- proofs.toList) {
+          if(p != None) {
+            println("=======================")
+            println(lpretty)
+            println(rpretty)
+            println(p)
+            p.get.performGluing(g)
+          }
+          
+          for((ns,c) <- s) {
+            if(stats.contains(ns))
+              stats(ns) += c
+            else
+              stats(ns) = c  
+          }
+        }*/
         
         var eprover = new EquivalenceProver(g)
         
@@ -294,15 +361,38 @@ object Test {
               if i > 0 && l.deref.node != r.deref.node) {
           val lpretty = l.prettyDebug
           val rpretty = r.prettyDebug
-          println("=======================")
-          println((i,ren))
-          println(lpretty)
-          println(rpretty)
           val eq = eprover.prove(l.deref.node, r.deref.node)
-          println(eq)
           if(eq != None) {
+            println("=======================")
+            println((i,ren))
+            println(lpretty)
+            println(rpretty)
+            println(eq)
             eq.get.performGluing(g)
+            val st = eprover.stats
             eprover = new EquivalenceProver(g)
+            eprover.stats = st
+          }
+        }
+        
+        val stats = eprover.stats
+        
+        for(((l1,r1),c) <- stats.toList.sortBy(_._2)) {
+          val l = l1.deref.node
+          val r = r1.deref.node
+          val lik = LikenessCalculator[Int].likeness(l.deref, r.deref)
+          if(lik != None && lik.get._1 == 0 ) {
+            println(c + " $$$$$$$ This would help $$$$$$$$$ " + lik)
+            println(l.prettyDebug)
+            println("---")
+            println(r.prettyDebug)
+            println("^^^^^^^^^^")
+            g.zeroBoth(l.deref)
+            g.zeroBoth(r.deref)
+            if(g.drive(l) == None)
+              println("seems undrivable\n" + l.prettyDebug)
+            if(g.drive(r) == None)
+              println("seems undrivable\n" + r.prettyDebug)
           }
         }
         
@@ -322,6 +412,31 @@ object Test {
         
         
         println("After eqproof: " + g.nodes.size + " hypers: " + g.allHyperedges.size)
+        
+        {
+        val gresid = new TheHypergraph with Prettifier {}
+        val residualizer = new Residualizer(gresid, SCC(g))
+        val resid = time(residualizer(g("rev")))
+        gresid.setName(resid.get.node.node, "main")
+        gresid.removeUnreachable(resid.get.node.node)
+        gresid.nameUnnamed()
+        println("misses: " + residualizer.misses)
+        println("Resid cost: " + resid.get.cost)
+        println("Graph size: " + gresid.nodes.size)
+        println(gresid.prettyProgram)
+        }
+        {
+        val gresid = new TheHypergraph with Prettifier {}
+        val residualizer = new Residualizer(gresid, SCC(g))
+        val resid = time(residualizer(g("nrev")))
+        gresid.setName(resid.get.node.node, "main")
+        gresid.removeUnreachable(resid.get.node.node)
+        gresid.nameUnnamed()
+        println("misses: " + residualizer.misses)
+        println("Resid cost: " + resid.get.cost)
+        println("Graph size: " + gresid.nodes.size)
+        println(gresid.prettyProgram)
+        }
         
         if(readLine().startsWith("s"))
           stop = true

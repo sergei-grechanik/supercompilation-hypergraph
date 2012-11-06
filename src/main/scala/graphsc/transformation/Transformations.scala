@@ -1,6 +1,8 @@
 package graphsc
 package transformation
 
+import scala.annotation.tailrec
+
 trait Transformations extends Hypergraph {
   
   private def isVar(n: Node): Boolean =
@@ -245,38 +247,60 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   
-  def drive(n: Node): Hyperedge = {
+  // Don't use this function together with buffering! It relies on 
+  // immediate appearance of added hyperedges.
+  final def drive(n: Node, hist: List[Node] = Nil): Option[Hyperedge] = {
     val node = n.deref.node
     definingHyperedge(node) match {
-      case Some(h) => h
+      case Some(h) => Some(h)
       case None =>
+        if(hist.exists(_.deref.node == node))
+          return None
+        
         val caseofs = node.outs.filter(_.label.isInstanceOf[CaseOf]).toList
         if(caseofs.nonEmpty) {
-          for(c <- caseofs) {
-            val childdef = drive(c.dests(0).node)
-            if(childdef.label.isInstanceOf[CaseOf])
-              applyTransformation(caseCase, c, childdef)
-            else if(childdef.label.isInstanceOf[Var])
-              applyTransformation(caseVar, c, childdef)
-            else if(childdef.label.isInstanceOf[Tick])
-              applyTransformation(caseTick, c, childdef)
-          }
-          drive(n)
+          var changed = false
+          for(c <- caseofs)
+            drive(c.dests(0).node, n :: hist) match {
+              case Some(childdef) =>
+                if(childdef.label.isInstanceOf[CaseOf])
+                  applyTransformation(caseCase, c, childdef)
+                else if(childdef.label.isInstanceOf[Var])
+                  applyTransformation(caseVar, c, childdef)
+                else if(childdef.label.isInstanceOf[Tick])
+                  applyTransformation(caseTick, c, childdef)
+                changed = true
+              case None =>
+            }
+          
+          if(changed)
+            drive(n, n :: hist)
+          else
+            None
         }
         else {
+          var changed = false
           for(l <- node.outs) {
             assert(l.label == Let())
-            val childdef = drive(l.dests(0).node)
-            if(childdef.label.isInstanceOf[CaseOf])
-              applyTransformation(letCaseOf, l, childdef)
-            else if(childdef.label.isInstanceOf[Var])
-              applyTransformation(letVar, l, childdef)
-            else if(childdef.label.isInstanceOf[Let])
-              applyTransformation(letLet, l, childdef)
-            else
-              applyTransformation(letOther, l, childdef)
+            drive(l.dests(0).node, n :: hist) match {
+              case Some(childdef) =>
+                if(childdef.label.isInstanceOf[CaseOf])
+                  applyTransformation(letCaseOf, l, childdef)
+                else if(childdef.label.isInstanceOf[Var])
+                  applyTransformation(letVar, l, childdef)
+                else if(childdef.label.isInstanceOf[Let])
+                  applyTransformation(letLet, l, childdef)
+                else
+                  applyTransformation(letOther, l, childdef)
+                changed = true
+              case None =>
+            }
           }
-          drive(n)
+          
+          if(changed)
+            drive(n, hist)
+          else
+            None
         }
     }
   }

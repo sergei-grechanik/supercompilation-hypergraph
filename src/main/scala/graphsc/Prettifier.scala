@@ -6,6 +6,10 @@ trait NamedNodes extends Hypergraph {
   
   def apply(n: String): RenamedNode = namedNodes(n).deref
   
+  def setName(n: Node, name: String) {
+    namedNodes += name -> RenamedNode.fromNode(n)
+  }
+  
   def newNode(n: String, arity: Int): RenamedNode = 
     if(namedNodes.contains(n)) {
       namedNodes(n).deref
@@ -32,25 +36,43 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     prettyRename(r, pretty(n))
   }
   
-  def prettySet(n: Node, s: String) {
-    prettyMap += n -> s
-    n.prettyDebug = s
+  def prettyUpdate(n: Node, s: String) {
+    val old = prettyMap.get(n)
+    if(old.isEmpty || old.get.size > s.size) {
+      prettyMap(n) = s
+      n.prettyDebug = s
+      prettyUpdateIns(n)
+    }
+  }
+  
+  def prettyUpdateIns(n: Node) {
+    for(h <- n.ins) {
+      try {
+        val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
+        prettyUpdate(h.source.node, s)
+      } catch {
+        case _: NoSuchElementException =>
+      }
+    }
+  }
+  
+  override def setName(node: Node, name: String) {
+    val n = node.deref.node
+    super.setName(n, name)
+    val newname = name + (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", "")
+    prettyUpdate(n, newname)
   }
   
   override def newNode(n: String, arity: Int): RenamedNode = {
     val node = super.newNode(n, arity)
-    prettySet(node.node, n + (0 until arity).map("v" + _ + "v").mkString(" ", " ", ""))
+    prettyUpdate(node.node, n + (0 until arity).map("v" + _ + "v").mkString(" ", " ", ""))
     node
   }
   
   override def onNewHyperedge(h: Hyperedge) {
     try {
       val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
-      prettyMap.get(h.source.node) match {
-        case Some(p) if p.length <= s.length =>
-        case _ =>
-          prettySet(h.source.node, s)
-      }
+      prettyUpdate(h.source.node, s)
     } catch {
       case _: NoSuchElementException =>
     }
@@ -60,11 +82,15 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   override def beforeGlue(l: RenamedNode, r: Node) {
     val lp = prettyMap.get(l.node)
     val rp = prettyMap.get(r).map(prettyRename(l.renaming.inv, _))
-    assert(lp != None || rp != None)
-    if(lp == None || (rp != None && rp.get.length < lp.get.length)) {
-      prettySet(l.node, rp.get)
+    if(rp != None) {
+      prettyUpdate(l.node, rp.get)
     }
     super.beforeGlue(l, r)
+  }
+  
+  override def afterGlue(n: Node) {
+    prettyUpdateIns(n)
+    super.afterGlue(n)
   }
   
   private def indent(s: String, ind: String = "  "): String = "  " + indent1(s, ind)
@@ -133,6 +159,27 @@ trait Prettifier extends TheHypergraph with NamedNodes {
                 prettyHyperedge(h2, (n => "{" + pretty(n) + "}")))
           else
             "{" + pretty(n) + "}"))
+  }
+  
+  def prettyProgram: String = {
+    (for(rnode:RenamedNode <- namedNodes.values.toSet; h <- rnode.deref.node.outs.iterator) yield {
+      pretty(rnode.deref.node) + " = " + prettyHyperedge(h) + ";\n"
+    }).toList.reduce(_ + _)
+  }
+  
+  def nameUnnamed() {
+    var i = 0
+    for(n <- nodes if n.ins.size > 1) {
+      if(!prettyMap.contains(n)) {
+        var newname: String = null
+        do {
+          newname = "f_" + i
+          i += 1
+        } while(namedNodes.contains(newname))
+        
+        setName(n, newname)
+      }
+    }
   }
   
   override def nodeDotLabel(n: Node): String =
