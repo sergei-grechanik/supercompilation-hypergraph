@@ -396,7 +396,7 @@ object Test {
           }
         }
         
-        val nrt = g("nrevto")
+        /*val nrt = g("nrevto")
         println("nrevto: " + g.depth(nrt) + " " + g.codepth(nrt))
         
         println("nrevto driven:")
@@ -408,7 +408,7 @@ object Test {
         println("nrevto_plus_1 in terms of nrevto:")
         println(p.check("forall x y . nrevto_plus_1 x y = nrevto x (S y)"))
         println("nrev = rev, our goal:")
-        println(p.check("forall x . nrev x = rev x"))
+        println(p.check("forall x . nrev x = rev x"))*/
         
         
         println("After eqproof: " + g.nodes.size + " hypers: " + g.allHyperedges.size)

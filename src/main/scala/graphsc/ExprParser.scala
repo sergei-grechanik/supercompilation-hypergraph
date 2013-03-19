@@ -32,6 +32,8 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     h
   }
   
+  override val whiteSpace = """(\s|--.*\n)+""".r
+  
   type H = (RenamedNode, Hyperedge)
   private implicit def toRenamedNode(p: H): RenamedNode = p._1
   
@@ -77,7 +79,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def caseof: Parser[Map[String,Int] => H] =
     ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
     { case e~lst => table =>
-        val cases = lst.map(_(table))
+        val cases = lst.map(_(table)).sortBy(_._1)
         graph.addH(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2._1)) }
   
   def call: Parser[Map[String,Int] => H] =
