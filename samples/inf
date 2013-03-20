@@ -1,0 +1,4 @@
+-- inf1=inf2
+
+inf1 = S inf1;
+inf2 = S inf2;

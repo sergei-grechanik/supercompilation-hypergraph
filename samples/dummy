@@ -1,0 +1,14 @@
+-- bad=good
+
+bad x y =
+  case x of {
+    Z -> Z;
+    S x -> bad x (S y)
+  };
+  
+good x y =
+  case x of {
+    Z -> Z;
+    S x -> good x y
+  };
+

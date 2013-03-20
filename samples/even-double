@@ -1,0 +1,28 @@
+-- evendouble=true
+
+even x =
+  case x of {
+    Z -> T;
+    S x -> odd x
+  };
+
+odd x =     
+  case x of {
+    Z -> F;
+    S x -> even x
+  };
+
+double x y =
+  case x of {
+    Z -> y;
+    S x -> S (S (double x y))
+  };
+
+true x =
+  case x of {
+    Z -> T;
+    S x -> true x
+  };
+
+evendouble x = even (double x Z);
+

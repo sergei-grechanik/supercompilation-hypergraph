@@ -1,0 +1,10 @@
+-- add3left=add3right
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+  
+add3left x y z = add (add x y) z;
+add3right x y z = add x (add y z);

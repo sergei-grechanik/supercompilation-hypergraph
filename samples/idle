@@ -1,3 +1,4 @@
+-- idle=constz
 -- idle scrutinizes its argument and returns a constant Z
 
 idle x =
@@ -10,5 +11,5 @@ constz x =
   case x of {
     Z -> Z;
     S x -> constz x
-  }
+  };
 
