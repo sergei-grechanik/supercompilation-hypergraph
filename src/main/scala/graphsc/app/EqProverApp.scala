@@ -191,9 +191,9 @@ object EqProverApp {
     }
     
     if(checktask())
-      System.err.println("The equivalence was successfully proved (up to renaming)")
+      System.err.println("SUCCESS: The equivalence was successfully proved (up to renaming)")
     else if(conf.task.isSupplied)
-      System.err.println("I was unable to prove the equivalence")
+      System.err.println("FAIL: I was unable to prove the equivalence")
     
     if(conf.dumpDot.isSupplied) {
       println(graph.toDot)

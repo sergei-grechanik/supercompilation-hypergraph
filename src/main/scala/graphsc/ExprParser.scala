@@ -50,8 +50,18 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
         val table = vs.zipWithIndex.toMap
         e1(table) }
   
-  def prog: Parser[List[(String, H)]] = repsep(definition, ";") <~ opt(";")
+  def prog: Parser[List[(String, H)]] = 
+    (repsep(decl, ";") <~ opt(";")).map(_.collect {case Some(x) => x})
   
+  def decl: Parser[Option[(String, H)]] =
+    eqdecl.map(_ => None) | definition.map(Some(_))
+      
+  def eqdecl: Parser[Unit] = 
+    ("forall" ~> rep(fname) <~ ".") ~ (expr <~ "=") ~! expr ^^
+    { case vs~e1~e2 =>
+        val table = vs.zipWithIndex.toMap
+        graph.glue(List(e1(table)._1, e2(table)._1)) }
+    
   def definition: Parser[(String, H)] = 
     (sign <~ "=") ~! expr ^^
     { case (name,node,table)~e => (name, graph.addH(Id(), node, List(e(table)))) }

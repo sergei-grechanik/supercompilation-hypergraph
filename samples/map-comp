@@ -1,0 +1,30 @@
+-- mapfmapg=mapfg
+
+-- A clumsy way of formulating this theorem in a first-order language.
+
+-- Our supercompiler doesn't require functions to be defined.
+-- But if it did, these two definitions would do:
+-- f x = F x;
+-- g x = G x;
+
+mapf l =
+  case l of {
+    N -> N;
+    C a l -> C (f a) (mapf l)
+  };
+
+mapg l =
+  case l of {
+    N -> N;
+    C a l -> C (g a) (mapg l)
+  };
+  
+mapfg l =
+  case l of {
+    N -> N;
+    C a l -> C (f (g a)) (mapfg l)
+  };
+  
+mapfmapg l = mapf (mapg l);
+
+  
