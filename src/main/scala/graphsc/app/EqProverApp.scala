@@ -10,7 +10,7 @@ import org.rogach.scallop._
 object EqProverApp {
   
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-    version("Equivalence prover based on hypergraph supercompilation, version 0.0")
+    version("Equivalence prover based on hypergraph supercompilation, version 0.1")
     banner("Usage: EqProver [OPTIONS] file")
     val task = opt[String](descr = 
       "An equivalence we want to prove (up to renaming!) of the form foo=bar " +

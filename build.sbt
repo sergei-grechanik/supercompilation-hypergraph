@@ -1,4 +1,4 @@
-import com.typesafe.sbt.SbtStartScript
+//import com.typesafe.sbt.SbtStartScript
 
 name := "graphsc"
 
@@ -12,6 +12,10 @@ libraryDependencies += "junit" % "junit" % "4.8.1" % "test"
 
 libraryDependencies += "org.rogach" %% "scallop" % "0.8.1"
 
-seq(SbtStartScript.startScriptForClassesSettings: _*)
+mainClass in oneJar := Some("graphsc.app.EqProverApp")
+
+seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
+
+//seq(SbtStartScript.startScriptForClassesSettings: _*)
 
 //seq(ScctPlugin.instrumentSettings : _*)
