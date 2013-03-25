@@ -13,24 +13,29 @@ object SCC {
     val stack = collection.mutable.Stack[Node]()
     
     for(n <- g.allNodes)
+      // process all nodes that we didn't reach earlier
       if(!indices.contains(n))
         process(n)
     
     // returns so-called lowlink
     def process(n: Node): Int = {
+      // assign a new index to n and push in on the stack
       val myindex = index
       indices(n) = myindex
       index += 1
       stack.push(n)
       
-      var lowlink = index
+      var lowlink = myindex
       
       for(h <- n.outs; rm <- h.dests; val m = rm.node) {
         indices.get(m) match {
           case None =>
+            // We haven't processed m yet, process
             lowlink = lowlink min process(m)
           case Some(i) =>
-            if(stack.contains(m))
+            // We've already processed m.
+            // We have to check if we've assigned an SCC to it.
+            if(!compmap.contains(m))
               lowlink = lowlink min indices(m)
         }
       }
@@ -52,6 +57,8 @@ object SCC {
       
       lowlink
     }
+    
+    assert(stack.isEmpty)
     
     SCC(compmap.toMap, components.toMap)
   }
