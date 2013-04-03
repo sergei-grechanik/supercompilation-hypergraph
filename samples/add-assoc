@@ -1,4 +1,5 @@
 -- add3left=add3right
+-- needs -a4
 
 add x y =
   case x of {

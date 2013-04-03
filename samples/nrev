@@ -1,0 +1,23 @@
+-- nrev=rev
+-- (on peano numbers)
+-- Doesn't work yet
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+
+nrev x =
+  case x of {
+    Z -> Z;
+    S x -> add x (S Z)
+  };
+  
+rev x = revTo x Z;
+
+revTo x y =
+  case x of {
+    Z -> y;
+    S x -> revTo x (S y)
+  };

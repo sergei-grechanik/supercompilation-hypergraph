@@ -1,0 +1,17 @@
+-- mul3left=mul3right
+-- Doesn't work yet
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+
+mul x y =
+  case x of {
+    Z -> Z;
+    S x -> add y (mul x y)
+  };
+  
+mul3left x y z = mul (mul x y) z;
+mul3right x y z = mul x (mul y z);
