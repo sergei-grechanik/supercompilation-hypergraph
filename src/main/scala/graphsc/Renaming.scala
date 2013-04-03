@@ -136,6 +136,9 @@ case class RenamedNode(renaming: Renaming, node: Node) {
     else
       None
    
+  // Resturns true if the nodes are equal up to renaming
+  def ~~(n: RenamedNode): Boolean = node ~~ n.node
+      
   // Assign numbers to the variables used by node but marked unused by renaming
   def restoreUnused(fromvar: Int): (Int, RenamedNode) = {
     var curvar = fromvar

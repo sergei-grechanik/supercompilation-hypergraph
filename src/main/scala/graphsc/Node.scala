@@ -32,6 +32,14 @@ class Node(initial_used: Set[Int]) {
   def insMut: collection.mutable.Set[Hyperedge] = 
     if(gluedTo == null) mins else error()
     
+  def ~~(n: Node): Boolean =
+    if(gluedTo == null && n.gluedTo == null)
+      this == n
+    else if(gluedTo != null)
+      gluedTo.node ~~ n
+    else
+      n ~~ this
+    
   // Sometimes the node was glued to some other node...
   // Imperative programming sucks, I know
   def deref: RenamedNode =

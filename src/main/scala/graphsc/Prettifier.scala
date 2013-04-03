@@ -23,7 +23,8 @@ trait NamedNodes extends Hypergraph {
 
 // Prettifies nodes on the fly
 trait Prettifier extends TheHypergraph with NamedNodes {
-  val prettyMap = collection.mutable.Map[Node, String]() 
+  val prettyMap = collection.mutable.Map[Node, String]()
+  val nameGen = new NameGenerator[String]
   
   def pretty(n: Node): String = prettyMap.get(n) match {
     case None =>
@@ -93,13 +94,14 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.afterGlue(n)
   }
   
-  private def indent(s: String, ind: String = "  "): String = "  " + indent1(s, ind)
-  private def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
+  protected def indent(s: String, ind: String = "  "): String = ind + indent1(s, ind)
+  protected def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
   
   def prettyHyperedge(h: Hyperedge, prettyfun: RenamedNode => String = pretty _): String = 
     h.label match {
       case Construct(name) => name + h.dests.map("(" + prettyfun(_) + ")").mkString(" ", " ", "")
       case CaseOf(cases) =>
+        // There is a problem with nested caseofs but I'm too lazy to fix it
         "case " + prettyfun(h.dests(0)) + " of {\n" +
         indent((
           for(((n,k),e) <- cases zip h.dests.tail) yield
@@ -136,7 +138,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
           { m =>
               val i = m.group(1).toInt
               if(r(i) < 0)
-                "_|_"
+                "_"
               else
                 "v" + r(i) + "v" })
   }
@@ -186,6 +188,59 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.nodeDotLabel(n) + "\\l" +
     pretty(n).replace("\n", "\\l") + "\\l" +
     "\\l"
+    
+//  // Node signature in the form "name v0v v1v"
+//  def nodeSig(n_underef: RenamedNode): String = {
+//    val n = n_underef.deref
+//    prettyRename(n.renaming,
+//      namedNodes.find(_._2 ~~ n).fold(n.node.uniqueName)((s,_) => s) +
+//        (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+//  }
+  
+  def nodeShortProg(n_underef: RenamedNode): String = {
+    val n = n_underef.deref
+    val sig = 
+      prettyRename(n.renaming,
+          "f_" + nameGen(pretty(n.node)) +
+          (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+    val prog = pretty(n)
+    if(sig.size < prog.size)
+      sig 
+    else
+      prog
+  }
+  
+  def nodeBadSig(n_underef: RenamedNode): String = {
+    val n = n_underef.deref
+    val sig = 
+      prettyRename(n.renaming,
+          nameGen(n.node.uniqueName) + "-" + n.node.uniqueName +
+          (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+    if(prettyMap.contains(n.node)) {
+      val prog = pretty(n)
+      if(sig.size < prog.size || prog.contains("\n"))
+        sig 
+      else
+        "[" + sig + " ~ " + prog + "]"
+    }
+    else
+      sig
+  }
+    
+  // Convert the graph to program.
+  def toProg: String = {
+    val sb = new StringBuilder()
+    for(n <- nodes) {
+      val sig = nodeShortProg(RenamedNode.fromNode(n))
+      sb.append("\n-- " + sig + "=\n" + indent(pretty(n), "--   ") + "\n\n")
+      for(h <- n.outs) {
+        sb.append(sig + " = " + 
+          indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeShortProg))) + ";\n")
+      }
+      sb.append("\n")
+    }
+    sb.toString
+  }
     
   def statistics() {
     val hyperedges = allNodes.toList.flatMap(n => n.ins ++ n.outs).toSet

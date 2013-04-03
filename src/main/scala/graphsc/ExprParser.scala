@@ -64,11 +64,16 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     
   def definition: Parser[(String, H)] = 
     (sign <~ "=") ~! expr ^^
-    { case (name,node,table)~e => (name, graph.addH(Id(), node, List(e(table)))) }
+    { case (name,node,table)~e =>
+        val (n, hyp) = e(table)
+        graph.glue(List(node, n))
+        (name, (node.deref, graph.normalize(hyp))) }
   
   def sign: Parser[(String, RenamedNode, Map[String,Int])] =
-    fname ~ rep(fname) ^^
-    { case name~vs => (name, graph.newNode(name, vs.length.toInt), vs.zipWithIndex.toMap) }
+    fname ~ rep(fname | "_") ^^
+    { case name~vs => 
+        (name, graph.newNode(name, vs.length.toInt), 
+            vs.zipWithIndex.filter(_._1 != "_").toMap) }
   
   def fname = "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
@@ -87,7 +92,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   
   // TODO: now we cannot parse "case fun x of"
   def caseof: Parser[Map[String,Int] => H] =
-    ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ "}") ^^
+    ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ opt(";") <~ "}") ^^
     { case e~lst => table =>
         val cases = lst.map(_(table)).sortBy(_._1)
         graph.addH(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2._1)) }

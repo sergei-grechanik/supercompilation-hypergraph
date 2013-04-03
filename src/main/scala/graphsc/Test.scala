@@ -58,9 +58,11 @@ object Trace {
 
 class TooManyNodesException(s: String) extends Exception(s)
 
-trait HyperLogger extends Hypergraph {
+trait HyperLogger extends Prettifier {
   abstract override def addHyperedge(h: Hyperedge) {
     println("\nhyper " + h)
+    println("\n" + nodeBadSig(h.source) + " = " + 
+        indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeBadSig))) + ";\n")
     super.addHyperedge(h)
     println("=> " + normalize(h) + "\n")
   }
@@ -68,6 +70,9 @@ trait HyperLogger extends Hypergraph {
   override def onNewHyperedge(h: Hyperedge) {
     println("    new " + h)
     super.onNewHyperedge(h)
+    
+    println("\n" + nodeBadSig(h.source) + " = " + 
+        indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeBadSig))) + ";\n")
   }
   
   abstract override def newNode(a: Set[Int]): RenamedNode = {
@@ -77,33 +82,18 @@ trait HyperLogger extends Hypergraph {
   }
   
   override def beforeGlue(l: RenamedNode, r: Node) {
-    println("    glue " + l + " = " + r)
+    println("    glue " + nodeBadSig(l) + " = " + nodeBadSig(r.deref))
     super.beforeGlue(l, r)
   }
   
   override def afterGlue(n: Node) {
-    println("    glued " + n)
+    println("    glued " + nodeBadSig(n.deref))
     super.afterGlue(n)
   }
   
   override def onUsedReduced(n: Node) {
-    println("used reduced: " + n)
+    println("used reduced: " + nodeBadSig(n.deref))
     super.onUsedReduced(n)
-  }
-}
-
-trait SelfLetAdder extends Hypergraph {
-  var var0: RenamedNode = null
-  var creating = false
-  override def onNewNode(n: Node) {
-    super.onNewNode(n)
-    if(var0 != null)
-      add(Let(), n.deref, List(var0, n.deref))
-    else if(creating != true) {
-      creating = true
-      var0 = variable(0)
-      creating = false
-    }
   }
 }
 

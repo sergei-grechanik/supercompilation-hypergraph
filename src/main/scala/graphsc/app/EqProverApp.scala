@@ -22,11 +22,25 @@ object EqProverApp {
     val noiso = opt[Boolean](noshort = true, descr = "Disable merging by isomorphism")
     val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
+    val dumpCode = opt[Boolean](noshort = true, 
+      descr = "Dump the graph to stdout in a form of a program")
+    val dumpGenCode = opt[String](noshort = true, 
+      descr = "Dump code for each generation to files <arg>-i")
     val verbose = opt[Boolean](descr = "Be more verbose")
     val file = trailArg[String](required = true)
+    
+    val integrityCheck = opt[Boolean](hidden = true)
   }
-
-  def main(args: Array[String]) {
+  
+  def main(args: Array[String]) = mainBool(args) match {
+    case Some(true) =>
+      System.err.println("SUCCESS: The equivalence was successfully proved (up to renaming)")
+    case Some(false) =>
+      System.err.println("FAIL: I was unable to prove the equivalence")
+    case _ =>
+  }
+  
+  def mainBool(args: Array[String]): Option[Boolean] = {
     val conf = new Conf(args)
     val graph = new TheHypergraph
         with NamedNodes
@@ -39,10 +53,16 @@ object EqProverApp {
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
         with SelfLetAdder
+        with AutoTransformer {
+          override val integrityCheckEnabled = conf.integrityCheck.isSupplied
+        }
     
     val maxarity = conf.arity.get.get
     val maxdepth = conf.depth.get.get
     val maxcodepth = conf.codepth.get.get
+    
+    if(!conf.nogen.isSupplied)
+      graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
     val parser = ExprParser(graph)
@@ -97,14 +117,26 @@ object EqProverApp {
     
     def checktask() : Boolean = {
       for((l,r) <- task)
-        if(l.deref.node == r.deref.node) {
+        if(l ~~ r) {
           stop = true
           return true
         }
       false
     }
     
+    def gendump() {
+      if(conf.dumpGenCode.isSupplied) {
+        val out = 
+          new java.io.PrintWriter(
+            new java.io.File(conf.dumpGenCode.get.get + "-" + generation))
+        try {
+          out.write(graph.toProg)
+        } finally { out.close() }
+      }
+    }
+    
     stats()
+    gendump()
     checktask()
     
     // main loop
@@ -185,19 +217,23 @@ object EqProverApp {
       }
       
       stats()
-      
+      gendump()
       checktask()
       
     }
     
-    if(checktask())
-      System.err.println("SUCCESS: The equivalence was successfully proved (up to renaming)")
-    else if(conf.task.isSupplied)
-      System.err.println("FAIL: I was unable to prove the equivalence")
-    
     if(conf.dumpDot.isSupplied) {
       println(graph.toDot)
     }
+    
+    if(conf.dumpCode.isSupplied) {
+      println(graph.toProg)
+    }
+    
+    if(conf.task.isSupplied)
+      Some(checktask())
+    else
+      None
   }
 
 }

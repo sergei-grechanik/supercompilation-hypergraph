@@ -193,21 +193,6 @@ trait Transformations extends Hypergraph {
       var arity = h1.arity
       var extexprs = (0 until arity).map(variable(_)).toList
       
-      // We don't need this piece of code anymore as I solved this
-      // problem by preprocessing hyperedges in transformablePairs.
-      //// extend e1.renaming so that it won't ignore variables used in es2
-      //val allused = (Set[Int]() /: es2.map(_.used))(_ | _)
-      //val e1ren_ar = e1.renaming.arity
-      //val e1ren_newvec =
-      //  (0 until (e1.renaming.vector.size max ((allused + (-1)).max + 1))).map {
-      //    case j =>
-      //      val i = e1.renaming(j)
-      //      if(i != -1) i
-      //      else if(allused(j)) e1ren_ar + j
-      //      else -1
-      //  }
-      //val new_e1ren = Renaming(e1ren_newvec.toList).normal
-      
       val newes2 =
         for(e2 <- es2) yield {
           val e2prime = e1.renaming comp e2
@@ -242,6 +227,22 @@ trait Transformations extends Hypergraph {
       var extexprs = (0 until arity).map(variable(_)).toList
       val newcaseof = add(CaseOf(cases), variable(arity) :: es1.tail)
       add(Let(), src1, newcaseof :: extexprs ++ List(es1(0)))
+  }
+  
+  // f(x,x)  ->  let y = x, z = x in f(y,z)
+  def unshare(maxarity: Int = Int.MaxValue): PartialFunction[Hyperedge, Unit] = {
+    case h if(h.used.size + 1 <= maxarity) =>
+      for((m, shift) <- (0 until h.dests.length) zip h.shifts if shift != -1) {
+        val (init, d :: tail) = h.dests.splitAt(m)
+        for(v <- d.used if v >= shift) {
+          val newd = d.renaming.mapVars(i => if(i == v) h.arity + shift else i) comp d.node
+          val newsrc = add(h.label, init ++ (newd :: tail))
+          if(!(newsrc ~~ h.source)) {
+            add(Let(), h.source, 
+                newsrc :: (0 until h.arity).map(variable(_)).toList ++ List(variable(v - shift)))
+          }
+        }
+      }
   }
   
   /////////////////////////////////////////////////////////////////////////////
