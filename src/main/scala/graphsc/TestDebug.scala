@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto --integrity-check ./samples/even-double")
+    cmd("-tauto -v ./samples/even-double")
   }
 
 }

@@ -341,13 +341,13 @@ trait TheHypergraph extends Hypergraph {
       glueParents(l.node.deref.node)
       glueChildren(l.node.deref.node)
       
-      if(nodesbefore - nodes.size >= 20) {
-        println("This gluing was awesome:")
-        println(prettyl)
-        println("===")
-        println(prettyr)
-        println("difference " + (nodesbefore - nodes.size) + "\n")
-      }
+//      if(nodesbefore - nodes.size >= 20) {
+//        println("This gluing was awesome:")
+//        println(prettyl)
+//        println("===")
+//        println(prettyr)
+//        println("difference " + (nodesbefore - nodes.size) + "\n")
+//      }
       
       // Now l may be glued to something else
       l.deref

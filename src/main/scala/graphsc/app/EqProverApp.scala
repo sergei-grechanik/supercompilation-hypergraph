@@ -97,7 +97,7 @@ object EqProverApp {
       graph.zeroBoth(n.deref)
       
     // This buffer stores all hyperedges that will be added to the graph
-    val buf = HyperBuffer(graph)
+    val buf = graph//HyperBuffer(graph)
     // This buffer stores hyperedges for each transformation and makes sure
     // that no hyperedge exceeds the maximal arity
     val tr = new PostFilter(buf, h => h.arity <= maxarity) with Transformations
@@ -143,16 +143,15 @@ object EqProverApp {
     while(!stop && generation < conf.generations.get.get) {
       if(conf.verbose.isSupplied)
           System.err.println("Transforming...")
-      while(graph.updatedPairs.nonEmpty) {
-        val trans =
-          if(conf.nogen.isSupplied) tr.transDrive
-          else tr.transDrive & tr.letUp(maxarity)
-        graph.transform(
-            trans.cond(
-                graph.limitDepth(maxdepth) & graph.limitCodepth(maxcodepth)).onSuccess(
-                    () => { tr.commit(); } ))
-      }
-      buf.commit()
+      
+      val trans =
+        if(conf.nogen.isSupplied) tr.transDrive
+        else tr.transDrive & tr.letUp(maxarity)
+      graph.transform(
+          trans.cond(
+              graph.limitDepth(maxdepth) & graph.limitCodepth(maxcodepth)).onSuccess(
+                  () => { tr.commit(); } ))
+      //buf.commit()
       
       generation += 1
       
