@@ -291,6 +291,9 @@ trait TheHypergraph extends Hypergraph {
       val prettyr = r2.node.prettyDebug
       checkIntegrity()
       
+      // if one of the nodes is already being glued, we should restore this fact afterwards
+      val beingGluedBefore = l2.node.beingGlued || r2.node.beingGlued  
+      
       l2.node.beingGlued = true
       r2.node.beingGlued = true
       
@@ -326,7 +329,7 @@ trait TheHypergraph extends Hypergraph {
       l.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
       l.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
       
-      l.node.beingGlued = false
+      l.node.beingGlued = beingGluedBefore
         
       checkIntegrity()
       

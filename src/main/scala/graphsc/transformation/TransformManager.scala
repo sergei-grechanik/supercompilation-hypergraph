@@ -2,6 +2,70 @@ package graphsc
 package transformation
 import scala.util.Random
 
+trait BiTransformManager extends Hypergraph with DepthTracker {
+  val updatedPairs = collection.mutable.Set[(Hyperedge, Hyperedge)]()
+  
+  // TODO: Find a better name
+  def updateAll() {
+    for(n <- allNodes; h1 <- n.insMut; h2 <- n.outsMut)
+      updatedPairs.add((h1,h2))    
+  }
+  
+  override def onNewHyperedge(h: Hyperedge) {
+    for(h1 <- h.source.node.insMut)
+      updatedPairs.add((h1,h))
+    for(d <- h.dests; h2 <- d.node.outsMut)
+      updatedPairs.add((h,h2))
+    super.onNewHyperedge(h)
+  }
+  
+  override def beforeGlue(r: RenamedNode, n: Node) {
+    for(h1 <- n.insMut; h2 <- r.node.outsMut)
+      updatedPairs.add((h1,h2))
+    for(h1 <- r.node.insMut; h2 <- n.outsMut)
+      updatedPairs.add((h1,h2))
+    super.afterGlue(n)
+  }
+  
+  override def onUsedReduced(n: Node) {
+    for(h1 <- n.insMut; h2 <- n.outsMut)
+      updatedPairs.add((h1,h2)) 
+    super.onUsedReduced(n)
+  }
+  
+  def transforming(hs: Hyperedge*) {
+    println("Nodes: " + allNodes.size)
+    for(h <- hs)
+      println("    " + h)
+  }
+  
+  def transform(proc: BiHProcessor): Boolean = {
+    //println("Pairs to transform before normilizing: " + updatedPairs.size)
+    val set = 
+      updatedPairs.map(p => (normalize(p._1), normalize(p._2))).toList
+        .sortBy(p => (depth(p._1.source), depth(p._2.source)))
+    updatedPairs.clear()
+    //println("Pairs to transform: " + set.size)
+    var count = 0
+    val processed = collection.mutable.Set[(Hyperedge, Hyperedge)]()
+    for((h1o, h2o) <- set) {
+      val h1 = normalize(h1o)
+      val h2 = normalize(h2o)
+      if(!processed((h1,h2)) && !processed((h1o,h2o)) 
+          && h1.source.node.outs(h1) && h2.source.node.outs(h2)) {
+        processed.add((h1, h2))
+        proc(h1, h2)
+        count += 1
+      }
+    }
+    //println("Pairs transformed: " + count)
+    updatedPairs.nonEmpty
+  }
+}
+
+
+// This transformmanager is obsolete and should be replaced with 
+// BiTransformManager wherever possible
 trait TransformManager extends Hypergraph with DepthTracker {
   val updatedHyperedges = collection.mutable.Set[Hyperedge]()
   

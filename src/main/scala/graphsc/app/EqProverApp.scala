@@ -45,7 +45,7 @@ object EqProverApp {
     val graph = new TheHypergraph
         with NamedNodes
         with Transformations
-        with TransformManager 
+        with BiTransformManager 
         with DepthTracker
         with Prettifier 
         //with HyperTester
@@ -143,7 +143,7 @@ object EqProverApp {
     while(!stop && generation < conf.generations.get.get) {
       if(conf.verbose.isSupplied)
           System.err.println("Transforming...")
-      while(graph.updatedHyperedges.nonEmpty) {
+      while(graph.updatedPairs.nonEmpty) {
         val trans =
           if(conf.nogen.isSupplied) tr.transDrive
           else tr.transDrive & tr.letUp(maxarity)
