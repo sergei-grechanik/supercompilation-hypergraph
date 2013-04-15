@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -v ./samples/even-double")
+    cmd("-tauto --nogen -v ./samples/shuffled-let")
   }
 
 }

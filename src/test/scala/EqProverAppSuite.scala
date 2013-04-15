@@ -20,5 +20,6 @@ class EqProverAppSuite extends FunSuite {
   cmd("-tauto --integrity-check --nogen ./samples/idle")
   cmd("-tauto --integrity-check ./samples/inf")
   cmd("-tauto --integrity-check ./samples/map-comp")
+  cmd("-tauto --integrity-check --nogen ./samples/shuffled-let")
   
 }

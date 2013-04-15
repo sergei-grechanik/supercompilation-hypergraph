@@ -1,13 +1,16 @@
 -- left=right
 
--- Theoretically this could work.
--- But in practice it doesn't...
+-- Using the supercompiler as a very inefficient semiring solver.
+-- I had to switch off most of the axioms to make it work.
+
+-- Works with -a4 -d100 -c100
+-- Success is achieved after the 4th generation with 2000 hyperedges.
 
 forall x y z . add (add x y) z = add x (add y z);
 --forall x . add x zero = x;
-forall x y . add x y = add y x;
+--forall x y . add x y = add y x;
 
-forall x y z . mul (mul x y) z = mul x (mul y z);
+--forall x y z . mul (mul x y) z = mul x (mul y z);
 --forall x . mul x one = x;
 --forall x . mul one x = x;
 
@@ -17,7 +20,14 @@ forall x y z . mul (mul x y) z = mul x (mul y z);
 forall x y z . mul x (add y z) = add (mul x y) (mul x z);
 forall x y z . mul (add y z) x = add (mul y x) (mul z x);
 
+--add3l x y z = add (add x y) z;
+--add3r x y z = add x (add y z);
 
 left x y = mul (add x y) (add x y);
 right x y = add (mul x x) (add (mul x y) (add (mul y x) (mul y y)));
 
+-- Having intermediate steps in the graph really helps.
+--right x y = add (mul (add x y) x) (mul (add x y) y);
+--right x y = add (add (mul x x) (mul y x)) (add (mul x y) (mul y y));
+--middle x y = add3r (mul x x) (mul y x) (add (mul x y) (mul y y));
+--right x y = add (mul x x) (add (mul y x) (add (mul x y) (mul y y)));

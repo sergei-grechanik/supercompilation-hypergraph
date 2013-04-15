@@ -1,0 +1,5 @@
+-- left=right
+
+left x y =  C x y (left x (S y));
+
+right y x = C x y (right (S y) x);

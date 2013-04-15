@@ -13,6 +13,9 @@ case class Renaming(vector: List[Int]) {
     
   def isId(used: Set[Int]) =
     vector.zipWithIndex.forall{ case (a,b) => !used(b) || a == b }
+    
+  def isPermutation =
+    vector.sorted == (0 until vector.length).toList
   
   def apply(i: Int): Int =
     if(i >= 0 && i < vector.size)
@@ -77,10 +80,11 @@ case class Renaming(vector: List[Int]) {
     Renaming(vector.drop(n).map(i => 
       if(i == -1) -1 
       else if(i >= n) i - n
-      else throw new Exception(
-        "Well, this case shouldn't take place, but may be this function should return an Option")))
+      else -1))
   }
         
+  // combine two renamings. None if there is a contradiction 
+  // (i.e. if they map some variables to different variables)
   def |(r: Renaming): Option[Renaming] = {
     val v1 = vector.zipWithIndex.filter(_._1 != -1).map(_.swap)
     val v2 = r.vector.zipWithIndex.filter(_._1 != -1).map(_.swap)

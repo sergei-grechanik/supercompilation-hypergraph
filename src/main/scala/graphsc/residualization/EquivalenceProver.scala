@@ -90,7 +90,10 @@ class EquivalenceProver[S, L](scc: SCC = null)
       var hypers: (Hyperedge, Hyperedge) = null
       var subtrees: List[EqProofTree] = null
         
-      for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
+      // for each pair of hyperedges while there is no result
+      for((like, lh, rh1, ren1) <- sorted_pairs; rh <- varySecond(lh, rh1) if result == None) {
+        subtrees = Nil
+        
         val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
         val newss1 =
           (newhisthead :: hist).map(p => cc.through(p._1._2, lh)).transpose
@@ -100,41 +103,40 @@ class EquivalenceProver[S, L](scc: SCC = null)
         var curren: Option[Renaming] = 
           Some(lh.source.renaming comp ren1 comp rh.source.renaming.inv)
         
-        subtrees = Nil
+        val lhs = lh.dests zip newss1 zip lh.shifts
+        val rhs = rh.dests zip newss2
         
-        for((((ld, rd), sh), (news1, news2)) <- 
-            ((lh.dests zip rh.dests) zip lh.shifts zip (newss1 zip newss2))) {
-          if(curren != None) {
-            val newhist =
-              ((newhisthead :: hist) zip (news1 zip news2)).map {
-                case (((n1,_), (n2,_)), (s1, s2)) => 
-                  ((n1, s1), (n2, s2)) 
-              }
-            
-            if(sh != -1) {
-              // it is a normal or shifted child
-              val shiftedren = curren.get.shift(sh) | Renaming(0 until sh toSet)
-              
-              val subtree =
-                shiftedren.flatMap(shren =>
-                  prove(ld.node, rd.node, 
-                        ld.renaming.inv comp shren comp rd.renaming, 
-                        newhist))
-              
-              subtree.foreach { t => subtrees = t :: subtrees }     
-                      
-              curren = curren |
-                subtree.map(t => (ld.renaming comp t.renaming comp rd.renaming.inv).unshift(sh))
+        for((((ld, news1), sh), (rd, news2)) <- lhs zip rhs if curren != None) {
+          val newhist =
+            ((newhisthead :: hist) zip (news1 zip news2)).map {
+              case (((n1,_), (n2,_)), (s1, s2)) => 
+                ((n1, s1), (n2, s2)) 
             }
-            else {
-              // this is the zeroth dest of a let, it has independent renaming
-              // TODO: Actually the may be equal up to some non-id renaming, so
-              // we might want to rearrange other dests accordingly (seems not easy though)
-              val subtree = prove(ld.node, rd.node, Renaming(ld.used | rd.used), newhist)
-              subtree match {
-                case Some(t) => subtrees = t :: subtrees
-                case None => curren = None
-              }
+          
+          if(sh != -1) {
+            // it is a normal or shifted child
+            val shiftedren = curren.get.shift(sh) | Renaming(0 until sh toSet)
+            
+            val subtree =
+              shiftedren.flatMap(shren =>
+                prove(ld.node, rd.node, 
+                      ld.renaming.inv comp shren comp rd.renaming, 
+                      newhist))
+            
+            subtree.foreach { t => subtrees = t :: subtrees }     
+                    
+            curren = curren |
+              subtree.map(t => (ld.renaming comp t.renaming comp rd.renaming.inv).unshift(sh))
+          }
+          else {
+            // It's let's head
+            assert(lh.label == Let())
+            
+            // We cannot judge what variables are used if we've got a renaming from
+            // the equivalence prover. Just FYI.
+            prove(ld.node, rd.node, Renaming(/*ld.node.used | rd.node.used*/), newhist) match {
+              case None => curren = None
+              case Some(t) => subtrees = t :: subtrees 
             }
           }
         }
@@ -147,6 +149,44 @@ class EquivalenceProver[S, L](scc: SCC = null)
         EqProofTree(resren, (l,r), Some((hypers._1, hypers._2, subtrees.reverse))))
     }
   }
+  
+  // Since two let-expressions can match with some non-id rearrangement,
+  // we should check them all.
+  // This function builds a list of all viable rearranged versions of rh.
+  def varySecond(lh: Hyperedge, rh: Hyperedge): List[Hyperedge] = {
+    assert(lh.label == rh.label && lh.dests.size == rh.dests.size)
+    if(lh.label != Let())
+      List(rh)
+    else {
+      likeness(lh.dests(0), rh.dests(0)) match {
+        case None => List()
+        case Some((_, headren)) =>
+          // this function creates a list of rearranged dest lists together with
+          // corresponding rearranging renamings
+          def nextDests(tail: List[(RenamedNode, Int)], rest: List[(RenamedNode, Int)]): 
+            List[(List[RenamedNode], Renaming)] = tail match {
+            case Nil => List((Nil, Renaming()))
+            case (ld, i) :: tail1 =>
+              // we try to pair the head of the rest part of the left hand side dests
+              // with each of the node from the rest part of the right hand side dests
+              (for((rd, j) <- rest 
+                  if (headren(j) == -1 || headren(j) == i) &&
+                     likeness(ld, rd) != None
+                ) yield {
+                // we've chosen the next node from the rhs dests,
+                // do a recursiv call and combine the renamings
+                val nexts = nextDests(tail1, rest.filterNot(_._2 == j))
+                nexts.map { case (ds, ren) => (rd :: ds, (ren | Renaming(j -> i)).get) }
+              }).flatten
+          }
+          
+          nextDests(lh.dests.tail.zipWithIndex, rh.dests.tail.zipWithIndex).map {
+            case (ds, ren) =>
+              Hyperedge(rh.label, rh.source, (ren comp rh.dests(0)) :: ds)
+          }
+      }
+    }
+  }
 }
 
 case class EqProofTree(
@@ -157,11 +197,55 @@ case class EqProofTree(
   // Why can we glue child nodes too, not only roots?
   // Because they are defined in terms of themselves and the roots.
   def performGluing(g: Hypergraph) {
+    // The fisrt thing to do is to fix renamings
+    propagateRenamings.performGluing1(g)
+  }
+  
+  private def performGluing1(g: Hypergraph) {
     for((_,_,l) <- out; t <- l)
       t.performGluing(g)
     if(nodes._1.deref.node != nodes._2.deref.node)
       g.add(Id(), renaming comp nodes._2, List(nodes._1.deref))
   }
+  
+  // Fix renamings. When we prove equivalence we cannot infer correct renamings,
+  // so we should essentially perform a data-flow analysis. 
+  def propagateRenamings: EqProofTree = {
+    var prev = this
+    var cur = propagateRenamings1()
+    while(cur != prev) {
+      prev = cur
+      cur = cur.propagateRenamings1()
+    }
+    cur
+  }
+  
+  // One iteration of propagating renamings up
+  private def propagateRenamings1(hist: List[EqProofTree] = Nil): EqProofTree = 
+    out match {
+      case None =>
+        hist.find(t => t.nodes == nodes) match {
+          case None =>
+            // this node is refl in agda terms, we don't have to modify it since
+            // equivalence prover use the set of used variables without questioning it
+            this
+          case Some(t) =>
+            // it is a folding node, we should combine both renamings
+            EqProofTree((t.renaming | renaming).get, nodes, None)
+        }
+      case Some((h1, h2, ds)) =>
+        // recursively perform renaming propagation below
+        val newds = ds.map(_.propagateRenamings1(this :: hist))
+        // now lift through hyperedges and combine all the renamings
+        var ren = Renaming()
+        for((((d1, d2), s), t) <- h1.dests zip h2.dests zip h1.shifts zip newds if s != -1) {
+          // if the renamings are uncombinable then something has gone wrong
+          ren = (ren | (d1.renaming comp t.renaming comp d2.renaming.inv).unshift(s)).get
+        }
+        EqProofTree(
+            h1.source.renaming.inv comp ren comp h2.source.renaming, 
+            nodes, Some((h1, h2, newds)))
+    }
   
   def toDot: String = {
     val label =
