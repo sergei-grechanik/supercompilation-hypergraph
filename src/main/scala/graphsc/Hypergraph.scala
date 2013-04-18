@@ -331,8 +331,8 @@ trait TheHypergraph extends Hypergraph {
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
-      l.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
-      l.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
       
       l.node.beingGlued = beingGluedBefore
         
@@ -399,7 +399,8 @@ trait TheHypergraph extends Hypergraph {
   }
   
   // Normalize incident hyperedges which for some reason (gluing, used reduction) became non-normal
-  def normalizeIncident(node: Node) {
+  def normalizeIncident(node_underef: Node) {
+    val node = node_underef.deref.node
     val isvar = node.outs.exists(_.label.isInstanceOf[Var])
     var todo: List[() => Unit] = Nil
     for(h <- node.ins ++ node.outs) {

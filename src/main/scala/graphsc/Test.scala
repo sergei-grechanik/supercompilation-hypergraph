@@ -97,6 +97,7 @@ trait HyperLogger extends Prettifier {
   }
 }
 
+/*
 object Test {
   
   def time[R](block: => R): R = {
@@ -584,3 +585,4 @@ object Test {
            g.runNode(g("add3Left"), List(peano(2),peano(4),peano(3))))
   }
 }
+*/
