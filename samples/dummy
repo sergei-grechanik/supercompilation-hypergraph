@@ -12,3 +12,5 @@ good x y =
     S x -> good x y
   };
 
+test: good (S (S Z)) (S Z);
+test: bad (S (S (S Z))) Z;

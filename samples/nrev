@@ -21,3 +21,6 @@ revTo x y =
     Z -> y;
     S x -> revTo x (S y)
   };
+
+test: rev (S (S (S Z)));
+test: revTo (S (S (S Z))) (S Z);

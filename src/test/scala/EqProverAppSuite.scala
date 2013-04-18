@@ -13,13 +13,13 @@ class EqProverAppSuite extends FunSuite {
     }
   }
   
-  cmd("-tauto --integrity-check -a4 ./samples/add-assoc")
-  cmd("-tauto --integrity-check ./samples/dummy")
-  cmd("-tauto --integrity-check ./samples/even-double")
-  cmd("-tauto --integrity-check ./samples/idle")
-  cmd("-tauto --integrity-check --nogen ./samples/idle")
-  cmd("-tauto --integrity-check ./samples/inf")
-  cmd("-tauto --integrity-check ./samples/map-comp")
-  cmd("-tauto --integrity-check --nogen ./samples/shuffled-let")
+  cmd("-tauto --integrity-check --test -a4 ./samples/add-assoc")
+  cmd("-tauto --integrity-check --test ./samples/dummy")
+  cmd("-tauto --integrity-check --test ./samples/even-double")
+  cmd("-tauto --integrity-check --test ./samples/idle")
+  cmd("-tauto --integrity-check --test --nogen ./samples/idle")
+  cmd("-tauto --integrity-check --test ./samples/inf")
+  cmd("-tauto --integrity-check --test ./samples/map-comp")
+  cmd("-tauto --integrity-check --test --nogen ./samples/shuffled-let")
   
 }

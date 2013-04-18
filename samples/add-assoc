@@ -9,3 +9,5 @@ add x y =
   
 add3left x y z = add (add x y) z;
 add3right x y z = add x (add y z);
+
+test: add (S (S Z)) (S Z);

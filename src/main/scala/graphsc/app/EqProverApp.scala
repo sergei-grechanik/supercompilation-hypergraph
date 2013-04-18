@@ -29,6 +29,7 @@ object EqProverApp {
     val verbose = opt[Boolean](descr = "Be more verbose")
     val file = trailArg[String](required = true)
     
+    val test = opt[Boolean](descr = "Enable testing on the fly")
     val integrityCheck = opt[Boolean](hidden = true)
   }
   
@@ -48,13 +49,14 @@ object EqProverApp {
         with BiTransformManager 
         with DepthTracker
         with Prettifier 
-        //with HyperTester
+        with HyperTester
         //with HyperLogger
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
         with SelfLetAdder
         with AutoTransformer {
           override val integrityCheckEnabled = conf.integrityCheck.isSupplied
+          override val onTheFlyTesting = conf.test.isSupplied
         }
     
     val maxarity = conf.arity.get.get

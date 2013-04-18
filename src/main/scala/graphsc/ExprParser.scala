@@ -1,6 +1,7 @@
 package graphsc
 
 import scala.util.parsing.combinator._
+import graphsc.interpretation._
 
 case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   def apply(s: String): Map[String, RenamedNode] = {
@@ -54,8 +55,16 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     (repsep(decl, ";") <~ opt(";")).map(_.collect {case Some(x) => x})
   
   def decl: Parser[Option[(String, H)]] =
-    eqdecl.map(_ => None) | definition.map(Some(_))
-      
+    eqdecl.map(_ => None) | testdecl.map(_ => None) | definition.map(Some(_))
+  
+  def testdecl: Parser[Unit] = 
+    ("test:" ~> fname) ~ rep(const) ^^
+    { case name~cs =>
+        graph match {
+          case ht: HyperTester => ht.runNode(graph(name), cs)
+          case _ =>
+        }}
+    
   def eqdecl: Parser[Unit] = 
     ("forall" ~> rep(fname) <~ ".") ~ (expr <~ "=") ~! expr ^^
     { case vs~e1~e2 =>
@@ -141,5 +150,9 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
     caseof |
     zeroargCons |
     "(" ~> expr <~ ")"
-    
+  
+  def const: Parser[Value] =
+    (cname ^^ { case c => Ctr(c, Nil) }) |
+    ("(" ~> cname ~ rep(const) <~ ")") ^^
+      { case c~cs => Ctr(c, cs) }
 }

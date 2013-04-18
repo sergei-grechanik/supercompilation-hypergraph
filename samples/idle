@@ -13,3 +13,6 @@ constz x =
     S x -> constz x
   };
 
+
+test: idle (S (S (S Z)));
+test: constz (S (S (S Z)));

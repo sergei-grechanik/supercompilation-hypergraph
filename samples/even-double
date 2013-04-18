@@ -26,3 +26,5 @@ true x =
 
 evendouble x = even (double x Z);
 
+
+test: evendouble (S Z);

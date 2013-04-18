@@ -54,9 +54,12 @@ trait HyperTester extends TheHypergraph {
 
     // Try id hyperedges first
     val outs = 
-      n.outs.filter(_.label.isInstanceOf[Id]).toList ++
-      n.outs.filter(!_.label.isInstanceOf[Id]).toList
-      
+      n.outs.toList.sortBy(h => h.label match {
+        case _: Id => 0
+        case _ if isDefining(h) => 1
+        case _ => 2
+      })
+    
     val values = 
       for(o <- outs) yield {
         val r = runHyperedgeUncached(newctx, o, args)
@@ -82,9 +85,14 @@ trait HyperTester extends TheHypergraph {
         if(test != ErrorBottom)
           assert(test == lub)
         else {
-          println("Warning: there was an error computing\n\t" + o + " " + args)
-          println("Prettified source:")
-          println(n.prettyDebug)
+          // If we have a hyperedge like this:
+          //   f x y = f x (S y)
+          // we will get an infinite branch and hence this error message.
+          // Scince there is an example showing this problem (samples/dummy),
+          // I've disabled this error message.
+          //println("Warning: there was an error computing\n\t" + o + " " + args)
+          //println("Prettified source:")
+          //println(n.prettyDebug)
         }
       }
     }
@@ -104,9 +112,23 @@ trait HyperTester extends TheHypergraph {
   
   override def onNewHyperedge(h: Hyperedge) {
     if(onTheFlyTesting)
-      for((a, r) <- runCache(h.source.node)) {
+      for((as, r) <- runCache(h.source.node)) {
         val ctx = RunningContext()
-        val res = runHyperedgeUncached(ctx, h, a)
+        val res = runHyperedgeUncached(ctx, h, as)
+        
+        if(res != r) {
+          System.err.println("Hyperedge test failed")
+          System.err.println("args = " + as)
+          System.err.println("Got " + res + "  should be " + r)
+          this match {
+            case pret: Prettifier =>
+              System.err.println("\nNode: \n" + pret.pretty(h.source.node) + "\n")
+              System.err.println("\nHyperedge: \n" + h +"\n\n" + pret.prettyHyperedge(h) + "\n")
+            case _ =>
+          }
+          runHyperedgeUncached(RunningContext(), h, as)
+        }
+        
         assert(res == r)
       }
     super.onNewHyperedge(h)
@@ -119,8 +141,24 @@ trait HyperTester extends TheHypergraph {
       val data = 
         runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1))
         runCache(r).toList.map(_._1)
-      for(a <- data) {
-        assert(runNode(ctx, l, a) == runNode(ctx, RenamedNode.fromNode(r), a))
+      for(as <- data) {
+        val lres = runNode(ctx, l, as)
+        val rres = runNode(ctx, RenamedNode.fromNode(r), as)
+        if(lres != rres) {
+          System.err.println("Node merging test failed")
+          System.err.println("args = " + as)
+          System.err.println("Left result = " + lres)
+          System.err.println("Right result = " + rres)
+          this match {
+            case pret: Prettifier =>
+              System.err.println("\nLeft: \n" + pret.pretty(l) + "\n")
+              System.err.println("\nRight: \n" + pret.pretty(r) + "\n")
+            case _ =>
+          }
+          runNode(ctx, l, as)
+          runNode(ctx, RenamedNode.fromNode(r), as)
+        }
+        assert(lres == rres)
       }
     }
     super.beforeGlue(l, r)
@@ -138,8 +176,21 @@ trait HyperTester extends TheHypergraph {
           
       cache.clear()
       for((as,r) <- data) {
-        val newr = runNode(node, as)
-        assert(newr == r)
+        val res = runNode(node, as)
+        
+        if(res != r) {
+          System.err.println("Used reduction test failed")
+          System.err.println("args = " + as)
+          System.err.println("Got " + res + "  should be " + r)
+          this match {
+            case pret: Prettifier =>
+              System.err.println("\nNode: \n" + pret.pretty(n) + "\n")
+            case _ =>
+          }
+          runNode(node, as)
+        }
+        
+        assert(res == r)
       }
     }
     super.onUsedReduced(n)

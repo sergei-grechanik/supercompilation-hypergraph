@@ -319,9 +319,14 @@ trait TheHypergraph extends Hypergraph {
       r_node.gluedTo = l_renamed
       
       // Readd hyperedges. We just deref them, they will be normalized in normalizeIncident
-      for(h <- r_node.mouts)
+      // Turned out, ins and outs of the node may change during the readdition, so we should
+      // remember these sets. It's not a good thing, the whole gluing process becomes very
+      // unclear, I should think about redesigning it.
+      val routs = r_node.mouts.toList
+      val rins = r_node.mins.toList
+      for(h <- routs)
         addHyperedgeSimple(canonize(h.deref)._2)
-      for(h <- r_node.mins)
+      for(h <- rins)
         addHyperedgeSimple(canonize(h.deref)._2)
       
       // Remove id hyperedges
@@ -400,9 +405,14 @@ trait TheHypergraph extends Hypergraph {
     for(h <- node.ins ++ node.outs) {
         val nor = normalize(h)
         if(nor != h) {
-          todo = {() => addHyperedge(nor); ()} :: todo
+          // I don't remember why we used to perform hyperedge readdition after we've
+          // removed old hyperedges, but actually it may break on the fly testing (because
+          // "bad" hyperedges may be the only outgoing hyperedges)
+          // Readding immediately after removing doesn't seem to break anything. 
+          //todo = {() => addHyperedge(nor); ()} :: todo
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
+          addHyperedge(nor)
         } else if(isvar && h.label.isInstanceOf[CaseOf]) {
           // here h is not non-normal but we can still perform important gluings
           todo = {() => glueChildren(h.deref); ()} :: todo
