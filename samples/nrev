@@ -1,6 +1,6 @@
 -- nrev=rev
 -- (on peano numbers)
--- Doesn't work yet
+-- Use -a4 and wait for the generation 5
 
 add x y =
   case x of {
@@ -11,7 +11,7 @@ add x y =
 nrev x =
   case x of {
     Z -> Z;
-    S x -> add x (S Z)
+    S x -> add (nrev x) (S Z)
   };
   
 rev x = revTo x Z;

@@ -1,0 +1,26 @@
+-- nrev=rev
+-- On lists
+-- Doesn't work yet
+
+append x y =
+  case x of {
+    N -> y;
+    C a x -> C a (append x y)
+  };
+
+nrev x =
+  case x of {
+    N -> N;
+    C a x -> append (nrev x) (C a N)
+  };
+  
+rev x = revTo x Z;
+
+revTo x y =
+  case x of {
+    N -> y;
+    C a x -> revTo x (C a y)
+  };
+
+test: rev (C A1 (C A2 (C A3 N)));
+test: revTo (C A1 (C A2 (C A3 N))) (C A4 N);
