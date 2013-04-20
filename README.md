@@ -1,7 +1,8 @@
 # Hypergraph-based Supercompilation
 
 Hypergraph-based supercompilation is a kind of multi-result 
-supercompilation based on hypergraph transformation.
+supercompilation based on hypergraph transformation. It is described
+in the preprint ["Supercompilation by hypergraph transformation"](http://library.keldysh.ru/preprint.asp?id=2013-26&lg=e).
 This project is a set of components for building such supercompilers,
 currently limited to a lazy first-order functional language.
 It also contains an experimental supercompiler that can prove equivalence of
