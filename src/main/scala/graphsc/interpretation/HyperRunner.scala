@@ -14,7 +14,7 @@ object HyperRunner {
   
   def run(n: Node, as: List[Value]): Value = {
     val ress = n.outs.map(h => runHyperedge(h, run(h.source.renaming.inv, as), run _))
-    assert(ress.size == 1)
+    assert(ress.forall(_ == ress.head))
     ress.head
   }
 }

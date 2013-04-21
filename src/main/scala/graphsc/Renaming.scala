@@ -2,8 +2,9 @@ package graphsc
 
 // Should be injective, i.e. no gluing of variables
 case class Renaming(vector: List[Int]) {
-  require(vector.filter(_ >= 0).distinct.size == vector.filter(_ >= 0).size)
-  require(vector.forall(_ >= -1))
+  // This check is very bad for performance
+  //require(vector.filter(_ >= 0).distinct.size == vector.filter(_ >= 0).size)
+  //require(vector.forall(_ >= -1))
   
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
@@ -127,18 +128,17 @@ case class RenamedNode(renaming: Renaming, node: Node) {
     node.used.size == used.size
         
   def getVar: Option[Int] =
-    if(node.outsMut.exists(_.label == Var()))
+    if(node.isVar)
       Some(renaming(0))
     else
       None
       
   def getVarUnused: Option[Int] =
-    if(node.outsMut.exists(_.label == Var()))
-      Some(renaming(0))
-    else if(node.outsMut.exists(_.label == Unused()))
-      Some(-1)
-    else
-      None
+    node.definingHyperedge match {
+      case Some(h) if h.label == Var() => Some(renaming(0))
+      case Some(h) if h.label == Unused() => Some(-1)
+      case _ => None
+    }
    
   // Resturns true if the nodes are equal up to renaming
   def ~~(n: RenamedNode): Boolean = node ~~ n.node

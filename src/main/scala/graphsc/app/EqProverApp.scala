@@ -29,8 +29,11 @@ object EqProverApp {
     val verbose = opt[Boolean](descr = "Be more verbose")
     val file = trailArg[String](required = true)
     
-    val test = opt[Boolean](descr = "Enable testing on the fly")
-    val integrityCheck = opt[Boolean](hidden = true)
+    val nopretty = opt[Boolean](noshort = true, 
+        descr="Disable transforming nodes to readable programs on the fly. " +
+        		"Makes everything a bit faster.")
+    val test = opt[Boolean](noshort = true, descr = "Enable testing on the fly")
+    val integrityCheck = opt[Boolean](noshort = true, hidden = true)
   }
   
   def main(args: Array[String]) = mainBool(args) match {
@@ -57,6 +60,7 @@ object EqProverApp {
         with AutoTransformer {
           override val integrityCheckEnabled = conf.integrityCheck.isSupplied
           override val onTheFlyTesting = conf.test.isSupplied
+          override val prettifyingEnabled = !conf.nopretty.isSupplied
         }
     
     val maxarity = conf.arity.get.get

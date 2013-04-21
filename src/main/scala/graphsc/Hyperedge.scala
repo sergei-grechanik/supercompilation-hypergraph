@@ -24,6 +24,9 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
     case _ =>
   }
   
+  // We cache the hash code as it is used very often.
+  override val hashCode: Int = scala.runtime.ScalaRunTime._hashCode(this);
+  
   def arity: Int = (used + (-1)).max + 1
   
   def used: Set[Int] = label match {

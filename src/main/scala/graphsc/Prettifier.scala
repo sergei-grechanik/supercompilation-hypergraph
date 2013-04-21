@@ -23,6 +23,8 @@ trait NamedNodes extends Hypergraph {
 
 // Prettifies nodes on the fly
 trait Prettifier extends TheHypergraph with NamedNodes {
+  val prettifyingEnabled = true
+  
   val prettyMap = collection.mutable.Map[Node, String]()
   val nameGen = new NameGenerator[String]
   
@@ -47,14 +49,15 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   }
   
   def prettyUpdateIns(n: Node) {
-    for(h <- n.ins) {
-      try {
-        val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
-        prettyUpdate(h.source.node, s)
-      } catch {
-        case _: NoSuchElementException =>
+    if(prettifyingEnabled)
+      for(h <- n.ins) {
+        try {
+          val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
+          prettyUpdate(h.source.node, s)
+        } catch {
+          case _: NoSuchElementException =>
+        }
       }
-    }
   }
   
   override def setName(node: Node, name: String) {
@@ -71,20 +74,24 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   }
   
   override def onNewHyperedge(h: Hyperedge) {
-    try {
-      val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
-      prettyUpdate(h.source.node, s)
-    } catch {
-      case _: NoSuchElementException =>
+    if(prettifyingEnabled) {
+      try {
+        val s = prettyRename(h.source.renaming.inv, prettyHyperedge(h))
+        prettyUpdate(h.source.node, s)
+      } catch {
+        case _: NoSuchElementException =>
+      }
     }
     super.onNewHyperedge(h)
   }
   
   override def beforeGlue(l: RenamedNode, r: Node) {
-    val lp = prettyMap.get(l.node)
-    val rp = prettyMap.get(r).map(prettyRename(l.renaming.inv, _))
-    if(rp != None) {
-      prettyUpdate(l.node, rp.get)
+    if(prettifyingEnabled) {
+      val lp = prettyMap.get(l.node)
+      val rp = prettyMap.get(r).map(prettyRename(l.renaming.inv, _))
+      if(rp != None) {
+        prettyUpdate(l.node, rp.get)
+      }
     }
     super.beforeGlue(l, r)
   }

@@ -57,7 +57,7 @@ trait Hypergraph {
     null
   
   def allHyperedges: Set[Hyperedge] = {
-    val sets = allNodes.toList.map(n => n.ins ++ n.outs)
+    val sets = allNodes.toList.map(n => n.ins.toSet ++ n.outs.toSet)
     (Set[Hyperedge]() /: sets)(_ | _)
   }
   
@@ -159,6 +159,8 @@ trait Hypergraph {
 
 trait TheHypergraph extends Hypergraph {
   val nodes = collection.mutable.Set[Node]()
+  // This map maps zero-dested hyperedge labels to their sources
+  val zeroHyper2Node = collection.mutable.Map[Label, RenamedNode]()
   
   override def allNodes: Set[Node] = nodes.toSet
   
@@ -206,7 +208,8 @@ trait TheHypergraph extends Hypergraph {
     require(h.source.node.isInstanceOf[FreeNode] || nodes(h.source.node))
     
     if(h.dests.nonEmpty)
-      h.dests(0).node.insMut.find(x => x.label == h.label && x.dests == h.dests) match {
+      h.dests.minBy(_.node.insMut.size).node.insMut
+      .find(x => x.label == h.label && x.dests == h.dests) match {
         case Some(x) if h.source.node == x.source.node => h.source
         case Some(x) => glueNodes(x.source, h.source)
         case None => 
@@ -215,12 +218,12 @@ trait TheHypergraph extends Hypergraph {
           onNewHyperedge(newh)
       }
     else
-      nodes.find(_.outsMut.exists(_.label == h.label)) match {
+      zeroHyper2Node.get(h.label) match {
         case Some(n) =>
-          val src = n.outsMut.find(_.label == h.label).get.source
-          glueNodes(src, h.source)
+          glueNodes(n, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
+          zeroHyper2Node += newh.label -> newh.source 
           checkIntegrity()
           onNewHyperedge(newh)
       }
@@ -271,15 +274,25 @@ trait TheHypergraph extends Hypergraph {
   def glueNodes(l1_underef: RenamedNode, r1_underef: RenamedNode): RenamedNode = {
     val (l1, r1) = (l1_underef.deref, r1_underef.deref)
     
-    for((l1,r1) <- List((l1,r1), (r1,l1)))
+    /*for((l1,r1) <- List((l1,r1), (r1,l1)))
       if(l1.node.isInstanceOf[FreeNode]) {
         assert(l1.node.gluedTo == null)
-        assert(nodes.contains(r1.node))
+        //assert(nodes.contains(r1.node))
         l1.node.gluedTo = l1.renaming.inv comp r1
         return r1
-      }
+      }*/
+    if(l1.node.isInstanceOf[FreeNode]) {
+      assert(l1.node.gluedTo == null)
+      l1.node.gluedTo = l1.renaming.inv comp r1
+      return r1
+    }
+    if(r1.node.isInstanceOf[FreeNode]) {
+      assert(r1.node.gluedTo == null)
+      r1.node.gluedTo = r1.renaming.inv comp l1
+      return l1
+    }
     
-    assert(nodes.contains(l1.node) && nodes.contains(r1.node))
+    //assert(nodes.contains(l1.node) && nodes.contains(r1.node))
     
     // TODO: Just for testing, should sort according to some simplicity measure
     //val List(l2,r2) = List(l1, r1).sortBy(_ => Random.nextBoolean())
@@ -513,7 +526,7 @@ trait TheHypergraph extends Hypergraph {
               (h.source.node.beingGlued && h.dests(0).node.beingGlued))
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
-          assert(h.dests.forall(_.node.ins(h)))
+          assert(h.dests.forall(_.node.ins.contains(h)))
           assert(h.source.node == n)
           // h defines n. h cannot define n if its source has less variables than n
           // that's why we have arity reduction

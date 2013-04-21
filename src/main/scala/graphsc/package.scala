@@ -13,22 +13,14 @@ package object graphsc {
   
   def definingHyperedgesNonStrict(n: Node): List[Hyperedge] = {
     val hypers = 
-      n.outs.filter(h => h.label match {
+      n.outsMut.toList.filter(h => h.label match {
         case CaseOf(_) if h.dests(0).getVar.isDefined => true 
         case _ => isDefining(h)
       })
       
     // only caseofs can be multiple (due to unpropagated information)
     assert(hypers.size <= 1 || hypers.head.label.isInstanceOf[CaseOf])
-    hypers.toList
-  }
-  
-  // Filters out hyperedges with unpropagated information
-  def definingHyperedge(n: Node): Option[Hyperedge] = {
-    val lst =
-      definingHyperedgesNonStrict(n).filter(isDefining(_))
-    assert(lst.size <= 1)
-    lst.headOption
+    hypers
   }
   
   def nodesOf(h: Hyperedge): List[Node] =

@@ -7,6 +7,9 @@ class Node(initial_used: Set[Int]) {
   var gluedTo: RenamedNode = null
   // Indicated that this node is in the process of gluing
   var beingGlued: Boolean = false
+  // Defining hyperedge. Once it's defined, it cannot change anymore. 
+  private var definingHyperedgeCached: Hyperedge = null
+  private var isVarCached: Option[Boolean] = None
   
   var prettyDebug = ""
   
@@ -22,10 +25,10 @@ class Node(initial_used: Set[Int]) {
   def isReal: Boolean =
     gluedTo == null
     
-  def outs: Set[Hyperedge] = 
-    if(gluedTo == null) mouts.toSet else error()
-  def ins: Set[Hyperedge] = 
-    if(gluedTo == null) mins.toSet else error()
+  def outs: List[Hyperedge] = 
+    if(gluedTo == null) mouts.toList else error()
+  def ins: List[Hyperedge] = 
+    if(gluedTo == null) mins.toList else error()
   
   def outsMut: collection.mutable.Set[Hyperedge] = 
     if(gluedTo == null) mouts else error()
@@ -52,6 +55,36 @@ class Node(initial_used: Set[Int]) {
     else
       super.toString + "/" + arity + "(" + deref + ")"
     
+  def isVar: Boolean =
+    isVarCached match {
+      case Some(b) => b
+      case None =>
+        for(h <- outsMut) h.label match {
+          case Var() =>
+            isVarCached = Some(true)
+            return true
+          case Construct(_) =>
+            isVarCached = Some(false)
+            return false
+          case _ =>
+        }
+        return false
+    }
+      
+  def definingHyperedge: Option[Hyperedge] =
+    if(definingHyperedgeCached != null)
+      Some(definingHyperedgeCached)
+    else definingHyperedgesNonStrict(this).filter(isDefining(_)) match {
+      case Nil => None
+      case h :: Nil =>
+        definingHyperedgeCached = h
+        isVarCached = Some(h.label == Var())
+        Some(h)
+      case l =>
+        l.foreach(System.err.println(_))
+        throw new Exception("Multiple strictly defining hyperedges")
+    }
+      
   override def toString: String =
     uniqueName
 }

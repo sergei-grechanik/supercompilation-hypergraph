@@ -52,7 +52,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
       val h1 = normalize(h1o)
       val h2 = normalize(h2o)
       if(!processed((h1,h2)) && !processed((h1o,h2o)) 
-          && h1.source.node.outs(h1) && h2.source.node.outs(h2)) {
+          && h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2)) {
         processed.add((h1, h2))
         proc(h1, h2)
         count += 1
@@ -105,7 +105,7 @@ trait TransformManager extends Hypergraph with DepthTracker {
     val processed = collection.mutable.Set[Hyperedge]()
     for(ho <- set) {
       val h = normalize(ho)
-      if(!processed(h) && !processed(ho) && h.source.node.outs(h)) {
+      if(!processed(h) && !processed(ho) && h.source.node.outsMut(h)) {
         processed += h
         procHyperedge(h)
       }

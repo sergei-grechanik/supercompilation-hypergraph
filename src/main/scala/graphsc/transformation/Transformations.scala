@@ -252,7 +252,7 @@ trait Transformations extends Hypergraph {
   // immediate appearance of added hyperedges.
   final def drive(n: Node, hist: List[Node] = Nil): Option[Hyperedge] = {
     val node = n.deref.node
-    definingHyperedge(node) match {
+    node.definingHyperedge match {
       case Some(h) => Some(h)
       case None =>
         if(hist.exists(_.deref.node == node))
