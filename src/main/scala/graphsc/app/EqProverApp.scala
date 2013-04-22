@@ -12,15 +12,20 @@ object EqProverApp {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     version("Equivalence prover based on hypergraph supercompilation, version 0.1")
     banner("Usage: EqProver [OPTIONS] file")
+    
     val task = opt[String](descr = 
       "An equivalence we want to prove (up to renaming!) of the form foo=bar " +
     		"or auto to read the task from the first line of the file")
-    val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
+    
+		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
     val codepth = opt[Int](default = Some(3), descr = "Codepth limit")
     val nogen = opt[Boolean](noshort = true, descr = "Disable generalization")
     val noiso = opt[Boolean](noshort = true, descr = "Disable merging by isomorphism")
     val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
+    val driveRecommended = opt[Int](noshort = true, default = Some(0), 
+        descr = "Drive 2*<arg> recommended (by eqprover) nodes")
+    
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
     val dumpCode = opt[Boolean](noshort = true, 
       descr = "Dump the graph to stdout in a form of a program")
@@ -195,30 +200,22 @@ object EqProverApp {
             val st = eprover.stats
             eprover = new EquivalenceProver(graph)
             eprover.stats = st
+            checktask()
           }
         }
         
-        /*
-        val stats = eprover.stats
-        
-        for(((l1,r1),c) <- stats.toList.sortBy(_._2)) {
-          val l = l1.deref.node
-          val r = r1.deref.node
-          val lik = LikenessCalculator[Int].likeness(l.deref, r.deref)
-          if(lik != None && lik.get._1 == 0 ) {
-            println(c + " $$$$$$$ This would help $$$$$$$$$ " + lik)
-            println(l.prettyDebug)
-            println("---")
-            println(r.prettyDebug)
-            println("^^^^^^^^^^")
-            g.zeroBoth(l.deref)
-            g.zeroBoth(r.deref)
-            if(g.drive(l) == None)
-              println("seems undrivable\n" + l.prettyDebug)
-            if(g.drive(r) == None)
-              println("seems undrivable\n" + r.prettyDebug)
+        if(!stop && conf.driveRecommended.get.get > 0) {
+          if(conf.verbose.isSupplied)
+              System.err.println("Driving recommended nodes")
+          val stats = eprover.stats 
+          for(n <- stats.toList.filter 
+                { case ((l,r),_) => 
+                    LikenessCalculator[Int].likeness(l.deref, r.deref).map(_._1) == Some(0) }
+                .sortBy(-_._2).take(conf.driveRecommended.get.get)
+                .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
+            graph.drive(n)
           }
-        }*/
+        }
       }
       
       stats()
