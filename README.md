@@ -13,18 +13,25 @@ functions.
 Hypergraph-based supercompilation is good at proving equivalences.
 To demonstrate this the project contains an equivalence prover.
 It is written in Scala, you can build it using Simple Build Tool 
-(see [here](http://typesafe.com/resources/typesafe-stack/downloading-installing.html) 
+(see [here](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) 
 how to install it).
-First build the project and create a jar file using sbt-onejar plugin:
+You can either use the one-jar plugin or the start-script plugin to create
+an executable (you can also just build the project and run the class `graphsc.app.EqProverApp` by hand).
+Start-script seems to be easier, just type:
+
+    sbt start-script
+
+This command will build the project and create a script `./target/start` which can be used to launch
+the equivalence prover. We will call it just `eqprover`:
+
+    alias eqprover="./target/start" 
+ 
+Alternatively you can create a jar file using sbt-onejar plugin:
 
     sbt one-jar
 
 This command will create a jar with a name like this: `./target/scala-2.9.2/graphsc_2.9.2-0.1-SNAPSHOT-one-jar.jar`.
-You can use it to launch the equivalence prover:
-
-    java -jar ./target/scala-2.9.2/graphsc_2.9.2-0.1-SNAPSHOT-one-jar.jar
-
-Here will name it just `eqprover`.
+Then you will need an alias like this:
 
     alias eqprover="java -jar ./target/scala-2.9.2/graphsc_2.9.2-0.1-SNAPSHOT-one-jar.jar"
 

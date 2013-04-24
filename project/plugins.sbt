@@ -1,4 +1,6 @@
-//addSbtPlugin("com.typesafe.sbt" % "sbt-start-script" % "0.7.0")
+resolvers += Classpaths.typesafeResolver
+
+addSbtPlugin("com.typesafe.sbt" % "sbt-start-script" % "0.7.0")
 
 resolvers += Resolver.url(
   "sbt-plugin-releases", 
