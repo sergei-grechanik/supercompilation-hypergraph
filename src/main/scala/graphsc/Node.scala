@@ -77,9 +77,6 @@ class Node(initial_used: Set[Int]) {
     else definingHyperedgesNonStrict(this).filter(isDefining(_)) match {
       case Nil => None
       case h :: tl =>
-        // Multiple defining hyperedge are possible if the haven't been glued yet.
-        // But all of them must have equal labels at least.
-        assert(tl.forall(_.label == h.label))
         definingHyperedgeCached = h
         isVarCached = Some(h.label == Var())
         Some(h)

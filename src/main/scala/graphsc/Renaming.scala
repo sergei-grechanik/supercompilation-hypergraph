@@ -134,10 +134,13 @@ case class RenamedNode(renaming: Renaming, node: Node) {
       None
       
   def getVarUnused: Option[Int] =
-    node.definingHyperedge match {
-      case Some(h) if h.label == Var() => Some(renaming(0))
-      case Some(h) if h.label == Unused() => Some(-1)
-      case _ => None
+    getVar match {
+      case Some(i) => Some(i)
+      case None =>
+        node.definingHyperedge match {
+          case Some(h) if h.label == Unused() => Some(-1)
+          case _ => None
+        }
     }
    
   // Resturns true if the nodes are equal up to renaming
