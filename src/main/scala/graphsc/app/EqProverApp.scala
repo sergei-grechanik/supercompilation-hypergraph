@@ -66,6 +66,14 @@ object EqProverApp {
           override val integrityCheckEnabled = conf.integrityCheck.isSupplied
           override val onTheFlyTesting = conf.test.isSupplied
           override val prettifyingEnabled = !conf.nopretty.isSupplied
+          
+          override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
+              List[(Hyperedge, Hyperedge)] =
+            pairs.filter { 
+              case (h1,h2) =>
+                nodesOf(h1,h2).map(depths(_)).max <= conf.depth.get.get &&
+                nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth.get.get
+            }
         }
     
     val maxarity = conf.arity.get.get
@@ -158,16 +166,13 @@ object EqProverApp {
       val trans =
         if(conf.nogen.isSupplied) tr.transDrive
         else tr.transDrive & tr.letUp(maxarity)
-      graph.transform(
-          trans.cond(
-              graph.limitDepth(maxdepth) & graph.limitCodepth(maxcodepth)).onSuccess(
-                  () => { tr.commit(); } ))
+      graph.transform(trans.onSuccess(() => { tr.commit(); }))
       //buf.commit()
       
       generation += 1
       
       checktask()
-      
+            
       if(!stop && !conf.noiso.isSupplied) {
         if(conf.verbose.isSupplied)
           System.err.println("Computing likeness...")
@@ -183,7 +188,7 @@ object EqProverApp {
         if(conf.verbose.isSupplied)
           System.err.println("Performing merging by isomorphism...")
         for(((i,ren),l,r) <- like.toList.sortBy(-_._1._1)
-              if i > 0 && l.deref.node != r.deref.node) {
+              if i > 0 && l.deref.node != r.deref.node && !stop) {
           val lpretty = l.prettyDebug
           val rpretty = r.prettyDebug
           val eq = eprover.prove(l.deref.node, r.deref.node)
