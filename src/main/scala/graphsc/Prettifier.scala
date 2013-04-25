@@ -209,7 +209,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     val sig = 
       prettyRename(n.renaming,
           "f_" + nameGen(pretty(n.node)) +
-          (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+          (0 until n.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
     val prog = pretty(n)
     if(sig.size < prog.size)
       sig 

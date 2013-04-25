@@ -3,10 +3,14 @@ package graphsc
 import scala.util.parsing.combinator._
 import graphsc.interpretation._
 
-case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
+case class ExprParser(graph: NamedNodes) extends RegexParsers {
   def apply(s: String): Map[String, RenamedNode] = {
     val parsed = parseAll(prog, s)
-    assert(parsed.successful) // We've modified the graph even if the parsing wasn't successful
+    if(!parsed.successful) {
+      // We've modified the graph even if the parsing wasn't successful
+      System.err.println("Syntax error at " + parsed.next.pos + ": " + parsed.next.first)
+      throw new Exception("Unsuccessful parse")
+    }
     parsed.get.toMap.mapValues(_._1)
   }
   
@@ -84,7 +88,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
         (name, graph.newNode(name, vs.length.toInt), 
             vs.zipWithIndex.filter(_._1 != "_").toMap) }
   
-  def fname = "[a-z][a-zA-Z0-9.@_]*".r
+  def fname = not("of\\b".r) ~> "[a-z][a-zA-Z0-9.@_]*".r
   def cname = "[A-Z][a-zA-Z0-9.@_]*".r
   
   private def theVar(v: Int): H = { 
@@ -101,7 +105,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   
   // TODO: now we cannot parse "case fun x of"
   def caseof: Parser[Map[String,Int] => H] =
-    ("case" ~> argexpr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ opt(";") <~ "}") ^^
+    ("case" ~> expr <~ "of") ~! ("{" ~> repsep(onecase, ";") <~ opt(";") <~ "}") ^^
     { case e~lst => table =>
         val cases = lst.map(_(table)).sortBy(_._1)
         graph.addH(CaseOf(cases.map(_._1)), e(table) :: cases.map(_._2._1)) }
@@ -126,6 +130,12 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
           // We assume undefined variables to be zero-arg function
           (graph.newNode(f, 0).deref, null)
     }
+  
+  def unused: Parser[Map[String,Int] => H] =
+    ("_|_" | "_" ) ^^
+    { case _ => table =>
+        graph.addH(Unused(), Nil)
+    }
     
   def cons: Parser[Map[String,Int] => H] =
     cname ~ rep1(argexpr) ^^
@@ -139,6 +149,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
             graph.add(Construct(c), List()))) }
   
   def expr: Parser[Map[String,Int] => H] =
+    unused |
     caseof |
     "(" ~> expr <~ ")" |
     call |
@@ -147,6 +158,7 @@ case class ExprParser(graph: NamedNodes) extends JavaTokenParsers {
   
   def argexpr: Parser[Map[String,Int] => H] =
     variable |
+    unused |
     caseof |
     zeroargCons |
     "(" ~> expr <~ ")"
