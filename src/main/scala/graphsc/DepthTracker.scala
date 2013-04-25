@@ -66,7 +66,9 @@ trait DepthTracker extends Hypergraph {
   
   override def beforeGlue(l: RenamedNode, r: Node) {
     updateDepth(l.node, depths(r))
+    updateDepth(r, depth(l))
     updateCodepth(l.node, codepths(r))
+    updateCodepth(r, codepth(l))
     super.beforeGlue(l, r)
   }
   
