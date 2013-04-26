@@ -24,7 +24,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
       updatedPairs.add((h1,h2))
     for(h1 <- r.node.insMut; h2 <- n.outsMut)
       updatedPairs.add((h1,h2))
-    super.afterGlue(n)
+    super.beforeGlue(r, n)
   }
   
   override def onUsedReduced(n: Node) {
