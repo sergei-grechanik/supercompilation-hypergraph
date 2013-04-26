@@ -119,7 +119,7 @@ object EqProverApp {
     val buf = graph//HyperBuffer(graph)
     // This buffer stores hyperedges for each transformation and makes sure
     // that no hyperedge exceeds the maximal arity
-    val tr = new PostFilter(buf, h => h.arity <= maxarity) with Transformations
+    val tr = new PostFilter(buf, h => h.used.size <= maxarity) with Transformations
       
     
     var generation = 0
