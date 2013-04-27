@@ -11,11 +11,22 @@ case class PostFilter(graph: Hypergraph, filter: Hyperedge => Boolean) extends H
     buffer += h
   }
   
-  def commit() {
-    if(buffer.forall(filter))
-      buffer.foreach(graph.addHyperedge(_))
-    
-    buffer.clear()
+  override def log(s: String) { graph.log(s) }
+  override def nodeToString(n: RenamedNode): String = graph.nodeToString(n)
+  override def hyperedgeToString(h: Hyperedge): String = graph.hyperedgeToString(h)
+  override def logShift() { graph.logShift() }
+  override def logUnshift() { graph.logUnshift() }
+  override def logTrans(name: String, hs: Seq[Hyperedge]) { graph.logTrans(name, hs) }
+  
+  override def trans(name: String, hs: Hyperedge*)(body: =>Unit) {
+    super.trans(name, hs: _*) {
+      body
+      if(buffer.forall(filter))
+        buffer.foreach(graph.addHyperedge(_))
+      else
+        log("-- Denied by postfilter")
+      buffer.clear()
+    }
   }
 }
 

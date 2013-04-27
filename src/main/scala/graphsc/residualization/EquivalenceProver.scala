@@ -265,5 +265,19 @@ case class EqProofTree(
         subs.map(_.toDot).mkString("\n")
     })
   }
+  
+  def toLog(g: Hypergraph) {
+    g.log("-- " + g.nodeToString(nodes._1.deref) + " = " + 
+            g.nodeToString(renaming comp nodes._2.deref))
+    out match {
+      case None =>
+      case Some((h1, h2, lst)) =>
+        g.log("-- " + g.hyperedgeToString(h1))
+        g.log("-- " + g.hyperedgeToString(h2))
+        g.logShift()
+        lst.foreach(_.toLog(g))
+        g.logUnshift()
+    }
+  }
     
 }

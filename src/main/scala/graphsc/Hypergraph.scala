@@ -45,6 +45,27 @@ trait Hypergraph {
   def beforeGlue(l: RenamedNode, r: Node) {}
   def afterGlue(l: Node) {}
   
+  def log(s: String) {}
+  def nodeToString(n: RenamedNode): String = n.toString()
+  def hyperedgeToString(h: Hyperedge): String = h.toString()
+  
+  def logShift() {}
+  def logUnshift() {}
+  
+  def logTrans(name: String, hs: Seq[Hyperedge]) {
+    log("-- transformation " + name)
+    for(h <- hs)
+      log("--   " + hyperedgeToString(h))
+    log("")
+  }
+  
+  def trans(name: String, hs: Hyperedge*)(body: =>Unit) {
+    logTrans(name, hs)
+    logShift()
+    body
+    logUnshift()
+  }
+  
   def glue(l: List[RenamedNode]): RenamedNode = l match {
     case List(r) => r
     case n1 :: n2 :: t => glue(add(Id(), n1, List(n2)) :: t) 
@@ -424,6 +445,7 @@ trait TheHypergraph extends Hypergraph {
           // "bad" hyperedges may be the only outgoing hyperedges)
           // Readding immediately after removing doesn't seem to break anything. 
           //todo = {() => addHyperedge(nor); ()} :: todo
+          log("-- remove " + hyperedgeToString(h))
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
           addHyperedge(nor)

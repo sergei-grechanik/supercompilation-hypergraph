@@ -32,6 +32,7 @@ object EqProverApp {
     val dumpGenCode = opt[String](noshort = true, 
       descr = "Dump code for each generation to files <arg>-i")
     val verbose = opt[Boolean](descr = "Be more verbose")
+    val log = opt[Boolean](descr = "Log transformations to stdout")
     val file = trailArg[String](required = true)
     
     val nopretty = opt[Boolean](noshort = true, 
@@ -58,11 +59,11 @@ object EqProverApp {
         with DepthTracker
         with Prettifier 
         with HyperTester
-        //with HyperLogger
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
         with SelfLetAdder
-        with AutoTransformer {
+        with AutoTransformer
+        with HyperLogger {
           override val integrityCheckEnabled = conf.integrityCheck.isSupplied
           override val onTheFlyTesting = conf.test.isSupplied
           override val prettifyingEnabled = !conf.nopretty.isSupplied
@@ -74,6 +75,8 @@ object EqProverApp {
                 nodesOf(h1,h2).map(depths(_)).max <= conf.depth.get.get &&
                 nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth.get.get
             }
+          
+          override def enableLogging = conf.log.isSupplied
         }
     
     val maxarity = conf.arity.get.get
@@ -166,7 +169,7 @@ object EqProverApp {
       val trans =
         if(conf.nogen.isSupplied) tr.transDrive
         else tr.transDrive & tr.letUp(maxarity)
-      graph.transform(trans.onSuccess(() => { tr.commit(); }))
+      graph.transform(trans)
       //buf.commit()
       
       generation += 1
@@ -201,6 +204,9 @@ object EqProverApp {
               System.err.println("=======================\n")
               //System.err.println(eq)
             }
+            graph.log("-- Proved by isomorphism")
+            eq.get.toLog(graph)
+            graph.log("")
             eq.get.performGluing(graph)
             val st = eprover.stats
             eprover = new EquivalenceProver(graph)

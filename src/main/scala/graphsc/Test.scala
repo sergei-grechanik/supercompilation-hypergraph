@@ -58,45 +58,6 @@ object Trace {
 
 class TooManyNodesException(s: String) extends Exception(s)
 
-trait HyperLogger extends Prettifier {
-  abstract override def addHyperedge(h: Hyperedge) {
-    println("\nhyper " + h)
-    println("\n" + nodeBadSig(h.source) + " = " + 
-        indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeBadSig))) + ";\n")
-    super.addHyperedge(h)
-    println("=> " + normalize(h) + "\n")
-  }
-  
-  override def onNewHyperedge(h: Hyperedge) {
-    println("    new " + h)
-    super.onNewHyperedge(h)
-    
-    println("\n" + nodeBadSig(h.source) + " = " + 
-        indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeBadSig))) + ";\n")
-  }
-  
-  abstract override def newNode(a: Set[Int]): RenamedNode = {
-    val n = super.newNode(a)
-    println("    new node " + n)
-    n
-  }
-  
-  override def beforeGlue(l: RenamedNode, r: Node) {
-    println("    glue " + nodeBadSig(l) + " = " + nodeBadSig(r.deref))
-    super.beforeGlue(l, r)
-  }
-  
-  override def afterGlue(n: Node) {
-    println("    glued " + nodeBadSig(n.deref))
-    super.afterGlue(n)
-  }
-  
-  override def onUsedReduced(n: Node) {
-    println("used reduced: " + nodeBadSig(n.deref))
-    super.onUsedReduced(n)
-  }
-}
-
 /*
 object Test {
   

@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto --test ./samples/even-double")
+    cmd("-tauto -d3 -c3 -a4 -g4 -v --test --log samples/dummy")
   }
 
 }

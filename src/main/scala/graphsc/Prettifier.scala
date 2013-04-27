@@ -28,6 +28,8 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   val prettyMap = collection.mutable.Map[Node, String]()
   val nameGen = new NameGenerator[String]
   
+  def onNameChanged(n: Node, oldname: String) {}
+  
   def pretty(n: Node): String = prettyMap.get(n) match {
     case None =>
       throw new NoSuchElementException("Node " + n + " is not pretty")
@@ -42,9 +44,11 @@ trait Prettifier extends TheHypergraph with NamedNodes {
   def prettyUpdate(n: Node, s: String) {
     val old = prettyMap.get(n)
     if(old.isEmpty || old.get.size > s.size) {
+      val oldname = nodeToString(n.deref)
       prettyMap(n) = s
       n.prettyDebug = s
       prettyUpdateIns(n)
+      onNameChanged(n, oldname)
     }
   }
   
@@ -101,10 +105,14 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.afterGlue(n)
   }
   
+  // TODO: Should override onUsedReduced!
+  
   protected def indent(s: String, ind: String = "  "): String = ind + indent1(s, ind)
   protected def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
   
-  def prettyHyperedge(h: Hyperedge, prettyfun: RenamedNode => String = pretty _): String = 
+  def prettyHyperedge(h: Hyperedge, 
+                      prettyfun: RenamedNode => String = pretty _, 
+                      preserveLets: Boolean = false): String = 
     h.label match {
       case Construct(name) => name + h.dests.map("(" + prettyfun(_) + ")").mkString(" ", " ", "")
       case CaseOf(cases) =>
@@ -129,7 +137,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
         lazy val callres =
           "v([0-9]+)v".r.replaceAllIn(in, m => "(" + args(m.group(1).toInt) + ")" )
             
-        if(args.forall(!_.contains("\n")) && callres.size < letres.size)
+        if(args.forall(!_.contains("\n")) && callres.size < letres.size && !preserveLets)
           callres
         else
           letres
@@ -195,41 +203,17 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.nodeDotLabel(n) + "\\l" +
     pretty(n).replace("\n", "\\l") + "\\l" +
     "\\l"
-    
-//  // Node signature in the form "name v0v v1v"
-//  def nodeSig(n_underef: RenamedNode): String = {
-//    val n = n_underef.deref
-//    prettyRename(n.renaming,
-//      namedNodes.find(_._2 ~~ n).fold(n.node.uniqueName)((s,_) => s) +
-//        (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
-//  }
   
   def nodeShortProg(n_underef: RenamedNode): String = {
     val n = n_underef.deref
+    lazy val prog = pretty(n.node)
+    val name =
+      if(prettyMap.contains(n.node)) "f_" + nameGen(prog) else "g_" + n.node.hashCode()
     val sig = 
       prettyRename(n.renaming,
-          "f_" + nameGen(pretty(n.node)) +
-          (0 until n.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
-    val prog = pretty(n)
-    if(sig.size < prog.size)
-      sig 
-    else
+          name + (0 until n.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+    if(prettyMap.contains(n.node) && (prog.size <= sig.size * 2 || namedNodes.exists(_._2 ~~ n)))
       prog
-  }
-  
-  def nodeBadSig(n_underef: RenamedNode): String = {
-    val n = n_underef.deref
-    val sig = 
-      prettyRename(n.renaming,
-          nameGen(n.node.uniqueName) + "-" + n.node.uniqueName +
-          (0 until n.arity).map("v" + _ + "v").mkString(" ", " ", ""))
-    if(prettyMap.contains(n.node)) {
-      val prog = pretty(n)
-      if(sig.size < prog.size || prog.contains("\n"))
-        sig 
-      else
-        "[" + sig + " ~ " + prog + "]"
-    }
     else
       sig
   }
