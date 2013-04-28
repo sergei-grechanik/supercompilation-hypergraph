@@ -105,7 +105,16 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.afterGlue(n)
   }
   
-  // TODO: Should override onUsedReduced!
+  override def onUsedReduced(n: Node) {
+    if(prettifyingEnabled) {
+      prettyMap.get(n) match {
+        case None =>
+        case Some(p) =>
+          prettyUpdate(n, prettyRename(n.deref.renaming, p))
+      }
+    }
+    super.onUsedReduced(n)
+  }
   
   protected def indent(s: String, ind: String = "  "): String = ind + indent1(s, ind)
   protected def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
@@ -213,7 +222,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       prettyRename(n.renaming,
           name + (0 until n.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
     if(prettyMap.contains(n.node) && (prog.size <= sig.size * 2 || namedNodes.exists(_._2 ~~ n)))
-      prog
+      prettyRename(n.renaming, prog)
     else
       sig
   }

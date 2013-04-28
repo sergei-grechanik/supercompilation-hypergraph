@@ -61,7 +61,7 @@ trait HyperLogger extends Prettifier {
       log(nodeToString(l) + " = " + nodeToString(r.deref))
       log("-- reglued hyperedges:")
       for(h <- r.ins ++ r.outs)
-        log(hyperedgeToString(h.replace(r, l)))
+        log(hyperedgeToString(normalize(h.replace(r, l))))
       log("")
     }
     super.beforeGlue(l, r)
