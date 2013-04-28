@@ -48,7 +48,7 @@ class EquivalenceProver[S, L](scc: SCC = null)
           stats += (l,r) -> 1
         
       res
-    })
+    }).map(t => if(swap) t.swap else t)
   }
     
   def proveUncached(
@@ -194,6 +194,10 @@ case class EqProofTree(
     nodes: (Node, Node), 
     out: Option[(Hyperedge, Hyperedge, List[EqProofTree])] = None) {
   
+  def swap: EqProofTree =
+    EqProofTree(renaming.inv, (nodes._2, nodes._1), 
+        out.map { case (h1, h2, lst) => (h2, h1, lst.map(_.swap)) })
+  
   // Why can we glue child nodes too, not only roots?
   // Because they are defined in terms of themselves and the roots.
   def performGluing(g: Hypergraph) {
@@ -272,10 +276,12 @@ case class EqProofTree(
     out match {
       case None =>
       case Some((h1, h2, lst)) =>
+        g.logShift()
         g.log("-- " + g.hyperedgeToString(h1))
         g.log("-- " + g.hyperedgeToString(h2))
         g.logShift()
         lst.foreach(_.toLog(g))
+        g.logUnshift()
         g.logUnshift()
     }
   }
