@@ -11,20 +11,21 @@ case class RunningContext(depth: Int = 0, visited: List[(Node, List[Value])] = L
 trait HyperTester extends TheHypergraph {
   def onTheFlyTesting = false
   
-  val runCacheImpl = collection.mutable.Map[Node, collection.mutable.Map[List[Value], Value]]()
+  val runCacheImpl = 
+    collection.mutable.Map[Node, collection.mutable.Map[List[Value], ValueAndStuff]]()
   
-  def runCache(n: Node): collection.mutable.Map[List[Value], Value] =
+  def runCache(n: Node): collection.mutable.Map[List[Value], ValueAndStuff] =
     runCacheImpl.getOrElseUpdate(n, collection.mutable.Map())
     
   def depthLimit = 150
   
-  def runNode(n: RenamedNode, args: List[Value]): Value = {
+  def runNode(n: RenamedNode, args: List[Value]): ValueAndStuff = {
     val ctx = RunningContext()
     val res = runNode(ctx, n, args)
     res
   }
   
-  def runNode(ctx: RunningContext, node: RenamedNode, argsUncut: List[Value]): Value = {
+  def runNode(ctx: RunningContext, node: RenamedNode, argsUncut: List[Value]): ValueAndStuff = {
     val n = node.deref.node
     val args =
       truncArgs(node.deref, argsUncut).map(_ | Bottom)
@@ -36,19 +37,19 @@ trait HyperTester extends TheHypergraph {
     
     // If the result contains bottom then it may have
     // been taken from the arguments, so if they contain ErrorBottom, we should propagate it
-    if(!argsUncut.contains(ErrorBottom) || almost.isBottomless)
+    if(!argsUncut.contains(ErrorBottom) || almost.value.isBottomless)
       almost
     else
-      ErrorBottom
+      ValueAndStuff(ErrorBottom, 0, Nil) 
   }
     
   // args should be without ErrorBottoms
-  def runNodeUncached(ctx: RunningContext, n: Node, args: List[Value]): Value = {
+  def runNodeUncached(ctx: RunningContext, n: Node, args: List[Value]): ValueAndStuff = {
     require(n.outs.nonEmpty)
     require(args.forall(_ != ErrorBottom))
     
     if(ctx.visited.contains((n,args)) || ctx.depth > depthLimit)
-      return ErrorBottom
+      return ValueAndStuff(ErrorBottom, 0, Nil) 
 
     val newctx = ctx.add(n,args)
 
@@ -76,14 +77,14 @@ trait HyperTester extends TheHypergraph {
     
     val lub = values.reduce(_ | _)
     
-    if(lub != ErrorBottom) {
+    if(lub.value != ErrorBottom) {
       runCache(n) += args -> lub
       
       for((v,o) <- values zip outs if v != lub) {
         val test = runHyperedgeUncached(RunningContext(newctx.depth), o, args)
         // Sometimes it is just too difficult to compute the true value
-        if(test != ErrorBottom)
-          assert(test == lub)
+        if(test.value != ErrorBottom)
+          assert(test.value == lub.value)
         else {
           // If we have a hyperedge like this:
           //   f x y = f x (S y)
@@ -102,11 +103,11 @@ trait HyperTester extends TheHypergraph {
   
   // Note that this function runs arguments through h.source.renaming.inv
   private def runHyperedgeUncached(
-      ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): Value = {
+      ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): ValueAndStuff = {
     val args = 
       truncArgs(h.source.renaming.inv comp h.asDummyNode, argsUncut)
         
-    val res = runHyperedge(h, args, this.runNode(ctx, _, _))
+    val res = runHyperedgeAndStuff(h, args, this.runNode(ctx, _, _))
     res
   }
   
@@ -116,10 +117,10 @@ trait HyperTester extends TheHypergraph {
         val ctx = RunningContext()
         val res = runHyperedgeUncached(ctx, h, as)
         
-        if(res != r) {
+        if(res.value != r.value) {
           System.err.println("Hyperedge test failed")
           System.err.println("args = " + as)
-          System.err.println("Got " + res + "  should be " + r)
+          System.err.println("Got " + res.value + "  should be " + r.value)
           this match {
             case pret: Prettifier =>
               System.err.println("\nNode: \n" + pret.pretty(h.source.node) + "\n")
@@ -127,9 +128,10 @@ trait HyperTester extends TheHypergraph {
             case _ =>
           }
           runHyperedgeUncached(RunningContext(), h, as)
+          throw new Exception("Hyperedge test failed")
         }
         
-        assert(res == r)
+        runCache(h.source.node) += as -> (r | res)
       }
     super.onNewHyperedge(h)
   }
@@ -139,16 +141,17 @@ trait HyperTester extends TheHypergraph {
       val ctx = RunningContext()
       val renamed_r = RenamedNode(l.renaming.inv, r).normal
       val data = 
-        runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1))
+        runCache(l.node).toList.map(p => truncArgs(renamed_r, p._1)) ++
         runCache(r).toList.map(_._1)
       for(as <- data) {
         val lres = runNode(ctx, l, as)
         val rres = runNode(ctx, RenamedNode.fromNode(r), as)
-        if(lres != rres) {
+        
+        if(lres.value != rres.value) {
           System.err.println("Node merging test failed")
           System.err.println("args = " + as)
-          System.err.println("Left result = " + lres)
-          System.err.println("Right result = " + rres)
+          System.err.println("Left result = " + lres.value)
+          System.err.println("Right result = " + rres.value)
           this match {
             case pret: Prettifier =>
               System.err.println("\nLeft: \n" + pret.pretty(l) + "\n")
@@ -157,8 +160,10 @@ trait HyperTester extends TheHypergraph {
           }
           runNode(ctx, l, as)
           runNode(ctx, RenamedNode.fromNode(r), as)
+          throw new Exception("Node merging test failed")
         }
-        assert(lres == rres)
+        
+        runCache(l.node) += truncArgs(l, as) -> (lres | rres)
       }
     }
     super.beforeGlue(l, r)
@@ -178,7 +183,7 @@ trait HyperTester extends TheHypergraph {
       for((as,r) <- data) {
         val res = runNode(node, as)
         
-        if(res != r) {
+        if(res.value != r.value) {
           System.err.println("Used reduction test failed")
           System.err.println("args = " + as)
           System.err.println("Got " + res + "  should be " + r)
@@ -188,9 +193,8 @@ trait HyperTester extends TheHypergraph {
             case _ =>
           }
           runNode(node, as)
+          throw new Exception("Used reduction test failed")
         }
-        
-        assert(res == r)
       }
     }
     super.onUsedReduced(n)
@@ -199,41 +203,6 @@ trait HyperTester extends TheHypergraph {
   private def truncArgs(n: RenamedNode, as: List[Value]): List[Value] = {
     val norm = n.normal
     norm.renaming.vector.map(i => if(i >= 0 && i < as.size) as(i) else Bottom)
-  }
-  
-  override def nodeDotLabel(n: Node): String = {
-    super.nodeDotLabel(n) +
-    "\\l" + 
-    (for((a,r) <- runCache(n) /*if a.forall(_.isBottomless)*/) yield
-        a.mkString(", ") + " -> " + r).mkString("\\l") + "\\l"
-  }
-  
-  def statisticsTester() {
-    val nodes = allNodes
-    var empty = 0
-    val nv =
-      for(n <- nodes) yield
-        (n, runCache(n).toMap)
-        
-    println(
-        "statistics: " + nodes.size + 
-        " should be " + (fun(Set(), nv.toList).size + empty) + 
-        " empty: " + empty)
-    
-    def fun(s: Set[(Node, Map[List[Value], Value])], 
-            l: List[(Node, Map[List[Value], Value])]): Set[(Node, Map[List[Value], Value])] = {
-      l match {
-        case (n1, m1) :: tl =>
-          if(m1.isEmpty)
-            empty += 1
-          for((n, m) <- s) {
-            if(m == m1)
-              return fun(s, tl)
-          }
-          fun(s + (n1 -> m1), tl)
-        case Nil => s
-      }
-    }
   }
 }
 

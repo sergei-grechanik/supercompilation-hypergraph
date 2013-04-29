@@ -116,9 +116,6 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.onUsedReduced(n)
   }
   
-  protected def indent(s: String, ind: String = "  "): String = ind + indent1(s, ind)
-  protected def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
-  
   def prettyHyperedge(h: Hyperedge, 
                       prettyfun: RenamedNode => String = pretty _, 
                       preserveLets: Boolean = false): String = 
@@ -226,16 +223,40 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     else
       sig
   }
+  
+  def nodeFunName(n_underef: RenamedNode): String = {
+    val n = n_underef.deref
+    (n.getVar, n.node.definingHyperedge) match {
+      case (Some(i), _) =>
+        "v" + i + "v"
+      case (None, Some(Hyperedge(Construct(c), _, Nil))) =>
+        c
+      case (None, _) =>
+        namedNodes.find(_._2 ~~ n) match {
+          case Some((name, n1)) =>
+            name + prettyRename(n.renaming comp n1.renaming.inv,
+                      (0 until n1.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+          case None =>
+            val name =
+              if(prettyMap.contains(n.node)) 
+                "f_" + nameGen(pretty(n.node))
+              else 
+                "g_" + n.node.hashCode()
+            prettyRename(n.renaming,
+              name + (0 until n.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+        }
+    }
+  }
     
   // Convert the graph to program.
   def toProg: String = {
     val sb = new StringBuilder()
     for(n <- nodes) {
-      val sig = nodeShortProg(RenamedNode.fromNode(n))
+      val sig = nodeFunName(RenamedNode.fromNode(n))
       sb.append("\n-- " + sig + "=\n" + indent(pretty(n), "--   ") + "\n\n")
       for(h <- n.outs) {
         sb.append(sig + " = " + 
-          indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeShortProg))) + ";\n")
+          indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeFunName))) + ";\n")
       }
       sb.append("\n")
     }

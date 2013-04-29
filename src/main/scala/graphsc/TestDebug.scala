@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -d3 -c3 -a4 -g4 -v --test --log samples/dummy")
+    cmd("-d3 -c3 -a4 -g0 -v --resid matchAAB samples/kmp")
   }
 
 }

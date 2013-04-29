@@ -20,22 +20,22 @@ class HyperTesterSuite extends FunSuite {
   }
   
   def runSamples(g: HyperTester with NamedNodes) {
-    assert(g.runNode(g("const"), List(2, 3)) === peano(2))
-    assert(g.runNode(g("add"), List(2, 3)) === peano(5))
-    assert(g.runNode(g("add"), List(5, 1)) === peano(6))
-    assert(g.runNode(g("mul"), List(2, 3)) === peano(6))
-    assert(g.runNode(g("mul"), List(4, 3)) === peano(12))
-    assert(g.runNode(g("padd"), List(2, 3)) === peano(5))
-    assert(g.runNode(g("pmul"), List(2, 3)) === peano(6))
-    assert(g.runNode(g("id"), List(3)) === peano(3))
-    assert(g.runNode(g("nrev"), List(2)) === peano(2))
-    assert(g.runNode(g("nrev"), List(5)) === peano(5))
-    assert(g.runNode(g("fac"), List(4)) === peano(24))
-    assert(g.runNode(g("fib"), List(6)) === peano(8))
-    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))) === list(4,3,2,1))
+    assert(g.runNode(g("const"), List(2, 3)).value === peano(2))
+    assert(g.runNode(g("add"), List(2, 3)).value === peano(5))
+    assert(g.runNode(g("add"), List(5, 1)).value === peano(6))
+    assert(g.runNode(g("mul"), List(2, 3)).value === peano(6))
+    assert(g.runNode(g("mul"), List(4, 3)).value === peano(12))
+    assert(g.runNode(g("padd"), List(2, 3)).value === peano(5))
+    assert(g.runNode(g("pmul"), List(2, 3)).value === peano(6))
+    assert(g.runNode(g("id"), List(3)).value === peano(3))
+    assert(g.runNode(g("nrev"), List(2)).value === peano(2))
+    assert(g.runNode(g("nrev"), List(5)).value === peano(5))
+    assert(g.runNode(g("fac"), List(4)).value === peano(24))
+    assert(g.runNode(g("fib"), List(6)).value === peano(8))
+    assert(g.runNode(g("nrevL"), List(list(1,2,3,4))).value === list(4,3,2,1))
     // HyperTester has a depth limit, so we cannot use too large arguments
-    assert(g.runNode(g("ackermann"), List(2, 3)) === peano(9))
-    assert(g.runNode(g("ackermann"), List(3, 2)) === peano(29))
+    assert(g.runNode(g("ackermann"), List(2, 3)).value === peano(9))
+    assert(g.runNode(g("ackermann"), List(3, 2)).value === peano(29))
   }
   
   test("Evaluation with HyperTester") {

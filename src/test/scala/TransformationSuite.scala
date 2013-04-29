@@ -53,7 +53,7 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
     val main = p(code)(name)
     // I'm always forgetting to call this function
     g.updateDepth(main.node, 0)
-    val res = g.runNode(main, input)
+    val res = g.runNode(main, input).value
     
     transform(g, maxdepth)
     val nodes1 = g.allNodes.size

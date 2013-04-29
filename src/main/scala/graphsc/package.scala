@@ -30,4 +30,7 @@ package object graphsc {
   
   def nodesOf(h1: Hyperedge, h2: Hyperedge): List[Node] =
     nodesOf(h1) ++ nodesOf(h2)
+  
+  def indent(s: String, ind: String = "  "): String = ind + indent1(s, ind)
+  def indent1(s: String, ind: String = "  "): String = s.replace("\n", "\n" + ind)
 }

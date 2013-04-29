@@ -52,3 +52,19 @@ case object ErrorBottom extends Value {
   
   override def isBottomless = false
 }
+
+// Value together with information about minimal cost
+case class ValueAndStuff(value: Value, cost: Int, preferred: List[Hyperedge]) {
+  def |(other: ValueAndStuff) = {
+    val newval = value | other.value
+    (newval == value, newval == other.value) match {
+      case (true, false) => this
+      case (false, true) => other
+      case _ =>
+        ValueAndStuff(newval, cost min other.cost,
+          if(cost < other.cost) preferred
+          else if(cost > other.cost) other.preferred
+          else (preferred ++ other.preferred).distinct)
+    }
+  }
+}

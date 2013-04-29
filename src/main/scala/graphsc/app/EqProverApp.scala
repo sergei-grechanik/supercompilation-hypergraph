@@ -16,6 +16,7 @@ object EqProverApp {
     val task = opt[String](descr = 
       "An equivalence we want to prove (up to renaming!) of the form foo=bar " +
     		"or auto to read the task from the first line of the file")
+    val resid = opt[String](descr = "Residualize the specified function. Requires --test.")
     
 		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
@@ -233,6 +234,23 @@ object EqProverApp {
       gendump()
       checktask()
       
+    }
+    
+    if(conf.resid.isSupplied) {
+      if(conf.verbose.isSupplied)
+        System.err.println("Residualizing...")
+      val subgraphs = ByTestingResidualizer(graph)(graph(conf.resid.get.get).node)
+      if(conf.verbose.isSupplied)
+        System.err.println("Residual graphs count: " + subgraphs.size)
+      if(subgraphs.nonEmpty) {
+        val res = subgraphs.minBy(_.nodes.size)
+        for((n,h) <- res.hyperedges 
+            if !n.isVar && !n.definingHyperedge.exists(
+                              h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
+          println(graph.nodeFunName(h.source) + " =\n" +
+              indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
+        }
+      }
     }
     
     if(conf.dumpDot.isSupplied) {
