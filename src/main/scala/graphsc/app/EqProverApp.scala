@@ -41,6 +41,9 @@ object EqProverApp {
         		"Makes everything a bit faster.")
     val test = opt[Boolean](noshort = true, descr = "Enable testing on the fly")
     val integrityCheck = opt[Boolean](noshort = true, hidden = true)
+    
+    val cheat = opt[Boolean](noshort = true,
+        descr = "Tweak the supercompiler so that it can solve the nrev example")
   }
   
   def main(args: Array[String]) = mainBool(args) match {
@@ -123,7 +126,11 @@ object EqProverApp {
     val buf = graph//HyperBuffer(graph)
     // This buffer stores hyperedges for each transformation and makes sure
     // that no hyperedge exceeds the maximal arity
-    val tr = new PostFilter(buf, h => h.used.size <= maxarity) with Transformations
+    val tr =
+      if(conf.cheat.isSupplied)
+        new PostFilter(buf, h => h.arity <= maxarity) with Transformations
+      else
+        new PostFilter(buf, h => h.used.size <= maxarity) with Transformations
       
     
     var generation = 0
