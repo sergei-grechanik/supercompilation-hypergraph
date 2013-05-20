@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-d3 -c3 -a4 -g0 -v --resid matchAAB samples/kmp")
+    cmd("-tauto -v -g5 --nogen --test samples/quad-idle")
   }
 
 }

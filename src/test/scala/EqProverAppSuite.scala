@@ -18,6 +18,9 @@ class EqProverAppSuite extends FunSuite {
   cmd("-tauto --integrity-check --test ./samples/even-double")
   cmd("-tauto --integrity-check --test ./samples/idle")
   cmd("-tauto --integrity-check --test --nogen ./samples/idle")
+  // --test fails on quad-idle, --integrity-check takes too long
+  cmd("-tauto ./samples/quad-idle")
+  cmd("-tauto --integrity-check --nogen ./samples/quad-idle")
   cmd("-tauto --integrity-check --test ./samples/inf")
   cmd("-tauto --integrity-check --test ./samples/map-comp")
   cmd("-tauto --integrity-check --test --nogen ./samples/shuffled-let")
