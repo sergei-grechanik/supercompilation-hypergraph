@@ -200,10 +200,11 @@ object EqProverApp {
           System.err.println("Performing merging by isomorphism...")
         val candidates = 
           like.toList.sortBy(-_._1._1)
-            .filter(p => p._1._1 > 0 && p._2.deref.node != p._3.deref.node)
+            .filter(p => p._1._1 > 0 && !(p._2 ~~ p._3))
         if(conf.verbose.isSupplied)
           System.err.println("Number of candidate pairs: " + candidates.size)
-        for(((i,ren),l,r) <- candidates if !stop) {
+        for(((i,ren),l,r) <- candidates 
+            if !stop && !(l ~~ r)) {
           val lpretty = l.prettyDebug
           val rpretty = r.prettyDebug
           val eq = eprover.prove(l.deref.node, r.deref.node)
