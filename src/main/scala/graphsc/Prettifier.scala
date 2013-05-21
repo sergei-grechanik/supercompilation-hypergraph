@@ -141,7 +141,8 @@ trait Prettifier extends TheHypergraph with NamedNodes {
               in.replaceAll("v([0-9]+)v", "b$1b")
         
         lazy val callres =
-          "v([0-9]+)v".r.replaceAllIn(in, m => "(" + args(m.group(1).toInt) + ")" )
+          "v([0-9]+)v".r.replaceAllIn(in, m => "(" + 
+              java.util.regex.Matcher.quoteReplacement(args(m.group(1).toInt)) + ")" )
             
         if(args.forall(!_.contains("\n")) && callres.size < letres.size && !preserveLets)
           callres

@@ -31,11 +31,11 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
   }
   
   def runTest(
-      code: String, 
+      namecode: (String, String), 
       input: List[Value], 
       maxdepth: Int = Int.MaxValue, 
       residuate: Boolean = false) {
-    val name = code.takeWhile(_ != ' ')
+    val (name, code) = namecode
     info(name + ":")
     
     val g = 
@@ -49,8 +49,8 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
         with OnTheFlyTesting
         with Prettifier
         
-    val p = new ExprParser(g)
-    val main = p(code)(name)
+    ProgramParser(g, code)
+    val main = g(name)
     // I'm always forgetting to call this function
     g.updateDepth(main.node, 0)
     val res = g.runNode(main, input).value

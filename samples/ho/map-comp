@@ -1,0 +1,17 @@
+-- mapfmapg=mapfg
+
+-- Needs -a4 and --nogen
+
+comp f g x = f (g x);
+
+map f l =
+  case l of {
+    N -> N;
+    C a l -> C (f a) (map f l)
+  };
+
+mapfg f g l = map (comp f g) l;
+
+mapfmapg f g l = comp (map f) (map g) l;
+
+  

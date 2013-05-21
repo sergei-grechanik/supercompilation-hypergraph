@@ -33,7 +33,9 @@ object Samples {
                   "S n1 -> ackermann k (ackermann m n1) }}")
   
   
-  def apply(n: String*): String = n.map(defs(_)).mkString(";")
+  def get(n: String*): String = n.map(defs(_)).mkString(";")
+  
+  def apply(n: String*): (String, String) = (n(0), get(n:_*))
   
   implicit def peano(i: Int): Value =
     if(i == 0)

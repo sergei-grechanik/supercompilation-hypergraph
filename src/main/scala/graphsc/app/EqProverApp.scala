@@ -91,11 +91,11 @@ object EqProverApp {
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
-    val parser = ExprParser(graph)
     val src = io.Source.fromFile(conf.file.get.get)
     val srctext = src.mkString
     src.close()
-    parser(srctext)
+    val prog = ProgramParser.parseProg(srctext).simplify
+    prog.loadInto(graph)
     
     // get the task
     val task =

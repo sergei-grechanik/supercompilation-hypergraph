@@ -14,9 +14,8 @@ class HyperTesterSuite extends FunSuite {
       "fac", "fib", "append", "nrevL", "ackermann")
   
   def addSamples(g: NamedNodes) {
-    val parser = new ExprParser(g)
     for(s <- samples)
-      parser(Samples(s))
+      ProgramParser(g, Samples.get(s))
   }
   
   def runSamples(g: HyperTester with NamedNodes) {

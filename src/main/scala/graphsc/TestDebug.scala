@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -v -g5 --nogen --test samples/quad-idle")
+    cmd("-tauto -v -g5 --nogen samples/exp-idle")
   }
 
 }
