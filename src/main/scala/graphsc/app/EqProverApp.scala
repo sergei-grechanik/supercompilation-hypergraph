@@ -16,7 +16,7 @@ object EqProverApp {
     val task = opt[String](descr = 
       "An equivalence we want to prove (up to renaming!) of the form foo=bar " +
     		"or auto to read the task from the first line of the file")
-    val resid = opt[String](descr = "Residualize the specified function. Requires --test.")
+    val resid = opt[String](descr = "Residualize the specified function. ")
     
 		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
@@ -121,6 +121,10 @@ object EqProverApp {
     // assign zero (co)depth to all initial nodes
     for(n <- graph.allNodes)
       graph.zeroBoth(n.deref)
+      
+    // load tests
+    if(conf.test.isSupplied)
+      prog.loadTestsInto(graph)
       
     // This buffer stores all hyperedges that will be added to the graph
     val buf = graph//HyperBuffer(graph)
@@ -248,9 +252,14 @@ object EqProverApp {
       
     }
     
+    // residualization (by testing)
     if(conf.resid.isSupplied) {
       if(conf.verbose.isSupplied)
         System.err.println("Residualizing...")
+      
+      // run tests if they haven't been run yet
+      prog.loadTestsInto(graph)
+        
       val subgraphs = ByTestingResidualizer(graph)(graph(conf.resid.get.get).node)
       if(conf.verbose.isSupplied)
         System.err.println("Residual graphs count: " + subgraphs.size)

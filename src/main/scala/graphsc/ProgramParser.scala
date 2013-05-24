@@ -108,6 +108,41 @@ sealed trait Expr {
     case _ => (Set[String]() /: mapChildrenToList((vs, b) => b.freeVars -- vs))(_ ++ _)
   }
   
+  def isConst: Boolean = this match {
+    case ExprConstr(_) => true
+    case ExprCall(ExprConstr(_), as) =>
+      as.forall(_.isConst)
+    case _ => false
+  }
+  
+  def mkConst: Value = this match {
+    case ExprConstr(c) => Ctr(c, Nil)
+    case ExprCall(ExprConstr(c), as) =>
+      Ctr(c, as.map(_.mkConst))
+    case _ => throw new Exception("mkConst from a non-const")
+  }
+  
+  def factorConstsImpl: (Expr, Set[(String, Expr)]) = {
+    if(isConst)
+      (ExprVar("$c " + this), Set("$c " + this -> this))
+    else {
+      val set = collection.mutable.Set[(String, Expr)]()
+      val e = 
+        mapChildren{(_, b) =>
+          val (e, s) = b.factorConstsImpl
+          set ++= s
+          e
+        }
+      (e, set.toSet)
+    }
+  }
+  
+  def factorConsts: Expr = {
+    val (e, ps) = factorConstsImpl
+    val psl = ps.toList
+    ExprCall(ExprLambda(psl.map(_._1), e), psl.map(_._2))
+  }
+  
   def loadInto(g: NamedNodes, table: Map[String, Int] = Map()): RenamedNode = this match {
     case ExprLambda(vs, b) =>
       b.loadInto(g, vs.zipWithIndex.toMap)
@@ -214,7 +249,7 @@ case class Program(
   // we should make them all have equal arity. 
   def splitBadLambdas: Program = {
     val newdefs = defs.mapValues{ ds =>
-        val ar = ds.map(_.arity).min
+        val ar = (Int.MaxValue :: ds.map(_.arity)).min
         ds.map{
           case ExprLambda(vs, b) if vs.size > ar =>
             ExprLambda(vs.take(ar), ExprLambda(vs.drop(ar), b))
@@ -246,6 +281,7 @@ case class Program(
       case _ => e.mapChildren((_,b) => go(b))
     }
     
+    // TODO: This is wrong if tests contain top-velel lambdas
     val newprog = mapExprs {
       case ExprLambda(vs, b) => ExprLambda(vs, go(b))
       case b => go(b)
@@ -262,7 +298,8 @@ case class Program(
     // Some functions may be undefined, so we should guess their arities
     val arities =
       allSubExprs.collect{ case ExprCall(ExprFun(f), as) => (f, as.size) }
-        .groupBy(_._1).mapValues(_.map(_._2).max) ++ defs.mapValues(_.map(_.arity).min)
+        .groupBy(_._1).mapValues(_.map(_._2).max) ++ 
+          defs.collect{ case (f, l@(_::_)) => (f, l.map(_.arity).min) }
     
     def makeapps(f: Expr, as: List[Expr]) =
         (f /: as)((l,r) => ExprCall(ExprFun("@"), List(l, r)))
@@ -315,6 +352,12 @@ case class Program(
       newprog
   }
   
+  // Factor out consts from the tests.
+  def splitTests: Program = {
+    val newtests = tests.map(_.factorConsts)
+    Program(defs, propdefs, newtests, roots, residualize, assumptions, prove)
+  }
+  
   def simplify: Program = {
     val p1 = this.resolveUnbound.mergeAppsAndLambdas
     //println("Resolved and merged:\n" + p1)
@@ -324,13 +367,13 @@ case class Program(
     //println("Lifted:\n" + p3)
     val p4 = p3.mergeAppsAndLambdas.defunctionalize
     //println("Defunctionalized:\n" + p4)
-    p4
+    p4.splitTests
   }
     
   // TODO: Implement removing unreferenced functions
     
   def loadInto(g: NamedNodes) {
-    for((f, ds) <- defs) {
+    for((f, ds) <- defs if ds.nonEmpty) {
       val ars = ds.map(_.arity)
       val ar = ars.head
       assert(ars.forall(_ == ar))
@@ -341,6 +384,19 @@ case class Program(
     
     for(a <- assumptions)
       a.loadInto(g)
+  }
+  
+  def loadTestsInto(g: NamedNodes with HyperTester) {
+    for(t <- tests) t match {
+      case ExprLambda(vs, _) if vs.nonEmpty =>
+        throw new Exception("Top-level lambdas in tests are not allowed: " + t)
+      case _ if t.freeVars.nonEmpty =>
+        throw new Exception("Free variables in tests are not allowed: " + t)
+      case ExprCall(e, as) if as.forall(_.isConst) =>
+        println(g.runNode(e.loadInto(g), as.map(_.mkConst)))
+      case _ =>
+        g.runNode(t.loadInto(g), Nil)
+    }
   }
 }
 
@@ -369,7 +425,8 @@ object ProgramParser extends RegexParsers {
     (repsep(decl, ";") <~ opt(";")).map(l => (Program() /: l)(_ ++ _))
   
   def decl: Parser[Program] =
-    definition | eqdecl | propdecl | testdecl | rootdecl | residdecl | assumedecl | provedecl
+    definition | eqdecl | propdecl | testdecl | rootdecl | residdecl | assumedecl | provedecl |
+    decldecl
   
   def definition: Parser[Program] =
     (fname ~ rep(varname) <~ "=") ~! expr ^^
@@ -397,6 +454,9 @@ object ProgramParser extends RegexParsers {
   def residdecl: Parser[Program] = 
     ("residualize:" ~> repsep(expr, ",")) ^^ (es => Program(residualize = es))
   
+  def decldecl: Parser[Program] =
+    ("declare:" ~> repsep(fname, ",")) ^^ (fs => Program(defs = fs.map(f => (f, Nil)).toMap))
+    
   def prop: Parser[Prop] =
     (expr <~ "=") ~ expr ^^ { case e1~e2 => PropEq(e1, e2) } |
     (expr <~ "~") ~ expr ^^ { case e1~e2 => PropEqModuloRen(e1, e2) } |

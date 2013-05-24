@@ -15,6 +15,7 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester) {
       List(already)
     else {
       val prefhs = graph.runCache(n).values.flatMap(_.preferred).toList
+      // TODO: Sometimes there may be a dead code that hasn't been tested
       val hs = if(prefhs.isEmpty) n.definingHyperedge.toList else prefhs
       (for(h <- hs.map(graph.normalize(_)).distinct) yield {
         def procdests(cursub: ProgramSubgraph, ds: List[RenamedNode]): List[ProgramSubgraph] =

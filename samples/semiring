@@ -3,10 +3,11 @@
 -- Using the supercompiler as a very inefficient semiring solver.
 -- I had to switch off most of the axioms to make it work.
 
--- Works with -a4 -d100 -c100
--- Success is achieved after the 4th generation with 2000 hyperedges.
+-- Used to work with -a4 -d100 -c100
 
-forall x y z . add (add x y) z = add x (add y z);
+declare: add, mul, zero;
+
+add (add x y) z = add x (add y z);
 --forall x . add x zero = x;
 --forall x y . add x y = add y x;
 
@@ -17,8 +18,8 @@ forall x y z . add (add x y) z = add x (add y z);
 --forall x . mul x zero = zero;
 --forall x . mul zero x = zero;
 
-forall x y z . mul x (add y z) = add (mul x y) (mul x z);
-forall x y z . mul (add y z) x = add (mul y x) (mul z x);
+mul x (add y z) = add (mul x y) (mul x z);
+mul (add y z) x = add (mul y x) (mul z x);
 
 --add3l x y z = add (add x y) z;
 --add3r x y z = add x (add y z);

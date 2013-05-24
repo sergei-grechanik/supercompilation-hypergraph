@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -v -g5 --nogen samples/exp-idle")
+    cmd("-tauto -d3 -c2 -a4 -g5 -v --cheat --resid nrev samples/nrev")
   }
 
 }
