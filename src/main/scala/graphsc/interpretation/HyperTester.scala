@@ -3,9 +3,11 @@ package interpretation
 
 class NonTerminationException(s: String = "") extends Exception(s)
 
-case class RunningContext(depth: Int = 0, visited: List[(Node, List[Value])] = List()) {
+case class RunningContext(limit: Int = Int.MaxValue, visited: List[(Node, List[Value])] = List()) {
   def add(n: Node, a: List[Value]): RunningContext =
-    RunningContext(depth + 1, (n, a)::visited)
+    RunningContext(limit, (n, a)::visited)
+  def -(c: Int): RunningContext =
+    RunningContext(limit - c, visited)
 }
 
 trait HyperTester extends TheHypergraph {
@@ -16,8 +18,10 @@ trait HyperTester extends TheHypergraph {
   
   def runCache(n: Node): collection.mutable.Map[List[Value], ValueAndStuff] =
     runCacheImpl.getOrElseUpdate(n, collection.mutable.Map())
-    
-  def depthLimit = 150
+  
+  def clearRunCache() {
+    runCacheImpl.clear()
+  }
   
   def runNode(n: RenamedNode, args: List[Value]): ValueAndStuff = {
     val ctx = RunningContext()
@@ -48,10 +52,10 @@ trait HyperTester extends TheHypergraph {
     require(n.outs.nonEmpty)
     require(args.forall(_ != ErrorBottom))
     
-    if(ctx.visited.contains((n,args)) || ctx.depth > depthLimit)
-      return ValueAndStuff(ErrorBottom, 0, Nil) 
+    if(ctx.visited.contains((n,args)) || ctx.limit <= 0)
+      return ValueAndStuff(ErrorBottom, 0, Nil)
 
-    val newctx = ctx.add(n,args)
+    var newctx = ctx.add(n,args)
 
     // Try id hyperedges first
     val outs = 
@@ -72,6 +76,13 @@ trait HyperTester extends TheHypergraph {
           case _ =>
         }
         
+        // Next hyperedges mustn't take much longer to compute
+        if(r.value != ErrorBottom) {
+          val newlim = limitFromMinCost(r.cost)
+          if(newlim < newctx.limit)
+            newctx = RunningContext(newlim, newctx.visited)
+        }
+          
         r
       }
     
@@ -81,7 +92,7 @@ trait HyperTester extends TheHypergraph {
       runCache(n) += args -> lub
       
       for((v,o) <- values zip outs if v != lub) {
-        val test = runHyperedgeUncached(RunningContext(newctx.depth), o, args)
+        val test = runHyperedgeUncached(RunningContext(newctx.limit), o, args)
         // Sometimes it is just too difficult to compute the true value
         if(test.value != ErrorBottom)
           assert(test.value == lub.value)
@@ -106,33 +117,79 @@ trait HyperTester extends TheHypergraph {
       ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): ValueAndStuff = {
     val args = 
       truncArgs(h.source.renaming.inv comp h.asDummyNode, argsUncut)
-        
-    val res = runHyperedgeAndStuff(h, args, this.runNode(ctx, _, _))
-    res
+      
+    var curctx = ctx
+    var subcost = 0
+      
+    val rv = runHyperedge(h, args, { (n, as) =>
+      val ValueAndStuff(v, c, _) = this.runNode(curctx, n, as)
+      curctx -= c
+      subcost += c
+      v
+    })
+    
+    ValueAndStuff(rv, subcost + hyperedgeCost(h), List(h))
+  }
+  
+  // Pure hyperedge cost
+  def hyperedgeCost(h: Hyperedge): Int = h.label match {
+    case Construct(name) => 1
+    case CaseOf(cases) => 1
+    case Let() => 1
+    case Tick() => 1
+    case Improvement() => 1
+    case Id() => 1
+    case Var() => 1
+    case Unused() => 0
+  }
+  
+  def updateRunCache(n: Node, as: List[Value], r: ValueAndStuff) {
+    val cache = runCache(n)
+    cache.get(as) match {
+      case None => cache += as -> r
+      case Some(oldr) =>
+        cache += as -> (r | oldr)
+        if(r.cost < oldr.cost)
+          onMinCostChanged(n)
+    }
+  }
+  
+  // If the right costs are really needed on the fly, this function should be overridden
+  // to retest incoming hyperedges. The obvious method of retesting is too slow, so
+  // it is disabled by default. It's easier to run tests from scratch before residualization.
+  def onMinCostChanged(n: Node) {
+    //for(h <- n.insMut)
+    //  retestHyperedge(h)
+  }
+  
+  def limitFromMinCost(c: Int): Int = c*2 + 30
+  
+  def retestHyperedge(h: Hyperedge) {
+    for((as, r) <- runCache(h.source.node)) {
+      val ctx = RunningContext(limitFromMinCost(r.cost))
+      val res = runHyperedgeUncached(ctx, h, as)
+      
+      if(res.value != r.value) {
+        System.err.println("Hyperedge test failed")
+        System.err.println("args = " + as)
+        System.err.println("Got " + res.value + "  should be " + r.value)
+        this match {
+          case pret: Prettifier =>
+            System.err.println("\nNode: \n" + pret.pretty(h.source.node) + "\n")
+            System.err.println("\nHyperedge: \n" + h +"\n\n" + pret.prettyHyperedge(h) + "\n")
+          case _ =>
+        }
+        runHyperedgeUncached(RunningContext(), h, as)
+        throw new Exception("Hyperedge test failed")
+      }
+      
+      updateRunCache(h.source.node, as, res)
+    }
   }
   
   override def onNewHyperedge(h: Hyperedge) {
     if(onTheFlyTesting)
-      for((as, r) <- runCache(h.source.node)) {
-        val ctx = RunningContext()
-        val res = runHyperedgeUncached(ctx, h, as)
-        
-        if(res.value != r.value) {
-          System.err.println("Hyperedge test failed")
-          System.err.println("args = " + as)
-          System.err.println("Got " + res.value + "  should be " + r.value)
-          this match {
-            case pret: Prettifier =>
-              System.err.println("\nNode: \n" + pret.pretty(h.source.node) + "\n")
-              System.err.println("\nHyperedge: \n" + h +"\n\n" + pret.prettyHyperedge(h) + "\n")
-            case _ =>
-          }
-          runHyperedgeUncached(RunningContext(), h, as)
-          throw new Exception("Hyperedge test failed")
-        }
-        
-        runCache(h.source.node) += as -> (r | res)
-      }
+      retestHyperedge(h)
     super.onNewHyperedge(h)
   }
   
@@ -163,7 +220,7 @@ trait HyperTester extends TheHypergraph {
           throw new Exception("Node merging test failed")
         }
         
-        runCache(l.node) += truncArgs(l, as) -> (lres | rres)
+        updateRunCache(l.node, truncArgs(l, as), lres | rres)
       }
     }
     super.beforeGlue(l, r)
@@ -195,6 +252,8 @@ trait HyperTester extends TheHypergraph {
           runNode(node, as)
           throw new Exception("Used reduction test failed")
         }
+        
+        updateRunCache(n, as, res)
       }
     }
     super.onUsedReduced(n)

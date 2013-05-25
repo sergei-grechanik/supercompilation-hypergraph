@@ -81,6 +81,11 @@ object EqProverApp {
             }
           
           override def enableLogging = conf.log.isSupplied
+          
+          var residualizing = false
+          override def limitFromMinCost(c: Int): Int =
+            if(residualizing) c
+            else super.limitFromMinCost(c)
         }
     
     val maxarity = conf.arity.get.get
@@ -257,8 +262,14 @@ object EqProverApp {
       if(conf.verbose.isSupplied)
         System.err.println("Residualizing...")
       
-      // run tests if they haven't been run yet
+      graph.residualizing = true
+        
+      // Even if there are cached results, they are of no use to us
+      graph.clearRunCache()
       prog.loadTestsInto(graph)
+      
+      if(conf.verbose.isSupplied)
+        System.err.println("Done running tests...")
         
       val subgraphs = ByTestingResidualizer(graph)(graph(conf.resid.get.get).node)
       if(conf.verbose.isSupplied)

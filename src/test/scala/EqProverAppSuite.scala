@@ -3,9 +3,10 @@ import app._
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.FunSuite
+import org.scalatest.ParallelTestExecution
 
 @RunWith(classOf[JUnitRunner])
-class EqProverAppSuite extends FunSuite {
+class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   
   def cmd(s: String) {
     test("eqprover " + s) {

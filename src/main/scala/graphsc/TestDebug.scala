@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -d3 -c2 -a4 -g5 -v --cheat --resid nrev samples/nrev")
+    cmd("-tauto -v --nogen --test samples/dummy")
   }
 
 }

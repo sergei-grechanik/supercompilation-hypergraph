@@ -393,7 +393,7 @@ case class Program(
       case _ if t.freeVars.nonEmpty =>
         throw new Exception("Free variables in tests are not allowed: " + t)
       case ExprCall(e, as) if as.forall(_.isConst) =>
-        println(g.runNode(e.loadInto(g), as.map(_.mkConst)))
+        g.runNode(e.loadInto(g), as.map(_.mkConst))
       case _ =>
         g.runNode(t.loadInto(g), Nil)
     }
