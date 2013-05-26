@@ -27,7 +27,7 @@ object SCC {
       
       var lowlink = myindex
       
-      for(h <- n.outs; rm <- h.dests; val m = rm.node) {
+      for(h <- n.outs; rm <- h.dests; m = rm.node) {
         indices.get(m) match {
           case None =>
             // We haven't processed m yet, process

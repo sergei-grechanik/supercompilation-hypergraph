@@ -231,7 +231,7 @@ trait TheHypergraph extends Hypergraph {
     if(h.dests.nonEmpty)
       h.dests.minBy(_.node.insMut.size).node.insMut
       .find(x => x.label == h.label && x.dests == h.dests) match {
-        case Some(x) if h.source.node == x.source.node => h.source
+        case Some(x) if h.source.node == x.source.node =>
         case Some(x) => glueNodes(x.source, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
@@ -419,8 +419,8 @@ trait TheHypergraph extends Hypergraph {
         if e != h
         if e.label == l && e.dests.size == ds.size
         if isDefining(e)
-        val srcren = src.renaming comp e.source.renaming.inv
-        val rens = 
+        srcren = src.renaming comp e.source.renaming.inv
+        rens = 
           (ds,e.dests,e.shifts).zipped.map((d, d1, sh) => 
             d.renaming.inv comp srcren.shift(sh) comp d1.renaming)
       } {

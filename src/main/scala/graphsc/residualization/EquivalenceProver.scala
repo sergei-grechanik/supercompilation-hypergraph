@@ -84,7 +84,7 @@ class EquivalenceProver[S, L](scc: SCC = null)
         }
       
       val sorted_pairs = 
-        pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(_._1)(Ordering[L].reverse)
+        pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(_._1)(ord.reverse)
       
       var result: Option[Renaming] = None
       var hypers: (Hyperedge, Hyperedge) = null

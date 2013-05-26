@@ -1,8 +1,6 @@
 import com.typesafe.sbt.SbtStartScript
 
-scalaVersion := "2.9.2"
-
-sbtVersion := "0.12.1"
+scalaVersion := "2.10.1"
 
 name := "graphsc"
 
@@ -12,11 +10,11 @@ mainClass in Compile := Some("graphsc.app.EqProverApp")
 
 mainClass in oneJar := Some("graphsc.app.EqProverApp")
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "1.8" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.1" % "test"
 
 libraryDependencies += "junit" % "junit" % "4.8.1" % "test"
 
-libraryDependencies += "org.rogach" %% "scallop" % "0.8.1"
+libraryDependencies += "org.rogach" %% "scallop" % "0.9.2"
 
 seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 

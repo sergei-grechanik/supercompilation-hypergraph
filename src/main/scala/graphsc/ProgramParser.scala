@@ -332,7 +332,7 @@ case class Program(
     
     val newprog = mapExprs(go)
     val appcases = 
-      (for((f,m) <- minargs.toList; val ar = arities(f); k <- m until ar) yield
+      (for((f,m) <- minargs.toList; ar = arities(f); k <- m until ar) yield
         ("#Ptr_" + f + "_" + k, (0 until k).map("$" + _).toList, 
             if(k < ar - 1)
               ExprCall(ExprConstr("#Ptr_" + f + "_" + (k+1)), 
