@@ -9,6 +9,9 @@ case class Renaming(vector: List[Int]) {
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
   
+  def toMap: Map[Int, Int] =
+    vector.zipWithIndex.filter(_._1 != -1).map(_.swap).toMap
+    
   def arity: Int =
     (-1 :: vector).max + 1
     

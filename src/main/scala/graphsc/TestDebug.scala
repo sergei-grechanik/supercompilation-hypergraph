@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -v --nogen --test samples/dummy")
+    cmd("-tauto -v --nogen -g0 --test --resid add samples/add-assoc")
   }
 
 }

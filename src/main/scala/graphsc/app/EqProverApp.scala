@@ -263,6 +263,9 @@ object EqProverApp {
         System.err.println("Residualizing...")
       
       graph.residualizing = true
+      
+      //val trie = Trie.mkTrie(graph(conf.resid.get.get))
+      //println(trie.dump(10))
         
       // Even if there are cached results, they are of no use to us
       graph.clearRunCache()

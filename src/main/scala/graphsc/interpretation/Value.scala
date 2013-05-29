@@ -11,11 +11,11 @@ case class Ctr(constructor: String, args: List[Value]) extends Value {
   override def toString = constructor match {
     case "S" if args.size == 1 =>
       val child = args(0).toString
-      if(child.startsWith("#"))
-        "#" + (child.tail.toInt + 1)
+      if(child.forall(_.isDigit))
+        (child.tail.toInt + 1).toString
       else
         "S (" + child + ")"
-    case "Z" if args.isEmpty => "#0"
+    case "Z" if args.isEmpty => "0"
     case _ => constructor + " " + args.map("(" + _ + ")").mkString(" ")
   }
   
