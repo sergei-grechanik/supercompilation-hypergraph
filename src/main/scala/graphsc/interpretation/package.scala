@@ -1,6 +1,8 @@
 package graphsc
 
 package object interpretation {
+  type TrieSubst = Map[TrieVar, TrieVal]
+  
   def runHyperedge(
       h: Hyperedge, args: List[Value], nodeRunner: (RenamedNode, List[Value]) => Value): Value = {
     val Hyperedge(label, source, dests) = h

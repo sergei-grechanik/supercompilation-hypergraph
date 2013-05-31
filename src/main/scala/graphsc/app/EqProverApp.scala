@@ -16,8 +16,13 @@ object EqProverApp {
     val task = opt[String](descr = 
       "An equivalence we want to prove (up to renaming!) of the form foo=bar " +
     		"or auto to read the task from the first line of the file")
-    val resid = opt[String](descr = "Residualize the specified function. ")
     
+		val resid = opt[String](descr = "Residualize the specified function. ")
+    val residAutoTest = opt[Int](descr = 
+      "Run <arg> smallest automatically generated tests for each node on the defining boundary")
+    val residAutoTestOnly = opt[Boolean](descr =
+      "Don't use user-specified tests for residualization")
+		
 		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
     val codepth = opt[Int](default = Some(3), descr = "Codepth limit")
@@ -263,18 +268,25 @@ object EqProverApp {
         System.err.println("Residualizing...")
       
       graph.residualizing = true
-      
-      //val trie = Trie.mkTrie(graph(conf.resid.get.get))
-      //println(trie.dump(10))
         
       // Even if there are cached results, they are of no use to us
       graph.clearRunCache()
-      prog.loadTestsInto(graph)
+      
+      if(!conf.residAutoTestOnly.isSupplied)
+        prog.loadTestsInto(graph)
+      
+      val residualizer = ByTestingResidualizer(graph, conf.residAutoTest.get.getOrElse(1)) 
+      
+      if(conf.residAutoTest.isSupplied) {
+        if(conf.verbose.isSupplied)
+          System.err.println("Autogenerating and running tests...")
+        residualizer.autoTest(graph(conf.resid.get.get).node)
+      }
       
       if(conf.verbose.isSupplied)
         System.err.println("Done running tests...")
         
-      val subgraphs = ByTestingResidualizer(graph)(graph(conf.resid.get.get).node)
+      val subgraphs = residualizer(graph(conf.resid.get.get).node)
       if(conf.verbose.isSupplied)
         System.err.println("Residual graphs count: " + subgraphs.size)
       if(subgraphs.nonEmpty) {

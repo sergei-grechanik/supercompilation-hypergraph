@@ -535,6 +535,7 @@ trait TheHypergraph extends Hypergraph {
   def checkIntegrity() {
     if(integrityCheckEnabled)
       for(n <- nodes) {
+        assert(n.gluedTo == null)
         assert(n.deref.node == n)
         /*for(h <- n.ins) {
           assert(nodes(h.source.node))
@@ -548,6 +549,7 @@ trait TheHypergraph extends Hypergraph {
               (h.source.node.beingGlued && h.dests(0).node.beingGlued))
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
+          assert(h.dests.forall(n => n.node.gluedTo == null))
           assert(h.dests.forall(_.node.ins.contains(h)))
           assert(h.source.node == n)
           // h defines n. h cannot define n if its source has less variables than n

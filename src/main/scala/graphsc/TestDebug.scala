@@ -18,7 +18,8 @@ object TestDebug {
       }
     }
     
-    cmd("-tauto -v --nogen -g0 --test --resid add samples/add-assoc")
+    //cmd("-tauto -d3 -c2 -a4 -g5 -v --nogen --integrity-check --resid idle samples/idle")
+    cmd("-g0 -v --resid nrev nrev-code-dump")
   }
 
 }
