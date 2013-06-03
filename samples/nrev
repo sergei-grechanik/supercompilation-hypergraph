@@ -1,4 +1,3 @@
--- nrev=rev
 -- (on peano numbers)
 -- Use -a4 and wait for the generation 5
 
@@ -25,3 +24,7 @@ revTo x y =
 test: nrev (S (S (S (S (S (S (S (S (S (S (S (S Z))))))))))));
 test: rev (S (S (S Z)));
 test: revTo (S (S (S Z))) (S Z);
+
+prove: nrev = rev;
+
+--residualize: nrev;

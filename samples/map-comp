@@ -1,5 +1,3 @@
--- mapfmapg=mapfg
-
 -- A clumsy way of formulating this theorem in a first-order language.
 
 -- Our supercompiler doesn't require functions to be defined.
@@ -27,4 +25,4 @@ mapfg l =
   
 mapfmapg l = mapf (mapg l);
 
-  
+prove: mapfg = mapfmapg;  

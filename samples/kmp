@@ -57,3 +57,5 @@ test: matchAAB (Cons A (Cons A (Cons A (Cons A (Cons A Nil)))));
 test: matchAAB (Cons A (Cons A (Cons A (Cons B (Cons A Nil)))));
 test: matchAAB (Cons A (Cons A (Cons B (Cons A (Cons A Nil)))));
 test: matchAAB (Cons C (Cons A (Cons B (Cons A (Cons A (Cons B Nil))))));
+
+residualize: matchAAB;

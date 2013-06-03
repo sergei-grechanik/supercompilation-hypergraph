@@ -1,4 +1,3 @@
--- evendouble=true
 
 even x =
   case x of {
@@ -24,7 +23,6 @@ true x =
     S x -> true x
   };
 
-evendouble x = even (double x Z);
+test: even (double (S Z) Z);
 
-
-test: evendouble (S Z);
+prove: \x -> even (double x Z) = true;

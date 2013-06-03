@@ -1,4 +1,3 @@
--- f=constz
 -- Works better with --nogen
 -- Don't use with --test, it will loop for a very long time
 
@@ -25,4 +24,6 @@ f x =
 --  };
 
 test: f (S (S (S Z)));
+
+prove: f = constz;
 

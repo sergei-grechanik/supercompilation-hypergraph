@@ -1,5 +1,3 @@
--- bad=good
-
 bad x y =
   case x of {
     Z -> Z;
@@ -14,3 +12,6 @@ good x y =
 
 test: good (S (S Z)) (S Z);
 test: bad (S (S (S Z))) Z;
+
+prove: bad = good;
+

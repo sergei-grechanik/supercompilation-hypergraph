@@ -1,9 +1,8 @@
--- left=right
 
 -- Using the supercompiler as a very inefficient semiring solver.
 -- I had to switch off most of the axioms to make it work.
 
--- Used to work with -a4 -d100 -c100
+-- Works with -a4 -d100 -c100
 
 declare: add, mul, zero;
 
@@ -32,3 +31,5 @@ right x y = add (mul x x) (add (mul x y) (add (mul y x) (mul y y)));
 --right x y = add (add (mul x x) (mul y x)) (add (mul x y) (mul y y));
 --middle x y = add3r (mul x x) (mul y x) (add (mul x y) (mul y y));
 --right x y = add (mul x x) (add (mul y x) (add (mul x y) (mul y y)));
+
+prove: left = right;

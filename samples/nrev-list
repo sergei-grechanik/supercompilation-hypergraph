@@ -1,4 +1,3 @@
--- nrev=rev
 -- On lists
 -- Doesn't work yet
 
@@ -24,3 +23,5 @@ revTo x y =
 
 test: rev (C A1 (C A2 (C A3 N)));
 test: revTo (C A1 (C A2 (C A3 N))) (C A4 N);
+
+prove: nrev = rev;

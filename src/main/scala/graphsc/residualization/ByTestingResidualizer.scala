@@ -7,8 +7,11 @@ case class ProgramSubgraph(nodes: Set[Node], hyperedges: Map[Node, Hyperedge])
 
 case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcount: Int = 1) {
     
-  def apply(n: Node): List[ProgramSubgraph] =
-    go(n, ProgramSubgraph(Set(), Map()))
+  def apply(l: List[RenamedNode]): List[ProgramSubgraph] =
+    golist(l, ProgramSubgraph(Set(), Map()))
+  
+  def apply(n: RenamedNode): List[ProgramSubgraph] =
+    go(n.node, ProgramSubgraph(Set(), Map()))
   
   private def go(n: Node, already: ProgramSubgraph): List[ProgramSubgraph] = {
     if(already.nodes(n))
@@ -22,15 +25,15 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
       // TODO: Sometimes there may be a dead code that hasn't been tested
       val hs = if(prefhs.isEmpty) n.definingHyperedge.toList else prefhs
       hs.map(graph.normalize(_)).distinct.flatMap(h =>
-        procdests(ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> h)), h.dests))
+        golist(h.dests, ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> h))))
     }
   }
   
-  private def procdests(cursub: ProgramSubgraph, ds: List[RenamedNode]): List[ProgramSubgraph] =
+  private def golist(ds: List[RenamedNode], cursub: ProgramSubgraph): List[ProgramSubgraph] =
     ds match {
       case Nil => List(cursub)  
       case d :: tl =>
-        go(d.node, cursub).flatMap(procdests(_, tl))
+        go(d.node, cursub).flatMap(golist(tl, _))
     }
   
   // Run an automatically generated test

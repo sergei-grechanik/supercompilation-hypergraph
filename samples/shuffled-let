@@ -1,5 +1,9 @@
--- left=right
 
 left x y =  C x y (left x (S y));
 
 right y x = C x y (right (S y) x);
+
+--prove: left x y = right y x;
+
+-- f ~ g means "f is equal to g up to some renaming"
+prove: left ~ right;

@@ -35,21 +35,15 @@ Then you will need an alias like this:
 
     alias eqprover="java -jar ./target/scala-2.9.2/graphsc_2.9.2-0.1-SNAPSHOT-one-jar.jar"
 
-The equivalence prover should be provided with a file containing definitions and (optionally)
-a task in the form `foo=bar`:
+The equivalence prover should be provided with a file containing definitions and propositions to prove:
 
-    eqprover -t constz=idle samples/idle
-
-If the first line of the file contains a comment with a task (in the same format) then you can pass 
-`auto` instead:
-
-    eqprover -tauto samples/idle
+    eqprover --prove samples/idle
 
 You can use the flag `-v` to make the prover more verbose (for example, 
 it will then print what expressions it is merging by graph isomorphism).
 Note also that some examples may need adjustment of parameters:
 
-    eqprover -tauto -a4 -v  samples/add-assoc
+    eqprover --prove -a4 -v  samples/add-assoc
 
 (`-a4` increases the arity limit to 4)
 

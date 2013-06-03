@@ -12,15 +12,14 @@ object EqProverApp {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     version("Equivalence prover based on hypergraph supercompilation, version 0.1")
     banner("Usage: EqProver [OPTIONS] file")
+
+    val prove = opt[Boolean](descr = 
+      "Prove the propositions specified in the input file and then exit")
     
-    val task = opt[String](descr = 
-      "An equivalence we want to prove (up to renaming!) of the form foo=bar " +
-    		"or auto to read the task from the first line of the file")
-    
-		val resid = opt[String](descr = "Residualize the specified function. ")
-    val residAutoTest = opt[Int](descr = 
+		val resid = opt[Boolean](descr = "Residualize the function specified in the input file")
+    val residAutoTest = opt[Int](noshort = true, descr = 
       "Run <arg> smallest automatically generated tests for each node on the defining boundary")
-    val residAutoTestOnly = opt[Boolean](descr =
+    val residAutoTestOnly = opt[Boolean](noshort = true, descr =
       "Don't use user-specified tests for residualization")
 		
 		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
@@ -44,7 +43,8 @@ object EqProverApp {
     val nopretty = opt[Boolean](noshort = true, 
         descr="Disable transforming nodes to readable programs on the fly. " +
         		"Makes everything a bit faster.")
-    val test = opt[Boolean](noshort = true, descr = "Enable testing on the fly")
+    val test = opt[Boolean](noshort = true, descr = 
+      "Enable testing on the fly using the tests specified in the input file")
     val integrityCheck = opt[Boolean](noshort = true, hidden = true)
     
     val cheat = opt[Boolean](noshort = true,
@@ -53,9 +53,10 @@ object EqProverApp {
   
   def main(args: Array[String]) = mainBool(args) match {
     case Some(true) =>
-      System.err.println("SUCCESS: The equivalence was successfully proved (up to renaming)")
+      System.err.println("SUCCESS: All the goals were successfully proved")
     case Some(false) =>
-      System.err.println("FAIL: I was unable to prove the equivalence")
+      System.err.println("FAIL: I was unable to prove some of the goals")
+      System.exit(1)
     case _ =>
   }
   
@@ -81,8 +82,8 @@ object EqProverApp {
               List[(Hyperedge, Hyperedge)] =
             pairs.filter { 
               case (h1,h2) =>
-                nodesOf(h1,h2).map(depths(_)).max <= conf.depth.get.get &&
-                nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth.get.get
+                nodesOf(h1,h2).map(depths(_)).max <= conf.depth() &&
+                nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth()
             }
           
           override def enableLogging = conf.log.isSupplied
@@ -93,40 +94,35 @@ object EqProverApp {
             else super.limitFromMinCost(c)
         }
     
-    val maxarity = conf.arity.get.get
-    val maxdepth = conf.depth.get.get
-    val maxcodepth = conf.codepth.get.get
+    val maxarity = conf.arity()
+    val maxdepth = conf.depth()
+    val maxcodepth = conf.codepth()
     
     if(!conf.nogen.isSupplied)
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
-    val src = io.Source.fromFile(conf.file.get.get)
+    val src = io.Source.fromFile(conf.file())
     val srctext = src.mkString
     src.close()
     val prog = ProgramParser.parseProg(srctext).simplify
     prog.loadInto(graph)
     
-    // get the task
-    val task =
-      conf.task.get.map{ s => 
-        if(s == "auto") {
-          val m = "--[\t ]*([^= \t\n\r\f]+)=([^= \t\n\r\f]+)".r.findPrefixMatchOf(srctext)
-          if(!m.isDefined) {
-            System.err.println("Cannot read a task from file")
-            System.exit(1)
-          }
-          (graph(m.get.group(1)), graph(m.get.group(2))) 
-        }
-        else {
-          val names = s.split("=")
-          if(names.length != 2) {
-            System.err.println("Invalid task format: " + s)
-            System.exit(1)
-          }
-          (graph(names(0)), graph(names(1)))
-        }
-      }
+    // load props we want to prove as goals
+    val goals =
+      if(conf.prove.isSupplied)
+        prog.prove.map(_.loadAsGoal(graph))
+      else Nil
+      
+    if(conf.prove.isSupplied && goals.isEmpty) {
+      System.err.println("--prove is supplied but there is nothing to prove")
+      System.exit(2)
+    }
+      
+    val resid =
+      if(conf.resid.isSupplied)
+        prog.residualize.map(_.loadInto(graph))
+      else Nil
     
     // assign zero (co)depth to all initial nodes
     for(n <- graph.allNodes)
@@ -160,19 +156,24 @@ object EqProverApp {
     }
     
     def checktask() : Boolean = {
-      for((l,r) <- task)
-        if(l ~~ r) {
-          stop = true
-          return true
+      val achieved =
+        for(g <- goals) yield g match {
+          case GoalPropEqModuloRen(l, r) => l ~~ r
+          case GoalPropEq(l, r) => 
+            l ~~ r && (l.deref.renaming comp r.deref.renaming.inv).isId(r.used)
+          case _ => false
         }
-      false
+      if(achieved.forall(_ == true)) {
+        stop = true
+        true
+      } else false
     }
     
     def gendump() {
       if(conf.dumpGenCode.isSupplied) {
         val out = 
           new java.io.PrintWriter(
-            new java.io.File(conf.dumpGenCode.get.get + "-" + generation))
+            new java.io.File(conf.dumpGenCode() + "-" + generation))
         try {
           out.write(graph.toProg)
         } finally { out.close() }
@@ -184,7 +185,7 @@ object EqProverApp {
     checktask()
     
     // main loop
-    while(!stop && generation < conf.generations.get.get) {
+    while(!stop && generation < conf.generations()) {
       if(conf.verbose.isSupplied)
           System.err.println("Transforming...")
       
@@ -242,14 +243,14 @@ object EqProverApp {
           }
         }
         
-        if(!stop && conf.driveRecommended.get.get > 0) {
+        if(!stop && conf.driveRecommended() > 0) {
           if(conf.verbose.isSupplied)
               System.err.println("Driving recommended nodes")
           val stats = eprover.stats 
           for(n <- stats.toList.filter 
                 { case ((l,r),_) => 
                     LikenessCalculator[Int].likeness(l.deref, r.deref).map(_._1) == Some(0) }
-                .sortBy(-_._2).take(conf.driveRecommended.get.get)
+                .sortBy(-_._2).take(conf.driveRecommended())
                 .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
             graph.drive(n)
           }
@@ -264,6 +265,10 @@ object EqProverApp {
     
     // residualization (by testing)
     if(conf.resid.isSupplied) {
+      val residlist =
+        if(resid.nonEmpty) resid.map(_.deref)
+        else graph.namedNodes.values.toList.map(_.deref)
+      
       if(conf.verbose.isSupplied)
         System.err.println("Residualizing...")
       
@@ -280,13 +285,14 @@ object EqProverApp {
       if(conf.residAutoTest.isSupplied) {
         if(conf.verbose.isSupplied)
           System.err.println("Autogenerating and running tests...")
-        residualizer.autoTest(graph(conf.resid.get.get).node)
+        for(n <- residlist)
+          residualizer.autoTest(n.node)
       }
       
       if(conf.verbose.isSupplied)
         System.err.println("Done running tests...")
         
-      val subgraphs = residualizer(graph(conf.resid.get.get).node)
+      val subgraphs = residualizer(residlist)
       if(conf.verbose.isSupplied)
         System.err.println("Residual graphs count: " + subgraphs.size)
       if(subgraphs.nonEmpty) {
@@ -296,6 +302,14 @@ object EqProverApp {
                               h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
           println(graph.nodeFunName(h.source) + " =\n" +
               indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
+        }
+        for((name,n) <- graph.namedNodes if res.nodes.contains(n.deref.node)) {
+          val dern = n.deref
+          val r = graph.nodeFunName(dern)
+          val l = name + graph.prettyRename(dern.renaming,
+                      (0 until dern.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+          if(l != r)
+            println(l + " = " + r + ";")
         }
       }
     }
@@ -308,7 +322,7 @@ object EqProverApp {
       println(graph.toProg)
     }
     
-    if(conf.task.isSupplied)
+    if(conf.prove.isSupplied)
       Some(checktask())
     else
       None

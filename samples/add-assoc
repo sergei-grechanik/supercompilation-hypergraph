@@ -1,4 +1,3 @@
--- add3left=add3right
 -- needs -a4
 
 add x y =
@@ -7,8 +6,7 @@ add x y =
     S x -> S (add x y)
   };
   
-add3left x y z = add (add x y) z;
-add3right x y z = add x (add y z);
+test: add (add (S (S Z)) (S Z)) (S (S (S Z)));
+test: add (S (S Z)) (add (S (S (S Z))) (S Z));
 
-test: add3left (S (S Z)) (S Z) (S (S (S Z)));
-test: add3right (S (S Z)) (S (S (S Z))) (S Z);
+prove: add (add x y) z = add x (add y z);

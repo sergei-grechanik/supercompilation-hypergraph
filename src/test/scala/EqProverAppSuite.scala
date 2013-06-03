@@ -14,18 +14,18 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
     }
   }
   
-  cmd("-tauto --integrity-check --test -a4 ./samples/add-assoc")
-  cmd("-tauto --integrity-check --test ./samples/dummy")
-  cmd("-tauto --integrity-check --test ./samples/even-double")
-  cmd("-tauto --integrity-check --test ./samples/idle")
-  cmd("-tauto --integrity-check --test --nogen ./samples/idle")
+  cmd("--prove --integrity-check --test -a4 ./samples/add-assoc")
+  cmd("--prove --integrity-check --test ./samples/dummy")
+  cmd("--prove --integrity-check --test ./samples/even-double")
+  cmd("--prove --integrity-check --test ./samples/idle")
+  cmd("--prove --integrity-check --test --nogen ./samples/idle")
   // --test fails on quad-idle, --integrity-check takes too long
-  cmd("-tauto ./samples/quad-idle")
-  cmd("-tauto --integrity-check --nogen ./samples/quad-idle")
+  cmd("--prove ./samples/quad-idle")
+  cmd("--prove --integrity-check --nogen ./samples/quad-idle")
   // takes too long without --nogen
-  cmd("-tauto --integrity-check --nogen ./samples/exp-idle")
-  cmd("-tauto --integrity-check --test ./samples/inf")
-  cmd("-tauto --integrity-check --test ./samples/map-comp")
-  cmd("-tauto --integrity-check --test --nogen ./samples/shuffled-let")
+  cmd("--prove --integrity-check --nogen ./samples/exp-idle")
+  cmd("--prove --integrity-check --test ./samples/inf")
+  cmd("--prove --integrity-check --test ./samples/map-comp")
+  cmd("--prove --integrity-check --test --nogen ./samples/shuffled-let")
   
 }

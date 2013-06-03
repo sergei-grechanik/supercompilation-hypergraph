@@ -13,6 +13,11 @@ case class ExprCall(fun: Expr, args: List[Expr]) extends Expr
 case class ExprCaseOf(expr: Expr, cases: List[(String, List[String], Expr)]) extends Expr
 case class ExprLet(expr: Expr, binds: List[(String, Expr)]) extends Expr
 
+sealed trait GoalProp
+case class GoalPropEq(left: RenamedNode, right: RenamedNode) extends GoalProp
+case class GoalPropEqModuloRen(left: RenamedNode, right: RenamedNode) extends GoalProp
+case class GoalPropReturnsConstr(node: RenamedNode, constr: String) extends GoalProp
+
 sealed trait Prop {
   def mapExprs(f: Expr => Expr): Prop
   
@@ -28,8 +33,29 @@ sealed trait Prop {
       val free = (lhs.freeVars ++ rhs.freeVars).toList
       val l = ExprLambda(free, lhs).loadInto(g)
       val r = ExprLambda(free, rhs).loadInto(g)
+      g.glue(List(l, r))
     case _ =>
       throw new Exception("Loading props other than those stating equivalence is not supported")
+  }
+  
+  def loadExprsInto(g: NamedNodes): List[RenamedNode] = {
+    val free = allExprs.map(_.freeVars).flatten.distinct
+    for(e <- allExprs) yield
+      ExprLambda(free, e).loadInto(g)
+  }
+  
+  def loadAsGoal(g: NamedNodes): GoalProp = {
+    val lst = loadExprsInto(g)
+    this match {
+      case PropEq(lhs, rhs) =>
+        GoalPropEq(lst(0), lst(1))
+      case PropEqModuloRen(lhs, rhs) =>
+        GoalPropEqModuloRen(lst(0), lst(1))
+      case PropReturnsConstr(lhs, c) =>
+        GoalPropReturnsConstr(lst(0), c)
+      case PropNamed(_) =>
+        throw new Exception("Named props are not supported yet")
+    }
   }
 }
 
@@ -145,6 +171,7 @@ sealed trait Expr {
   
   def loadInto(g: NamedNodes, table: Map[String, Int] = Map()): RenamedNode = this match {
     case ExprLambda(vs, b) =>
+      // Top-level lambdas can be loaded into a graph
       b.loadInto(g, vs.zipWithIndex.toMap)
     case ExprCall(ExprFun(f), as) =>
       val n = g.newNode(f, as.size)
@@ -222,6 +249,7 @@ case class Program(
         assumptions ++ o.assumptions,
         prove ++ o.prove)
     
+  // map all top-level expressions
   def mapExprs(f: Expr => Expr): Program = {
     Program(
       defs.mapValues(_.map(f)).view.force, 
@@ -233,6 +261,7 @@ case class Program(
       prove.map(_.mapExprs(f)))
   }
   
+  // all top-level expressions
   def allExprs: Iterable[Expr] =
       defs.values.flatten ++ propdefs.values.flatMap(_.allExprs) ++ tests ++ 
       residualize ++ assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs)
@@ -257,6 +286,25 @@ case class Program(
         }
       }.view.force
     Program(newdefs, propdefs, tests, roots, residualize, assumptions, prove)
+  }
+  
+  // allows writing f = g instead of f x = g x in props
+  def topLevelEtaExpand: Program = {
+    def go(e: Expr): Expr = e match {
+      case e@ExprCall(ExprFun(name), as) if defs.contains(name) =>
+        // I think we should use the maximal possible arity here
+        // because after the procedure the minimal arity may increase
+        val ar = (0 :: defs(name).map(_.arity)).max
+        if(ar <= as.size) e
+        else {
+          val args = (0 until (ar - as.size)).map("$eta_" + _).toList
+          ExprLambda(args, ExprCall(ExprFun(name), as ++ args.map(ExprVar(_))))
+        }
+      case ExprFun(name) => go(ExprCall(ExprFun(name), Nil))
+      case ExprLambda(vs, body) => ExprLambda(vs, go(body)).mergeAppsAndLambdas
+      case _ => e
+    }
+    mapExprs(go)
   }
     
   def liftLambdas: Program = {
@@ -359,7 +407,7 @@ case class Program(
   }
   
   def simplify: Program = {
-    val p1 = this.resolveUnbound.mergeAppsAndLambdas
+    val p1 = this.resolveUnbound.mergeAppsAndLambdas.topLevelEtaExpand
     //println("Resolved and merged:\n" + p1)
     val p2 = p1.splitBadLambdas
     //println("Split bad:\n" + p2)
