@@ -63,6 +63,8 @@ git diff HEAD > "$OUTDIR/gitdiff"
 COMMIT="$(git rev-parse --short HEAD)"
 
 (
+echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+echo "<report>"
 echo "<conf>"
 echo "<name>$(basename $OUTDIR)</name>"
 echo "<date>$(date)</date>"
@@ -82,6 +84,8 @@ for t1 in `cat $TESTSET`; do
 done
 echo "</test-list>"
 echo "<timeout>$TIMEOUT</timeout>"
+echo "<mem-limit>$MEM_LIMIT</mem-limit>"
+echo "<threads>$PARALLEL</threads>"
 echo "</conf>"
 ) > "$OUTDIR/report.xml"
 
@@ -101,3 +105,4 @@ done
 done) | xargs -d "\n" -n 4 -P "$PARALLEL" "$(dirname $0)/single-run-wrapper.sh"
 
 cat "$OUTDIR"/part-*-report.xml >> "$OUTDIR/report.xml"
+echo "</report>" >> "$OUTDIR/report.xml"

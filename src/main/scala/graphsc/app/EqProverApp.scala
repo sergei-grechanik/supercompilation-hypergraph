@@ -16,13 +16,13 @@ object EqProverApp {
     val prove = opt[Boolean](descr = 
       "Prove the propositions specified in the input file and then exit")
     
-		val resid = opt[Boolean](descr = "Residualize the function specified in the input file")
+    val resid = opt[Boolean](descr = "Residualize the function specified in the input file")
     val residAutoTest = opt[Int](noshort = true, descr = 
       "Run <arg> smallest automatically generated tests for each node on the defining boundary")
     val residAutoTestOnly = opt[Boolean](noshort = true, descr =
       "Don't use user-specified tests for residualization")
 		
-		val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
+    val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
     val codepth = opt[Int](default = Some(3), descr = "Codepth limit")
     val nogen = opt[Boolean](noshort = true, descr = "Disable generalization")
@@ -38,6 +38,8 @@ object EqProverApp {
       descr = "Dump code for each generation to files <arg>-i")
     val verbose = opt[Boolean](descr = "Be more verbose")
     val log = opt[Boolean](descr = "Log transformations to stdout")
+    val stat = opt[Boolean](descr = "Print some statistics like number of nodes at the end")
+    
     val file = trailArg[String](required = true)
     
     val nopretty = opt[Boolean](noshort = true, 
@@ -320,6 +322,11 @@ object EqProverApp {
     
     if(conf.dumpCode.isSupplied) {
       println(graph.toProg)
+    }
+    
+    if(conf.stat.isSupplied) {
+      println("#nodes " + graph.allNodes.size)
+      println("#hyperedges " + graph.allHyperedges.size)
     }
     
     if(conf.prove.isSupplied)

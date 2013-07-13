@@ -24,7 +24,7 @@ fi
 wait
 
 (echo ""
-echo "<run j=$j i=$i>"
+echo "<run j='$j' i='$i'>"
 echo "<full-command>$COMMAND $o $t</full-command>"
 echo "<base-command>$COMMAND</base-command>"
 echo "<options>$o</options>"
@@ -32,4 +32,5 @@ echo "<test>$t1</test>"
 echo "<date>$STARTDATE</date>"
 echo "<temp-dir>$MYTEMP</temp-dir>"
 cat "$MYTEMP/stat" | sed "s/^\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/"
+cat "$MYTEMP/out"  | sed -n "s/^#\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/p"
 echo "</run>") >> "$OUTDIR/part-$(basename "$MYTEMP")-report.xml"
