@@ -165,7 +165,11 @@ trait Hypergraph {
       })
   }
   
+  def weakMerging: Boolean = false
+  
   def canonize(h: Hyperedge): (Renaming, Hyperedge) = h.label match {
+    case _ if weakMerging =>
+      (Renaming(h.used), h)
     case Let() =>
       val (r, newtail) = canonize(h.dests.tail, h.dests.tail.map(_ => 0))
       (r, Hyperedge(Let(), r.inv comp h.source, h.dests(0) :: newtail))
@@ -230,7 +234,8 @@ trait TheHypergraph extends Hypergraph {
     
     if(h.dests.nonEmpty)
       h.dests.minBy(_.node.insMut.size).node.insMut
-      .find(x => x.label == h.label && x.dests == h.dests) match {
+      .find(x => x.label == h.label && x.dests == h.dests &&
+          (!weakMerging || x.source.deref.renaming == h.source.deref.renaming)) match {
         case Some(x) if h.source.node == x.source.node =>
         case Some(x) => glueNodes(x.source, h.source)
         case None => 

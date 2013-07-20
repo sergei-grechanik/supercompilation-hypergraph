@@ -30,6 +30,7 @@ object EqProverApp {
     val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
     val driveRecommended = opt[Int](noshort = true, default = Some(0), 
         descr = "Drive 2*<arg> recommended (by eqprover) nodes")
+    val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
     
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
     val dumpCode = opt[Boolean](noshort = true, 
@@ -76,9 +77,10 @@ object EqProverApp {
         with SelfLetAdder
         with AutoTransformer
         with HyperLogger {
-          override val integrityCheckEnabled = conf.integrityCheck.isSupplied
-          override val onTheFlyTesting = conf.test.isSupplied
-          override val prettifyingEnabled = !conf.nopretty.isSupplied
+          override val integrityCheckEnabled = conf.integrityCheck()
+          override val onTheFlyTesting = conf.test()
+          override val prettifyingEnabled = !conf.nopretty()
+          override val weakMerging = conf.weakMerging()
           
           override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
               List[(Hyperedge, Hyperedge)] =
@@ -88,7 +90,7 @@ object EqProverApp {
                 nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth()
             }
           
-          override def enableLogging = conf.log.isSupplied
+          override def enableLogging = conf.log()
           
           var residualizing = false
           override def limitFromMinCost(c: Int): Int =
@@ -100,7 +102,7 @@ object EqProverApp {
     val maxdepth = conf.depth()
     val maxcodepth = conf.codepth()
     
-    if(!conf.nogen.isSupplied)
+    if(!conf.nogen())
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
@@ -112,17 +114,17 @@ object EqProverApp {
     
     // load props we want to prove as goals
     val goals =
-      if(conf.prove.isSupplied)
+      if(conf.prove())
         prog.prove.map(_.loadAsGoal(graph))
       else Nil
       
-    if(conf.prove.isSupplied && goals.isEmpty) {
+    if(conf.prove() && goals.isEmpty) {
       System.err.println("--prove is supplied but there is nothing to prove")
       System.exit(2)
     }
       
     val resid =
-      if(conf.resid.isSupplied)
+      if(conf.resid())
         prog.residualize.map(_.loadInto(graph))
       else Nil
     
@@ -131,7 +133,7 @@ object EqProverApp {
       graph.zeroBoth(n.deref)
       
     // load tests
-    if(conf.test.isSupplied)
+    if(conf.test())
       prog.loadTestsInto(graph)
       
     // This buffer stores all hyperedges that will be added to the graph
@@ -139,7 +141,7 @@ object EqProverApp {
     // This buffer stores hyperedges for each transformation and makes sure
     // that no hyperedge exceeds the maximal arity
     val tr =
-      if(conf.cheat.isSupplied)
+      if(conf.cheat())
         new PostFilter(buf, h => h.arity <= maxarity) with Transformations
       else
         new PostFilter(buf, h => h.used.size <= maxarity) with Transformations
@@ -149,7 +151,7 @@ object EqProverApp {
     var stop = false
     
     def stats() {
-      if(conf.verbose.isSupplied) {
+      if(conf.verbose()) {
         System.err.println("Generation: " + generation)
         System.err.println("Nodes: " + graph.allNodes.size)
         System.err.println("Hyperedges: " + graph.allHyperedges.size)
@@ -188,11 +190,11 @@ object EqProverApp {
     
     // main loop
     while(!stop && generation < conf.generations()) {
-      if(conf.verbose.isSupplied)
+      if(conf.verbose())
           System.err.println("Transforming...")
       
       val trans =
-        if(conf.nogen.isSupplied) tr.transDrive
+        if(conf.nogen()) tr.transDrive
         else tr.transDrive & tr.letUp(maxarity)
       graph.transform(trans)
       //buf.commit()
@@ -201,8 +203,8 @@ object EqProverApp {
       
       checktask()
             
-      if(!stop && !conf.noiso.isSupplied) {
-        if(conf.verbose.isSupplied)
+      if(!stop && !conf.noiso()) {
+        if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
         val like =
@@ -213,12 +215,12 @@ object EqProverApp {
         
         var eprover = new EquivalenceProver(graph)
         
-        if(conf.verbose.isSupplied)
+        if(conf.verbose())
           System.err.println("Performing merging by isomorphism...")
         val candidates = 
           like.toList.sortBy(-_._1._1)
             .filter(p => p._1._1 > 0 && !(p._2 ~~ p._3))
-        if(conf.verbose.isSupplied)
+        if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
         for(((i,ren),l,r) <- candidates 
             if !stop && !(l ~~ r)) {
@@ -226,7 +228,7 @@ object EqProverApp {
           val rpretty = r.prettyDebug
           val eq = eprover.prove(l.deref.node, r.deref.node)
           if(eq != None) {
-            if(conf.verbose.isSupplied) {
+            if(conf.verbose()) {
               System.err.println("==These two are equal==")
               System.err.println(lpretty)
               System.err.println("=======================")
@@ -246,7 +248,7 @@ object EqProverApp {
         }
         
         if(!stop && conf.driveRecommended() > 0) {
-          if(conf.verbose.isSupplied)
+          if(conf.verbose())
               System.err.println("Driving recommended nodes")
           val stats = eprover.stats 
           for(n <- stats.toList.filter 
@@ -266,12 +268,12 @@ object EqProverApp {
     }
     
     // residualization (by testing)
-    if(conf.resid.isSupplied) {
+    if(conf.resid()) {
       val residlist =
         if(resid.nonEmpty) resid.map(_.deref)
         else graph.namedNodes.values.toList.map(_.deref)
       
-      if(conf.verbose.isSupplied)
+      if(conf.verbose())
         System.err.println("Residualizing...")
       
       graph.residualizing = true
@@ -279,23 +281,23 @@ object EqProverApp {
       // Even if there are cached results, they are of no use to us
       graph.clearRunCache()
       
-      if(!conf.residAutoTestOnly.isSupplied)
+      if(!conf.residAutoTestOnly())
         prog.loadTestsInto(graph)
       
       val residualizer = ByTestingResidualizer(graph, conf.residAutoTest.get.getOrElse(1)) 
       
       if(conf.residAutoTest.isSupplied) {
-        if(conf.verbose.isSupplied)
+        if(conf.verbose())
           System.err.println("Autogenerating and running tests...")
         for(n <- residlist)
           residualizer.autoTest(n.node)
       }
       
-      if(conf.verbose.isSupplied)
+      if(conf.verbose())
         System.err.println("Done running tests...")
         
       val subgraphs = residualizer(residlist)
-      if(conf.verbose.isSupplied)
+      if(conf.verbose())
         System.err.println("Residual graphs count: " + subgraphs.size)
       if(subgraphs.nonEmpty) {
         val res = subgraphs.minBy(_.nodes.size)
@@ -316,20 +318,20 @@ object EqProverApp {
       }
     }
     
-    if(conf.dumpDot.isSupplied) {
+    if(conf.dumpDot()) {
       println(graph.toDot)
     }
     
-    if(conf.dumpCode.isSupplied) {
+    if(conf.dumpCode()) {
       println(graph.toProg)
     }
     
-    if(conf.stat.isSupplied) {
+    if(conf.stat()) {
       println("#nodes " + graph.allNodes.size)
       println("#hyperedges " + graph.allHyperedges.size)
     }
     
-    if(conf.prove.isSupplied)
+    if(conf.prove())
       Some(checktask())
     else
       None

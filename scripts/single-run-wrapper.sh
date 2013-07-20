@@ -34,3 +34,5 @@ echo "<temp-dir>$MYTEMP</temp-dir>"
 cat "$MYTEMP/stat" | sed "s/^\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/"
 cat "$MYTEMP/out"  | sed -n "s/^#\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/p"
 echo "</run>") >> "$OUTDIR/part-$(basename "$MYTEMP")-report.xml"
+
+cp "$OUTDIR/part-$(basename "$MYTEMP")-report.xml" "$MYTEMP/report-part.xml"

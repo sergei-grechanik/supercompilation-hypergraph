@@ -106,3 +106,8 @@ done) | xargs -d "\n" -n 4 -P "$PARALLEL" "$(dirname $0)/single-run-wrapper.sh"
 
 cat "$OUTDIR"/part-*-report.xml >> "$OUTDIR/report.xml"
 echo "</report>" >> "$OUTDIR/report.xml"
+
+if [[ -z "$KEEP_TEMPDIR" ]]; then
+	rm "$OUTDIR"/part-*-report.xml
+fi
+

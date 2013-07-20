@@ -18,6 +18,9 @@ case class Renaming(vector: List[Int]) {
   def isId(used: Set[Int]) =
     vector.zipWithIndex.forall{ case (a,b) => !used(b) || a == b }
     
+  def seemsId =
+    vector.zipWithIndex.forall{ case (a,b) => a == -1 || a == b }
+    
   def isPermutation =
     vector.sorted == (0 until vector.length).toList
   
