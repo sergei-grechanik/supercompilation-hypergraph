@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
 import sys
+import os.path
 import argparse
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 
-argp = argparse.ArgumentParser("Transform report.xml into a human-readable table")
-argp.add_argument('files', nargs='+')
-argp.add_argument('-f', nargs=1, default=["user"])
+argp = argparse.ArgumentParser(description="Transform report.xml into a human-readable table")
+argp.add_argument('file', nargs='+')
+argp.add_argument('-f', nargs=1, default=["user"], help="fields")
+argp.add_argument('--all', '-a', action="store_true")
 
 args = argp.parse_args()
 
@@ -16,14 +18,17 @@ fields = args.f[0].split(",")
 table = defaultdict(lambda : defaultdict(list))
 optsset = set()
 
-for f in args.files:
+for f in args.file:
     tree = ET.parse(f)
     for run in tree.findall("run"):
-        table[run.find("test").text][run.find("options").text].append(run)
-        optsset.add(run.find("options").text)
+        opt = run.find("base-command").text + " " + run.find("options").text
+        table[run.find("test").text][opt].append(run)
+        optsset.add(opt)
 
-print("test\t" + 
-  "\t".join("\t".join("\"" + o + " (" + f + ")\"" for f in fields) for o in optsset))
+prefix = os.path.commonprefix(optsset)
+preflen = len(prefix)
+
+output = [["test"] + ["\"" + o[preflen:] + "\"" for o in optsset]]
 
 warnings = []
 
@@ -35,7 +40,11 @@ def mkcell(runs, f):
         codes = list(int(r.find("exit-code").text) for r in runs)
         if any(c == 0 for c in codes) and any(c == 1 for c in codes):
             warn(runs[0])
-        if all(c != 0 for c in codes):
+            
+        if args.all:
+            l = [float(r.find(f).text) for r in runs if r.find(f) is not None]
+            return str(sum(l)/len(l)) if l else "fail"
+        elif all(c != 0 for c in codes):
             return "fail"
         else:
             l = [float(r.find(f).text) for r in runs if int(r.find("exit-code").text) == 0]
@@ -44,8 +53,17 @@ def mkcell(runs, f):
         return "?"
 
 for t, runs in table.iteritems():
-    print(t + "\t" + 
-          "\t".join("\t".join(mkcell(runs[o], f) for f in fields) for o in optsset))
+    for f in fields:
+        output.append([t + " (" + f + ")"] + 
+                      [mkcell(runs[o], f) for o in optsset])
+    
+lens = [max(len(l[i]) for l in output) for i in xrange(0, len(optsset) + 1)]
+
+print "Base: " + prefix
+
+for l in output:
+    print " ".join(c + " " * (m - len(c)) for c, m in zip(l, lens))
+    
     
 for w in warnings:
     print w
