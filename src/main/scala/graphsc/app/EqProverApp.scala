@@ -21,6 +21,8 @@ object EqProverApp {
       "Run <arg> smallest automatically generated tests for each node on the defining boundary")
     val residAutoTestOnly = opt[Boolean](noshort = true, descr =
       "Don't use user-specified tests for residualization")
+      
+    val only = opt[Boolean](descr = "Don't load unreferenced functions into graph")
 		
     val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
@@ -109,7 +111,8 @@ object EqProverApp {
     val src = io.Source.fromFile(conf.file())
     val srctext = src.mkString
     src.close()
-    val prog = ProgramParser.parseProg(srctext).simplify
+    val preprog = ProgramParser.parseProg(srctext).simplify
+    val prog = if(conf.only()) preprog.removeUnreferenced else preprog
     prog.loadInto(graph)
     
     // load props we want to prove as goals
@@ -265,6 +268,8 @@ object EqProverApp {
       gendump()
       checktask()
       
+      if(graph.updatedPairs.isEmpty)
+        stop = true
     }
     
     // residualization (by testing)

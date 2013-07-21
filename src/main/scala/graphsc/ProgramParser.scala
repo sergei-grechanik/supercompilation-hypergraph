@@ -418,7 +418,27 @@ case class Program(
     p4.splitTests
   }
     
-  // TODO: Implement removing unreferenced functions
+  // Removes unreferenced functions from defs
+  def removeUnreferenced: Program = {
+    val rexpr =
+      propdefs.values.flatMap(_.allExprs) ++ tests ++ residualize ++ 
+      defs.filterKeys(roots.contains(_)).values.flatten ++
+      assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs)
+    val funs = collection.mutable.Set[String]()
+    val stack = collection.mutable.Stack[String]()
+    for(ExprFun(f) <- rexpr.flatMap(_.allSubExprs))
+      stack.push(f)
+    while(stack.nonEmpty) {
+      val f = stack.pop()
+      if(!funs(f)) {
+        funs += f
+        for(es <- defs.get(f); e <- es; ExprFun(g) <- e.allSubExprs)
+          stack.push(g)
+      }
+    }
+      
+    Program(defs.filterKeys(funs(_)), propdefs, tests, roots, residualize, assumptions, prove)
+  }
     
   def loadInto(g: NamedNodes) {
     for((f, ds) <- defs if ds.nonEmpty) {
