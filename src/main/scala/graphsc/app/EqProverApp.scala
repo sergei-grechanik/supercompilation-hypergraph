@@ -196,6 +196,8 @@ object EqProverApp {
       if(conf.verbose())
           System.err.println("Transforming...")
       
+      graph.changed = false
+          
       val trans =
         if(conf.nogen()) tr.transDrive
         else tr.transDrive & tr.letUp(maxarity)
@@ -268,7 +270,7 @@ object EqProverApp {
       gendump()
       checktask()
       
-      if(graph.updatedPairs.isEmpty)
+      if(!graph.changed)
         stop = true
     }
     

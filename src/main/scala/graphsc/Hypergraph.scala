@@ -224,6 +224,13 @@ trait TheHypergraph extends Hypergraph {
     res.source.node.outsMut += res
     res.dests.foreach(_.node.insMut.add(res))
     reduceUsed(res.source.node, sourcenode_used)
+    
+    // if it is var, constr or unused, we should normalize incident hyperedges
+    if(h.label.isInstanceOf[Var] || 
+        h.label.isInstanceOf[Construct] || 
+        h.label.isInstanceOf[Unused])
+      normalizeIncident(h.source.node)
+    
     // after reduction of used sets res can become undereferenced
     val ultimate = normalize(res)
     ultimate

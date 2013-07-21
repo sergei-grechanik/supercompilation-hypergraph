@@ -3,6 +3,7 @@ package transformation
 import scala.util.Random
 
 trait BiTransformManager extends Hypergraph with DepthTracker {
+  var changed = true
   val updatedPairs = collection.mutable.Set[(Hyperedge, Hyperedge)]()
   
   // TODO: Find a better name
@@ -12,6 +13,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def onNewHyperedge(h: Hyperedge) {
+    changed = true
     for(h1 <- h.source.node.insMut)
       updatedPairs.add((h1,h))
     for(d <- h.dests; h2 <- d.node.outsMut)
@@ -20,6 +22,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def beforeGlue(r: RenamedNode, n: Node) {
+    changed = true
     for(h1 <- n.insMut; h2 <- r.node.outsMut)
       updatedPairs.add((h1,h2))
     for(h1 <- r.node.insMut; h2 <- n.outsMut)
@@ -28,6 +31,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def onUsedReduced(n: Node) {
+    changed = true
     for(h1 <- n.insMut; h2 <- n.outsMut)
       updatedPairs.add((h1,h2)) 
     super.onUsedReduced(n)
