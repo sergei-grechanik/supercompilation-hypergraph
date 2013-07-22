@@ -2,6 +2,7 @@ package graphsc
 
 import scala.util.parsing.combinator._
 import graphsc.interpretation._
+import java.io.File
 
 //sealed trait Expr
 case class ExprLambda(vars: List[String], body: Expr) extends Expr
@@ -134,6 +135,14 @@ sealed trait Expr {
     case _ => (Set[String]() /: mapChildrenToList((vs, b) => b.freeVars -- vs))(_ ++ _)
   }
   
+  def bindUnbound: Expr = {
+    val fv = freeVars
+    if(fv.isEmpty) 
+      this
+    else
+      ExprLambda(fv.toList, this)
+  }
+  
   def isConst: Boolean = this match {
     case ExprConstr(_) => true
     case ExprCall(ExprConstr(_), as) =>
@@ -235,7 +244,13 @@ case class Program(
   
   // TODO: other components
   override def toString: String =
-    (for((n, bs) <- defs.toList; b <- bs) yield n + " = " + b + ";\n").mkString
+    (for((n, bs) <- defs.toList; b <- bs) yield n + " = " + b + ";\n").mkString + 
+    tests.map("test:" + _ + ";\n").mkString +
+    "root: " + roots.mkString(", ") + ";\n" +
+    residualize.map("residualize: " + _ + ";\n").mkString +
+    assumptions.map("assume: " + _ + ";\n").mkString +
+    prove.map("prove: " + _ + ";\n").mkString
+    
   
   def ++(o: Program): Program =
     Program(
@@ -323,13 +338,13 @@ case class Program(
       case ExprLambda(vs, b) =>
         val newb = go(b)
         val name = newname()
-        val free = newb.freeVars.toList
+        val free = (newb.freeVars -- vs).toList
         newdefs += name -> List(ExprLambda(free ++ vs, newb))
         ExprCall(ExprFun(name), free.map(ExprVar(_)))
       case _ => e.mapChildren((_,b) => go(b))
     }
     
-    // TODO: This is wrong if tests contain top-velel lambdas
+    // TODO: This is wrong if tests contain top-level lambdas
     val newprog = mapExprs {
       case ExprLambda(vs, b) => ExprLambda(vs, go(b))
       case b => go(b)
@@ -421,11 +436,10 @@ case class Program(
   // Removes unreferenced functions from defs
   def removeUnreferenced: Program = {
     val rexpr =
-      propdefs.values.flatMap(_.allExprs) ++ tests ++ residualize ++ 
-      defs.filterKeys(roots.contains(_)).values.flatten ++
+      propdefs.values.flatMap(_.allExprs) ++ tests ++ residualize ++
       assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs)
     val funs = collection.mutable.Set[String]()
-    val stack = collection.mutable.Stack[String]()
+    val stack = collection.mutable.Stack[String](roots:_*)
     for(ExprFun(f) <- rexpr.flatMap(_.allSubExprs))
       stack.push(f)
     while(stack.nonEmpty) {
@@ -439,6 +453,17 @@ case class Program(
       
     Program(defs.filterKeys(funs(_)), propdefs, tests, roots, residualize, assumptions, prove)
   }
+  
+  // Prepend "q." to every function name
+  def qualify(q: String): Program = {
+    def qual(l: Any, e: Expr): Expr = e match {
+      case ExprFun(f) => ExprFun(q + "." + f)
+      case _ => e.mapChildren(qual)
+    }
+    val p = mapExprs(qual(null, _))
+    Program(p.defs.map(p => q + "." + p._1 -> p._2), 
+      p.propdefs, p.tests, p.roots.map(q + "." + _), p.residualize, p.assumptions, p.prove)
+  }
     
   def loadInto(g: NamedNodes) {
     for((f, ds) <- defs if ds.nonEmpty) {
@@ -447,7 +472,14 @@ case class Program(
       assert(ars.forall(_ == ar))
       val node = g.newNode(f, ar)
       for(d <- ds)
-        g.glue(List(node, d.loadInto(g)))
+        try {
+            g.glue(List(node, d.loadInto(g)))
+        } catch {
+          case e: Throwable => 
+            System.err.println("Error while loading " + f)
+            System.err.println(f + " = " + d)
+            throw e
+        }
     }
     
     for(a <- assumptions)
@@ -468,7 +500,7 @@ case class Program(
   }
 }
 
-object ProgramParser extends RegexParsers {
+class ProgramParser(path: String) extends RegexParsers {
   override val whiteSpace = """(\s|--.*\n)+""".r
   def fname = not("of\\b".r) ~> "[a-z$][a-zA-Z0-9$.@_]*".r
   def cname = "[A-Z#][a-zA-Z0-9$.@_]*".r
@@ -494,8 +526,19 @@ object ProgramParser extends RegexParsers {
   
   def decl: Parser[Program] =
     definition | eqdecl | propdecl | testdecl | rootdecl | residdecl | assumedecl | provedecl |
-    decldecl
+    decldecl | include
+    
+  def file = 
+    ("\"[^\"]+\"" ^^ (s => s.substring(1,-1)) | """[^;\s]+""".r) ~ opt("as" ~> fname) ^^ { 
+        case s~None => ProgramParser.parseFile(path + "/" + s).resolveUnbound
+        case s~Some(q) => ProgramParser.parseFile(path + "/" + s).resolveUnbound.qualify(q)
+      }
   
+  def include: Parser[Program] =
+    ("include:" ~> file) |
+    ("import:" ~> file ~ ("(" ~> repsep(fname, ",") <~ ")")) ^^ 
+      { case p~ns => Program(Program(defs = p.defs, roots = ns).removeUnreferenced.defs) }
+    
   def definition: Parser[Program] =
     (fname ~ rep(varname) <~ "=") ~! expr ^^
       { case f~as~e => Program(defs = Map(f -> List(ExprLambda(as, e)))) }
@@ -558,4 +601,13 @@ object ProgramParser extends RegexParsers {
   def lambda: Parser[ExprLambda] =
     ("\\" ~> rep(varname) <~ "->") ~ expr ^^
       { case vs~e => ExprLambda(vs, e) }
+}
+
+object ProgramParser extends ProgramParser("") {
+  def parseFile(path: String): Program = {
+    val src = io.Source.fromFile(path)
+    val srctext = src.mkString
+    src.close()
+    (new ProgramParser((new File(path)).getParent())).parseProg(srctext)
+  }
 }

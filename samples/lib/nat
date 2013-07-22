@@ -1,0 +1,101 @@
+
+add x y = 
+  case x of {
+    S x -> add x y;
+    Z -> y;
+  };
+
+mul x y =
+  case x of {
+    S x -> add y (mul x y);
+    Z -> Z;
+  };
+
+exp x y =
+  case y of {
+    S y -> mul x (exp x y);
+    Z -> S Z;
+  };
+
+ack x y =
+  case x of {
+    Z -> S y;
+    S x ->
+      case y of {
+        Z -> ack x (S Z);
+	S y -> ack x (ack (S x) y);
+      };
+  };
+
+idNat x =
+  case x of {
+    S x -> S (idNat x);
+    Z -> Z;
+  };
+
+const x y =
+  case x of {
+    S x -> const x;
+    Z -> y;
+  };
+
+constz x =
+  case x of {
+    S x -> constz x;
+    Z -> Z;
+  };
+
+double x =
+  case x of {
+    S x -> S (S (double x));
+    Z -> Z;
+  };
+
+even x =
+  case x of {
+    S x -> odd x;
+    Z -> T;
+  };
+
+odd x =
+  case x of {
+    S x -> even x;
+    Z -> F;
+  };
+
+qrevNat x = qrevNatTo x Z;
+
+qrevNatTo x y =
+  case x of {
+    S x -> qrevNatTo x (S y);
+    Z -> y;
+  };
+
+nrevNat x =
+  case x of {
+    S x -> add (nrevNat x) (S Z);
+    Z -> Z;
+  };
+
+nrevNatTo x y =
+  case x of {
+    S x -> add (nrevNat x) (S y);
+    Z -> y;
+  };
+
+foldNat f a x =
+  case x of {
+    S x -> f (foldNat f a x);
+    Z -> a;
+  };
+
+church x f a = foldNat f a x; 
+
+unchurch j = j (\x -> S x) Z;
+
+chadd i j f a = i f (j f a);
+
+chmul i j f = i (j f);
+
+chexp i j = j i;
+

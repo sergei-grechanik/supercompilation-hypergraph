@@ -1,0 +1,4 @@
+import: ../lib/nat (add, chadd, church, unchurch);
+
+prove: unchurch (chadd (church x) (church y)) = add x y;
+

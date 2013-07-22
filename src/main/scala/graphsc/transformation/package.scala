@@ -86,7 +86,7 @@ package object transformation {
     val node = new Node(src2.used | h2.used)
     val rnode = RenamedNode(src2.renaming.inv, node)
     
-    val maxvar = (0 :: h1.dests.map(_.arity)).max + h1.shifts.max
+    val maxvar = (0 :: h1.dests.map(_.arity)).max + (0 :: h1.shifts).max
     
     // as there may be several occurences of src2 in ds1, we should consider them one by one
     val pairs = 

@@ -1,0 +1,5 @@
+import: ../lib/nat (idNat, church, unchurch);
+
+prove: unchurch (church x) = idNat x;
+residualize: unchurch (church x);
+

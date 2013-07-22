@@ -108,11 +108,8 @@ object EqProverApp {
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
-    val src = io.Source.fromFile(conf.file())
-    val srctext = src.mkString
-    src.close()
-    val preprog = ProgramParser.parseProg(srctext).simplify
-    val prog = if(conf.only()) preprog.removeUnreferenced else preprog
+    val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound
+    val prog = if(conf.only()) preprog.removeUnreferenced.simplify else preprog.simplify
     prog.loadInto(graph)
     
     // load props we want to prove as goals
@@ -128,7 +125,7 @@ object EqProverApp {
       
     val resid =
       if(conf.resid())
-        prog.residualize.map(_.loadInto(graph))
+        prog.residualize.map(_.bindUnbound.loadInto(graph))
       else Nil
     
     // assign zero (co)depth to all initial nodes

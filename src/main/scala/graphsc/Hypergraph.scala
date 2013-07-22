@@ -137,13 +137,15 @@ trait Hypergraph {
           case Some(Hyperedge(Unused(), _, _)) =>
             Hyperedge(Unused(), h.source, Nil)
           case Some(Hyperedge(Construct(name), src2, args)) =>
-            val ((_,n),branch) = (cases zip h.dests.tail).find(_._1._1 == name).get
-            assert(n == args.size)
-            val bs = 
-              args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
-              (n until branch.arity).map(i => variable(i - n))
-            
-            simplify(Hyperedge(Let(), h.source, List(branch) ++ bs))
+            (cases zip h.dests.tail).find(p => p._1._1 == name && p._1._2 == args.size) match {
+              case Some((_,branch)) =>
+                val bs = 
+                  args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
+                  (args.size until branch.arity).map(i => variable(i - args.size))
+                simplify(Hyperedge(Let(), h.source, List(branch) ++ bs))
+              case None =>
+                Hyperedge(Unused(), h.source, Nil)
+            }
           case _ => h
         }
       case _ => h
