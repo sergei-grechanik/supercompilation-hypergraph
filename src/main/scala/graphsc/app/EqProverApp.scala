@@ -167,7 +167,7 @@ object EqProverApp {
             l ~~ r && (l.deref.renaming comp r.deref.renaming.inv).isId(r.used)
           case _ => false
         }
-      if(achieved.forall(_ == true)) {
+      if(achieved.nonEmpty && achieved.forall(_ == true)) {
         stop = true
         true
       } else false

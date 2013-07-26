@@ -16,6 +16,8 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
   private def go(n: Node, already: ProgramSubgraph): List[ProgramSubgraph] = {
     if(already.nodes(n))
       List(already)
+    else if(n.outs.size == 1)
+      List(ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> n.outs.head)))
     else {
       // We start with 
       //val hss =
@@ -37,6 +39,7 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
     }
   
   // Run an automatically generated test
+  // tests should be deeper than a perfect subtree
   def autoTest(node: Node) {
     val trie = Trie.mkTrie(node.deref)
     val visited = collection.mutable.Set[Node]()

@@ -18,8 +18,8 @@ object TestDebug {
       }
     }
     
-    //cmd("-tauto -d3 -c2 -a4 -g5 -v --nogen --integrity-check --resid idle samples/idle")
-    cmd("-g0 -v --resid nrev nrev-code-dump")
+    cmd("--prove --integrity-check --test ./samples/even-double")
+    //cmd("-g0 -v --resid nrev nrev-code-dump")
   }
 
 }

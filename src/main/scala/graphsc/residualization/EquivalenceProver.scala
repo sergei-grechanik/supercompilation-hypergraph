@@ -59,12 +59,17 @@ class EquivalenceProver[S, L](scc: SCC = null)
     val lind = hist.indexWhere(_._1._1 == l)
     val rind = hist.indexWhere(_._2._1 == r)
 
-    if(l == r)
-      (ren | Renaming(r.used)).map(EqProofTree(_, (l,r)))
+    val renid = (ren | Renaming(r.used))
+    
+    if(l == r && l.used.subsetOf(ren.codomain) && r.used.subsetOf(ren.domain))
+      Some(EqProofTree(ren, (l,r)))
+    else if(l == r && renid.nonEmpty)
+      renid.map(EqProofTree(_, (l,r)))
     else if(lind != -1 && rind != -1) {
       hist.find(p => p._1._1 == l && p._2._1 == r) match {
         case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) =>
-          // TODO: I think we should add some variables to ren (if they guarantee correctness)
+          // I thought we should add some variables to ren (if they guarantee correctness)
+          // But now I think they will be there if they guarantee correctness.
           Some(EqProofTree(ren, (l,r)))
         case _ => None
       }
@@ -174,7 +179,7 @@ class EquivalenceProver[S, L](scc: SCC = null)
                      likeness(ld, rd) != None
                 ) yield {
                 // we've chosen the next node from the rhs dests,
-                // do a recursiv call and combine the renamings
+                // do a recursive call and combine the renamings
                 val nexts = nextDests(tail1, rest.filterNot(_._2 == j))
                 nexts.map { case (ds, ren) => (rd :: ds, (ren | Renaming(j -> i)).get) }
               }).flatten

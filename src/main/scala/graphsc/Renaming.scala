@@ -11,6 +11,12 @@ case class Renaming(vector: List[Int]) {
   
   def toMap: Map[Int, Int] =
     vector.zipWithIndex.filter(_._1 != -1).map(_.swap).toMap
+  
+  def codomain: Set[Int] =
+    vector.filter(_ != -1).toSet
+    
+  def domain: Set[Int] =
+    vector.zipWithIndex.filter(_._1 != -1).map(_._2).toSet
     
   def arity: Int =
     (-1 :: vector).max + 1
