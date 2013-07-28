@@ -204,7 +204,19 @@ object EqProverApp {
       generation += 1
       
       checktask()
-            
+      
+      /*val genr = new Generalizer()
+      val gens =
+        for(i <- graph.nodes.toList; j <- graph.nodes.toList; if i.hashCode() < j.hashCode()) yield
+          genr.generalizeNodes(i, j)
+      
+      if(gens.nonEmpty) {
+        val fl = gens.flatten.sortBy(-_.depth).filter(_.depth > 1)
+        if(fl.nonEmpty)
+          fl.head.toLog(graph) 
+      }*/
+      
+          
       if(!stop && !conf.noiso()) {
         if(conf.verbose())
           System.err.println("Computing likeness...")

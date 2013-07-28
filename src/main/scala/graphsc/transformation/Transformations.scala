@@ -13,11 +13,6 @@ trait Transformations extends Hypergraph {
   
   private def isInj[T](l: Seq[T]): Boolean = 
     l.distinct == l
-  
-  private def sequence[T](l: List[List[T]]): List[List[T]] = l match {
-    case (h :: t) => for(x <- h; y <- sequence(t)) yield x :: y
-    case Nil => List(Nil)
-  }
     
   private implicit def injectAt(l: List[RenamedNode]) = new {
     def at(i: Int): RenamedNode =

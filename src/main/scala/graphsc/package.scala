@@ -1,5 +1,10 @@
 package object graphsc {
   
+  def sequence[T](l: List[List[T]]): List[List[T]] = l match {
+    case (h :: t) => for(x <- h; y <- sequence(t)) yield x :: y
+    case Nil => List(Nil)
+  }
+  
   def isDefining(h: Hyperedge): Boolean = h.label match {
     case Construct(_) => true
     case Tick() => true
