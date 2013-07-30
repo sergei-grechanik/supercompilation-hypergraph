@@ -15,6 +15,6 @@ mul x y =
 mul3left x y z = mul (mul x y) z;
 mul3right x y z = mul x (mul y z);
 
-test: mul (S (S Z)) (S (S (S Z)));
+test: mul (S (S (S (S Z)))) (S (S (S (S (S Z)))));
 
 prove: mul3left = mul3right

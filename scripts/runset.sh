@@ -73,7 +73,7 @@ if [[ -n "$COMMIT" ]]; then
 fi
 echo "<base-command>$COMMAND</base-command>"
 echo "<option-list>"
-for o in $*; do
+for o in $@; do
 	echo "<options>$o</options>"
 done
 echo "</option-list>"

@@ -21,7 +21,11 @@ optsset = set()
 for f in args.file:
     tree = ET.parse(f)
     for run in tree.findall("run"):
-        opt = run.find("base-command").text + " " + run.find("options").text
+	opts = run.find("options").text
+	if opts:
+        	opt = run.find("base-command").text + " " + opts
+	else:
+		opt = run.find("base-command").text
         table[run.find("test").text][opt].append(run)
         optsset.add(opt)
 

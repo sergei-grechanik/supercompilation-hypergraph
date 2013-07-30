@@ -1,0 +1,16 @@
+./semiring
+./add-assoc
+./shuffled-let
+./inf
+./quad-idle
+./dummy
+./ho/church-id
+./ho/church-add
+./ho/map-comp
+./mul-assoc
+./nrev-nat
+./nrev-list
+./exp-idle
+./even-double
+./idle
+./map-comp
