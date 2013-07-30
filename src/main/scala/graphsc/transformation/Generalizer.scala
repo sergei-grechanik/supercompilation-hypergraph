@@ -88,12 +88,12 @@ class Generalizer(scc: SCC = null) {
             
             if(sh != -1) {
               // it is a normal or shifted child
-              val shiftedren = curren.shift(sh) | Renaming(0 until sh toSet)
+              val shiftedren = curren.shift(sh)
               
-              val shiftedlren = lren.shift(sh).mapVars(_ - sh)
-              val shiftedrren = rren.shift(sh).mapVars(_ - sh)
+              val shiftedlren = Renaming((0 until sh).toList ++ lren.vector)
+              val shiftedrren = Renaming((0 until sh).toList ++ rren.vector)
               
-              generalize(ld, rd, shiftedren.get, shiftedlren, shiftedrren, newhist)
+              generalize(ld, rd, shiftedren, shiftedlren, shiftedrren, newhist)
             }
             else {
               // It's let's head
@@ -149,6 +149,85 @@ case class Generalization(
   def swap: Generalization =
     Generalization(renaming.inv, (nodes._2, nodes._1), (rens._2, rens._1), 
         out.map { case (h1, h2, lst) => (h2, h1, lst.map(_.swap)) })
+  
+  def performGeneralization(graph: Hypergraph) {
+    val (n, map1) = performGeneralizationImpl(graph)
+    val map = map1.mapValues { case (a,b) => (glueVariables(a, graph), glueVariables(b, graph))}
+    val ar = (n.arity :: map.keys.toList).max
+    graph.add(Let(), 
+        n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(i))(_._1)))
+    val rinv = renaming.inv
+    graph.add(Let(), 
+        n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(rinv(i)))(_._2)))
+  }
+  
+  def glueVariables(n: RenamedNode, graph: Hypergraph): RenamedNode = {
+    if(n.isInvertible)
+      n
+    else
+      graph.add(Let(), 
+          n.node.deref :: (0 to n.node.arity).toList.map(i => graph.variable(n.renaming(i))))
+  }
+        
+  def performGeneralizationImpl(graph: Hypergraph): 
+      (RenamedNode, Map[Int, (RenamedNode, RenamedNode)]) = out match {
+    case Some((h1,h2,gs)) =>
+      val ds = gs.map(_.performGeneralizationImpl(graph))
+      val maxvar = (0 :: ds.map(_._1.arity)).max + 1
+      var pairs = ds.flatMap(_._2.values).distinct
+      
+      val unused = graph.unused
+      
+      val unused_i =
+        pairs.indexWhere(p => p._1 ~~ unused && p._2 ~~ unused) match {
+          case -1 => 
+            pairs = (unused, unused) :: pairs
+            0
+          case j => j
+        } 
+      
+      val newdests =
+        for(((old,sh),(d,map)) <- h1.dests zip h1.shifts zip ds) yield {
+          val newren =
+            Renaming((0 until d.arity).toList.map { i =>
+              map.get(i) match {
+                case Some(p) => maxvar + (sh max 0) + pairs.indexOf(p)
+                case None => old.renaming(i)
+              }
+            })
+          newren comp d
+        }
+      
+      val newnode =
+        if(h1.label == Let()) {
+          val vars = 
+            ((newdests.length - 1) until (maxvar + pairs.length)).toList.map(graph.variable(_))
+          graph.add(h1.label, newdests ++ vars)
+        }
+        else {
+          graph.add(h1.label, newdests)
+        }
+      
+      val h1_srcren_inv = h1.source.renaming.inv
+      val srcren_maxvar = (0 :: h1_srcren_inv.vector).max + 1 
+      val newren = 
+        Renaming((0 until ((maxvar + pairs.length) max newnode.arity)).toList.map { i =>
+          if(i < maxvar) h1_srcren_inv(i) match {
+            case -1 =>
+              if(!newnode.used(i)) -1
+              else unused_i + srcren_maxvar
+            case j => j
+          }
+          else i - maxvar + srcren_maxvar
+        })
+      val newmap = pairs.zipWithIndex.map{ case (p,i) => (i + srcren_maxvar, p) }.toMap
+      
+      assert((newren comp newnode).isInvertible)
+      (newren comp newnode, newmap)
+    case None if nodes._1 == nodes._2 => (nodes._1.deref, Map())
+    case None =>
+      (graph.variable(0), Map(0 -> (rens._1 comp nodes._1, rens._2 comp nodes._2)))
+  }
         
   def toDot: String = {
     val label =
@@ -171,7 +250,7 @@ case class Generalization(
   
   def toLog(g: Hypergraph) {
     g.log("-- " + g.nodeToString(nodes._1.deref) + " <> " + 
-            g.nodeToString(renaming comp nodes._2.deref))
+            g.nodeToString(nodes._2.deref))
     g.log("-- " + renaming)
     g.log("-- " + rens._1 + " <> " + rens._2)
     out match {

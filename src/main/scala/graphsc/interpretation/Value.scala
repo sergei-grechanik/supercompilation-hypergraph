@@ -12,7 +12,7 @@ case class Ctr(constructor: String, args: List[Value]) extends Value {
     case "S" if args.size == 1 =>
       val child = args(0).toString
       if(child.forall(_.isDigit))
-        (child.tail.toInt + 1).toString
+        (child.toInt + 1).toString
       else
         "S (" + child + ")"
     case "Z" if args.isEmpty => "0"

@@ -27,12 +27,14 @@ object EqProverApp {
     val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
     val depth = opt[Int](default = Some(3), descr = "Depth limit")
     val codepth = opt[Int](default = Some(3), descr = "Codepth limit")
-    val nogen = opt[Boolean](noshort = true, descr = "Disable generalization")
+    val nogen = opt[Boolean](noshort = true, descr = "Disable unordered generalization")
     val noiso = opt[Boolean](noshort = true, descr = "Disable merging by isomorphism")
     val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
     val driveRecommended = opt[Int](noshort = true, default = Some(0), 
         descr = "Drive 2*<arg> recommended (by eqprover) nodes")
     val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
+    val genPair = opt[Boolean](noshort = true, 
+        descr = "Traditional pairwise generalization")
     
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
     val dumpCode = opt[Boolean](noshort = true, 
@@ -201,21 +203,27 @@ object EqProverApp {
       graph.transform(trans)
       //buf.commit()
       
+      
+      // Pairwise generalization
+      if(conf.genPair()) {
+        val genr = new Generalizer()
+        val gens =
+          for(i <- graph.nodes.toList; j <- graph.nodes.toList; 
+              if i.hashCode() < j.hashCode()) yield
+            genr.generalizeNodes(i, j)
+        
+        val gs = gens.flatten.sortBy(-_.depth).filter(_.depth > 1)
+        for(g <- gs) {
+          graph.log("-- Pairwise generalization")
+          g.toLog(graph)
+          graph.log("")
+          g.performGeneralization(graph)
+        }
+      }
+      
       generation += 1
       
       checktask()
-      
-      /*val genr = new Generalizer()
-      val gens =
-        for(i <- graph.nodes.toList; j <- graph.nodes.toList; if i.hashCode() < j.hashCode()) yield
-          genr.generalizeNodes(i, j)
-      
-      if(gens.nonEmpty) {
-        val fl = gens.flatten.sortBy(-_.depth).filter(_.depth > 1)
-        if(fl.nonEmpty)
-          fl.head.toLog(graph) 
-      }*/
-      
           
       if(!stop && !conf.noiso()) {
         if(conf.verbose())

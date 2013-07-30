@@ -18,7 +18,8 @@ object TestDebug {
       }
     }
     
-    cmd("--prove --integrity-check --test ./samples/even-double")
+    cmd("-p -v --gen-pair -c3 -d3 -a5 samples/map-comp")
+    //cmd("--prove --integrity-check --test ./samples/even-double")
     //cmd("-g0 -v --resid nrev nrev-code-dump")
   }
 

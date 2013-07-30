@@ -84,9 +84,13 @@ trait Hypergraph {
   
   // RenamedNode representing ith variable
   def variable(i: Int): RenamedNode = {
-    val res = Renaming(0 -> i) comp add(Var(), Nil)
-    assert(res.used.size == 1)
-    res
+    if(i == -1) 
+      unused
+    else {
+      val res = Renaming(0 -> i) comp add(Var(), Nil)
+      assert(res.used.size == 1)
+      res
+    }
   }
   
   // RenamedNode representing unused expression
@@ -195,9 +199,13 @@ trait TheHypergraph extends Hypergraph {
   protected var unusedNode: RenamedNode = null 
   
   override def variable(i: Int): RenamedNode = {
-    if(varNode == null)
-      varNode = super.variable(0)
-    Renaming(0 -> i) comp varNode.deref
+    if(i == -1)
+      unused
+    else {
+      if(varNode == null)
+        varNode = super.variable(0)
+      Renaming(0 -> i) comp varNode.deref
+    }
   }
   
   // RenamedNode representing error

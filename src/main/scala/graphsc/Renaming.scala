@@ -4,7 +4,7 @@ package graphsc
 case class Renaming(vector: List[Int]) {
   // This check is very bad for performance
   //require(vector.filter(_ >= 0).distinct.size == vector.filter(_ >= 0).size)
-  //require(vector.forall(_ >= -1))
+  require(vector.forall(_ >= -1))
   
   override def toString: String =
     vector.zipWithIndex.map{case (j,i) => i + " = " + j}.mkString("(", ", ", ")")
