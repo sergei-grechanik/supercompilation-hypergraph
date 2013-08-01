@@ -114,6 +114,7 @@ object EqProverApp {
     // read the file
     val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound
     val prog = if(conf.only()) preprog.removeUnreferenced.simplify else preprog.simplify
+    val propdefs = collection.mutable.Set(prog.propdefs.toSeq:_*)
     prog.loadInto(graph)
     
     // load props we want to prove as goals
@@ -164,6 +165,14 @@ object EqProverApp {
     }
     
     def checktask() : Boolean = {
+      for((name, p) <- propdefs.toList) {
+        if(p.checkWithoutLoading(graph) && conf.verbose()) {
+          System.err.println("Proved one of the named props:")
+          System.err.println("prop " + name + ": " + p)
+          propdefs.remove((name, p))
+        }
+      }
+      
       val achieved =
         for(g <- goals) yield g match {
           case GoalPropEqModuloRen(l, r) => l ~~ r

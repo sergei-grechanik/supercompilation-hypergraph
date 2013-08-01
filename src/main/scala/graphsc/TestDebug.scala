@@ -14,11 +14,12 @@ object TestDebug {
   def main(args: Array[String]) {
     def cmd(s: String) {
       test("eqprover " + s) {
-        assert(EqProverApp.mainBool(s.split(" ")) == Some(true))
+        assert(EqProverApp.mainBool(s.split(" +")) == Some(true))
       }
     }
     
-    cmd("-p -v --gen-pair -c3 -d3 -a5 samples/map-comp")
+    cmd("-p -v -c10 -d10 -a4 --nogen  samples/idle")
+    //cmd("-p -v --super -c3 -d3 -a5 samples/map-comp")
     //cmd("--prove --integrity-check --test ./samples/even-double")
     //cmd("-g0 -v --resid nrev nrev-code-dump")
   }

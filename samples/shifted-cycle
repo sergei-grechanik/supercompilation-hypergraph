@@ -1,0 +1,3 @@
+import: lib/list (cycle);
+
+prove: cycle (C A (C B N)) = C A (cycle (C B (C A N)));

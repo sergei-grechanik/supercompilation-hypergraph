@@ -1,0 +1,48 @@
+
+append x y = 
+  case x of {
+    C a x -> C a (append x y);
+    N -> y;
+  };
+
+cycle x = append x (cycle x);
+
+idList x =
+  case x of {
+    C a x -> C a (idList x);
+    N -> N;
+  };
+
+seqList x y =
+  case x of {
+    C a x -> seqList x y;
+    N -> y;
+  };
+
+qrev x = qrevTo x N;
+
+qrevTo x y =
+  case x of {
+    C a x -> qrevTo x (C a y);
+    N -> y;
+  };
+
+nrev x =
+  case x of {
+    C a x -> append (nrev x) (C a N);
+    N -> N;
+  };
+
+nrevTo x y =
+  case x of {
+    C a x -> append (nrev x) (C a y);
+    N -> y;
+  };
+
+foldList f a x =
+  case x of {
+    C b x -> f b (foldList f a x);
+    N -> a;
+  };
+
+

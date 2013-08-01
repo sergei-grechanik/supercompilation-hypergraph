@@ -58,6 +58,17 @@ sealed trait Prop {
         throw new Exception("Named props are not supported yet")
     }
   }
+  
+  def checkWithoutLoading(g: NamedNodes): Boolean = try {
+    loadAsGoal(new HyperedgeFinder(g)) match {
+      case GoalPropEqModuloRen(l, r) => l ~~ r
+      case GoalPropEq(l, r) => 
+        l ~~ r && (l.deref.renaming comp r.deref.renaming.inv).isId(r.used)
+      case _ => false
+    }
+  } catch {
+    case _: HyperedgeNotFoundException => false
+  }
 }
 
 case class PropEq(left: Expr, right: Expr) extends Prop {
@@ -500,7 +511,7 @@ case class Program(
   }
 }
 
-class ProgramParser(path: String) extends RegexParsers {
+class ProgramParser(path: String, filename: String = "") extends RegexParsers {
   override val whiteSpace = """(\s|--.*\n)+""".r
   def fname = not("of\\b".r) ~> "[a-z$][a-zA-Z0-9$.@_]*".r
   def cname = "[A-Z#][a-zA-Z0-9$.@_]*".r
@@ -515,7 +526,8 @@ class ProgramParser(path: String) extends RegexParsers {
   def parseProg(s: String): Program = {
     val parsed = parseAll(prog, s)
     if(!parsed.successful) {
-      System.err.println("Syntax error at " + parsed.next.pos + ": " + parsed.next.first)
+      System.err.println(
+          "Syntax error in " + filename + " at " + parsed.next.pos + ": " + parsed.next.first)
       throw new Exception("Unsuccessful parse")
     }
     parsed.get
@@ -595,7 +607,7 @@ class ProgramParser(path: String) extends RegexParsers {
       { case n~l~"->"~e => (n, l, e) }
   
   def let: Parser[ExprLet] =
-    ("let" ~> repsep(fname ~ expr, ";") <~ "in") ~ expr ^^
+    ("let" ~> "{" ~> repsep((fname <~ "=") ~ expr, ";") <~ "}" <~ "in") ~ expr ^^
       { case lst~e => ExprLet(e, lst.map{ case n~e => (n,e) }) }
   
   def lambda: Parser[ExprLambda] =
@@ -603,11 +615,11 @@ class ProgramParser(path: String) extends RegexParsers {
       { case vs~e => ExprLambda(vs, e) }
 }
 
-object ProgramParser extends ProgramParser("") {
+object ProgramParser extends ProgramParser("", "") {
   def parseFile(path: String): Program = {
     val src = io.Source.fromFile(path)
     val srctext = src.mkString
     src.close()
-    (new ProgramParser((new File(path)).getParent())).parseProg(srctext)
+    (new ProgramParser((new File(path)).getParent(), path)).parseProg(srctext)
   }
 }

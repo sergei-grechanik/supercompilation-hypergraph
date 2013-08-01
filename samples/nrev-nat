@@ -25,6 +25,9 @@ test: nrev (S (S (S (S (S (S (S (S (S (S (S (S Z))))))))))));
 test: rev (S (S (S Z)));
 test: revTo (S (S (S Z))) (S Z);
 
+prop p1: nrev x = add (nrev x) Z;
+prop p2: nrev x = let {y = Z} in add (nrev x) y;
+
 prove: nrev = rev;
 
 --residualize: nrev;

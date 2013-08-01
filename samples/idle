@@ -16,4 +16,6 @@ constz x =
 test: idle (S (S (S Z)));
 test: constz (S (S (S Z)));
 
+prop p: idle x = idle (idle x);
+
 prove: idle = constz;
