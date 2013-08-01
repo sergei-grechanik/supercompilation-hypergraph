@@ -35,6 +35,8 @@ object EqProverApp {
     val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
     val genPair = opt[Boolean](noshort = true, 
         descr = "Traditional pairwise generalization")
+    val supercompile = opt[Boolean](name = "super", 
+        descr = "Traditional multiresult supercompilation")
     
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
     val dumpCode = opt[Boolean](noshort = true, 
@@ -190,17 +192,40 @@ object EqProverApp {
     gendump()
     checktask()
     
+    // Traditional multiresult supercompilation
+    if(conf.supercompile()) {
+      if(conf.verbose())
+        System.err.println("Supercompiling...")
+        
+      val s = new Supercompilation(graph, 5)
+      val ns = graph.namedNodes.values.toList
+      val fromgoals =
+        for(g <- goals) yield g match {
+          case GoalPropEqModuloRen(l, r) => List(l, r)
+          case GoalPropEq(l, r) => List(l, r)
+          case GoalPropReturnsConstr(l, _) => List(l)
+        }
+      
+      for(r <- fromgoals.flatten ++ resid)
+        s.supercompile(r.node)
+        
+      stats()
+      gendump()
+      checktask()
+    }
+    
     // main loop
     while(!stop && generation < conf.generations()) {
       if(conf.verbose())
-          System.err.println("Transforming...")
+        System.err.println("Transforming...")
       
       graph.changed = false
           
       val trans =
         if(conf.nogen()) tr.transDrive
         else tr.transDrive & tr.letUp(maxarity)
-      graph.transform(trans)
+      if(!conf.supercompile())
+        graph.transform(trans)
       //buf.commit()
       
       

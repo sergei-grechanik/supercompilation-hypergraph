@@ -150,15 +150,18 @@ case class Generalization(
     Generalization(renaming.inv, (nodes._2, nodes._1), (rens._2, rens._1), 
         out.map { case (h1, h2, lst) => (h2, h1, lst.map(_.swap)) })
   
-  def performGeneralization(graph: Hypergraph) {
+  def performGeneralization(graph: Hypergraph): (Hyperedge, Hyperedge) = {
     val (n, map1) = performGeneralizationImpl(graph)
     val map = map1.mapValues { case (a,b) => (glueVariables(a, graph), glueVariables(b, graph))}
     val ar = (n.arity :: map.keys.toList).max
-    graph.add(Let(), 
-        n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(i))(_._1)))
+    val h1 =
+      graph.addH(Let(), 
+          n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(i))(_._1)))
     val rinv = renaming.inv
-    graph.add(Let(), 
-        n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(rinv(i)))(_._2)))
+    val h2 =
+      graph.addH(Let(), 
+          n :: (0 to ar).toList.map(i => map.get(i).fold(graph.variable(rinv(i)))(_._2)))
+    (h1._2, h2._2)
   }
   
   def glueVariables(n: RenamedNode, graph: Hypergraph): RenamedNode = {

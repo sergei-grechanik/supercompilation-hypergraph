@@ -1,7 +1,7 @@
 
 add x y = 
   case x of {
-    S x -> add x y;
+    S x -> S (add x y);
     Z -> y;
   };
 
@@ -35,7 +35,7 @@ idNat x =
 
 const x y =
   case x of {
-    S x -> const x;
+    S x -> const x y;
     Z -> y;
   };
 
