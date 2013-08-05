@@ -140,7 +140,7 @@ case class RenamedNode(renaming: Renaming, node: Node) {
     node.used.size == used.size
         
   def getVar: Option[Int] =
-    if(node.isVar)
+    if(node.isVar && renaming(0) != -1)
       Some(renaming(0))
     else
       None
@@ -151,12 +151,23 @@ case class RenamedNode(renaming: Renaming, node: Node) {
       case None =>
         node.definingHyperedge match {
           case Some(h) if h.label == Unused() => Some(-1)
+          case Some(h) if h.label == Var() => Some(-1)
           case _ => None
         }
     }
    
   // Resturns true if the nodes are equal up to renaming
   def ~~(n: RenamedNode): Boolean = node ~~ n.node
+  
+  // Resturns true if the renamed nodes are strictly equal
+  def ~=~(n: RenamedNode): Boolean = {
+    val dthis = this.deref
+    val dn = n.deref
+    dthis == dn || 
+      dn.node.outs.exists(h => 
+        h.label == Id() && 
+        (dn.renaming comp h.source.renaming.inv comp h.dests(0)) == dthis) 
+  }
       
   // Assign numbers to the variables used by node but marked unused by renaming
   def restoreUnused(fromvar: Int): (Int, RenamedNode) = {

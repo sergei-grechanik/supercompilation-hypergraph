@@ -26,7 +26,8 @@ package object graphsc {
     // only caseofs can be multiple (due to unpropagated information)
     // but we cannot guarantee that all the equal def hyperedges has been merged
     // assert(hypers.size <= 1 || hypers.head.label.isInstanceOf[CaseOf])
-    assert(hypers.isEmpty || hypers.tail.forall(_.label == hypers.head.label))
+    // and in total setting there may be multiple defining hyperedges
+    // assert(hypers.isEmpty || hypers.tail.forall(_.label == hypers.head.label))
     hypers
   }
   

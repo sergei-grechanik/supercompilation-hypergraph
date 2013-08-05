@@ -441,6 +441,10 @@ trait TheHypergraph extends Hypergraph {
         if e != h
         if e.label == l && e.dests.size == ds.size
         if isDefining(e)
+        if !l.isInstanceOf[CaseOf] || 
+          (src.renaming.inv comp h.dests(0)).getVar.nonEmpty &&
+          ((src.renaming.inv comp h.dests(0)).getVar == 
+            (e.source.renaming.inv comp e.dests(0)).getVar) 
         srcren = src.renaming comp e.source.renaming.inv
         rens = 
           (ds,e.dests,e.shifts).zipped.map((d, d1, sh) => 

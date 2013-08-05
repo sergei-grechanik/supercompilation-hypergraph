@@ -1,0 +1,3 @@
+import: lib/nat (add,mul);
+
+prove: add (mul x y) (mul z y) = mul (add x z) y;

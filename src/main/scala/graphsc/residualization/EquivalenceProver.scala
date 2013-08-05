@@ -61,7 +61,7 @@ class EquivalenceProver[S, L](scc: SCC = null)
 
     val renid = (ren | Renaming(r.used))
     
-    if(l == r && l.used.subsetOf(ren.codomain) && r.used.subsetOf(ren.domain))
+    if(l.deref ~=~ (ren comp r))
       Some(EqProofTree(ren, (l,r)))
     else if(l == r && renid.nonEmpty)
       renid.map(EqProofTree(_, (l,r)))

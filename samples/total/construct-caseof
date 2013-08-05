@@ -1,0 +1,19 @@
+
+left x y = 
+  case x of {
+    S x -> C x y;
+    Z -> C Z (C x y);
+  };
+
+right x y = C
+  (case x of {
+    S x -> x;
+    Z -> Z;
+  })
+  (case x of {
+    S x -> y;
+    Z -> (C x y);
+  })
+  ;
+
+prove: left x y = right x y;

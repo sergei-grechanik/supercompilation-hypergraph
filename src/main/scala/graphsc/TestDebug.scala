@@ -18,10 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-p -v -c10 -d10 -a4 --nogen  samples/idle")
-    //cmd("-p -v --super -c3 -d3 -a5 samples/map-comp")
-    //cmd("--prove --integrity-check --test ./samples/even-double")
-    //cmd("-g0 -v --resid nrev nrev-code-dump")
+    cmd("-p -v -c10 -d10 -a10 --total --nogen   samples/total/add-comm-lemma")
   }
 
 }

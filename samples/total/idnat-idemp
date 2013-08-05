@@ -1,0 +1,9 @@
+-- actually it doesn't need total
+
+import: ../lib/nat (idNat);
+
+test: idNat (idNat (S (S (S Z))));
+
+prove: idNat (idNat x) = idNat x;
+
+

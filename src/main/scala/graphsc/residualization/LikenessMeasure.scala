@@ -19,7 +19,8 @@ object LikenessMeasure {
   }
 }
 
-case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[L]) {
+case class LikenessCalculator[L]
+    (total: Boolean = false)(implicit lm: LikenessMeasure[L], ord: Ordering[L]) {
   import lm._
   
   implicit def injectOr(r: Option[Renaming]) = new {
@@ -52,7 +53,12 @@ case class LikenessCalculator[L](implicit lm: LikenessMeasure[L], ord: Ordering[
         for(lh <- ldef; rh <- rdef) yield
           likenessH(lh, rh, hist)
       ress.filter(_.nonEmpty) match {
-        case Nil => None
+        case Nil =>
+          if(!total || (ldef.exists(!_.label.isInstanceOf[CaseOf]) && 
+                        rdef.exists(!_.label.isInstanceOf[CaseOf])))
+            None
+          else
+            Some((zero, Renaming()))
         case l => l.maxBy(_.get._1)
       }
     }

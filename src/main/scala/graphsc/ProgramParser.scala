@@ -62,8 +62,7 @@ sealed trait Prop {
   def checkWithoutLoading(g: NamedNodes): Boolean = try {
     loadAsGoal(new HyperedgeFinder(g)) match {
       case GoalPropEqModuloRen(l, r) => l ~~ r
-      case GoalPropEq(l, r) => 
-        l ~~ r && (l.deref.renaming comp r.deref.renaming.inv).isId(r.used)
+      case GoalPropEq(l, r) => l ~=~ r
       case _ => false
     }
   } catch {
@@ -120,6 +119,7 @@ sealed trait Expr {
     case ExprVar(v) if bound.contains(v) => ExprVar(v)
     case ExprVar(v) if global.contains(v) => ExprFun(v)
     case ExprVar(v) => ExprVar(v)
+    case ExprCall(ExprVar(v), Nil) => ExprVar(v).resolveUnbound(global, bound)
     case ExprCall(ExprVar(v), as) if !bound.contains(v) =>
       ExprCall(ExprFun(v), as.map(_.resolveUnbound(global, bound)))
     case _ => mapChildren((newvs, b) => b.resolveUnbound(global, bound ++ newvs))

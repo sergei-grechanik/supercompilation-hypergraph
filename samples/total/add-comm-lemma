@@ -1,0 +1,23 @@
+
+
+add x y =
+  case x of {
+    S x -> S (add x y);
+    Z -> idNat y;
+  };
+
+idNat x =
+  case x of {
+    S x -> S (idNat x);
+    Z -> Z;
+  };
+
+test: add (S (S Z)) (S (S (S Z)));
+
+--prove: add x (S y) = case x of { S x -> S (add x (S y)); Z -> idNat (S y); };
+--prove: add x (S y) = (case x of { S x -> S (add x (S y)); Z -> S (idNat y); });
+--prove: add x (S y) = S (case x of { S x -> add x (S y); Z -> idNat y; });
+
+prove: add x (S y) = S (add x y);
+
+

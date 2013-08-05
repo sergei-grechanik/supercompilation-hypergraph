@@ -1,0 +1,31 @@
+
+--import: ../lib/nat (add,idNat);
+
+add x y =
+  case x of {
+    S x -> S (add x y);
+    Z -> idNat y;
+  };
+
+idNat x =
+  case x of {
+    S x -> S (idNat x);
+    Z -> Z;
+  };
+
+test: add (S (S Z)) (S (S (S Z)));
+
+--prove: idNat (add x y) = idNat (add y x);
+
+prop lemma: add x (S y) = S (add x y);
+prop idnat: idNat x = add x Z;
+prop almost: add x y = case y of { S y -> S (add x y); Z -> idNat x; };
+
+--prove: add x y = case y of { S y -> add x (S y); Z -> add x Z; };
+--prove: add x y = case y of { S y -> add x (S y); Z -> idNat x; };
+--prop first: add x y = case y of { S y -> S (add x y); Z -> idNat x; };
+--prop second: add y x = case y of { S y -> S (add y x); Z -> idNat x; };
+
+prove: add x y = add y x;
+
+

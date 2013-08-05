@@ -13,6 +13,8 @@ object EqProverApp {
     version("Equivalence prover based on hypergraph supercompilation, version 0.1")
     banner("Usage: EqProver [OPTIONS] file")
 
+    val total = opt[Boolean](descr = "Assume that we work in total setting")
+    
     val prove = opt[Boolean](descr = 
       "Prove the propositions specified in the input file and then exit")
     
@@ -96,7 +98,9 @@ object EqProverApp {
                 nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth()
             }
           
-          override def enableLogging = conf.log()
+          var enableLoggingVar = conf.log()
+          override def enableLogging = enableLoggingVar
+          
           
           var residualizing = false
           override def limitFromMinCost(c: Int): Int =
@@ -167,8 +171,7 @@ object EqProverApp {
     def checktask() : Boolean = {
       for((name, p) <- propdefs.toList) {
         if(p.checkWithoutLoading(graph) && conf.verbose()) {
-          System.err.println("Proved one of the named props:")
-          System.err.println("prop " + name + ": " + p)
+          System.err.println("!!! prop " + name + ": " + p)
           propdefs.remove((name, p))
         }
       }
@@ -176,8 +179,7 @@ object EqProverApp {
       val achieved =
         for(g <- goals) yield g match {
           case GoalPropEqModuloRen(l, r) => l ~~ r
-          case GoalPropEq(l, r) => 
-            l ~~ r && (l.deref.renaming comp r.deref.renaming.inv).isId(r.used)
+          case GoalPropEq(l, r) => l ~=~ r
           case _ => false
         }
       if(achieved.nonEmpty && achieved.forall(_ == true)) {
@@ -231,8 +233,9 @@ object EqProverApp {
       graph.changed = false
           
       val trans =
-        if(conf.nogen()) tr.transDrive
-        else tr.transDrive & tr.letUp(maxarity)
+        (if(conf.nogen()) tr.transNone else partFun2BiHProc(tr.letUp(maxarity))) &
+        (if(conf.total()) tr.transTotal else tr.transNone) &
+        tr.transDrive
       if(!conf.supercompile())
         graph.transform(trans)
       //buf.commit()
@@ -265,7 +268,7 @@ object EqProverApp {
         val nodes = graph.allNodes.toList
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
-              lkl <- LikenessCalculator[Int].likenessN(l, r); if lkl._1 > 0) yield {
+              lkl <- LikenessCalculator[Int](conf.total()).likenessN(l, r); if lkl._1 > 0) yield {
             (lkl,l,r)
           }
         
@@ -279,7 +282,7 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
         for(((i,ren),l,r) <- candidates 
-            if !stop && !(l ~~ r)) {
+            if !stop && (!(l ~~ r) || (conf.total() /*&& !(l.deref ~=~ (ren comp r))*/ ))) {
           val lpretty = l.prettyDebug
           val rpretty = r.prettyDebug
           val eq = eprover.prove(l.deref.node, r.deref.node)
@@ -287,7 +290,7 @@ object EqProverApp {
             if(conf.verbose()) {
               System.err.println("==These two are equal==")
               System.err.println(lpretty)
-              System.err.println("=======================")
+              System.err.println("=======================" + eq.get.renaming)
               System.err.println(rpretty)
               System.err.println("=======================\n")
               //System.err.println(eq)
@@ -309,7 +312,8 @@ object EqProverApp {
           val stats = eprover.stats 
           for(n <- stats.toList.filter 
                 { case ((l,r),_) => 
-                    LikenessCalculator[Int].likeness(l.deref, r.deref).map(_._1) == Some(0) }
+                    LikenessCalculator[Int](conf.total())
+                      .likeness(l.deref, r.deref).map(_._1) == Some(0) }
                 .sortBy(-_._2).take(conf.driveRecommended())
                 .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
             graph.drive(n)

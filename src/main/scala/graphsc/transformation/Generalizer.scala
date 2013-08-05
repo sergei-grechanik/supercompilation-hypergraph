@@ -64,7 +64,7 @@ class Generalizer(scc: SCC = null) {
     val renid = (ren | Renaming(r.used))
     
     val bycoupl =
-      if(l == r && l.used.subsetOf(ren.codomain) && r.used.subsetOf(ren.domain))
+      if(l.deref ~=~ (ren comp r))
         List(Generalization(ren, (l,r), (lren, rren)))
       else if(l == r && renid.nonEmpty)
         renid.map(Generalization(_, (l,r), (lren, rren))).toList

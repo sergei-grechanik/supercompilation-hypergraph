@@ -36,6 +36,10 @@ trait Transformations extends Hypergraph {
   def transDrive =
     letVar & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
   
+  def transNone = Fun2BiHProc(Nil)
+  
+  def transTotal = partFun2BiHProc(caseConstrTotal) & caseCaseTotal
+  
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
     
@@ -181,6 +185,68 @@ trait Transformations extends Hypergraph {
           add(Tick(), src1, List(caseof))
         }
       }
+  }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  
+  // factoring out constructors from branches (in total setting)
+  def caseConstrTotal: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
+          h2@Hyperedge(l2@Construct(name), src2, es2)) if 
+            fs1.exists(_.plain == src2) && 
+            fs1.forall(f => f.plain == src2 || 
+                f.node.outs.exists(o => o.label == l2 && o.dests.size == es2.size)) =>
+      trans("caseConstrTotal", h1, h2) {
+        val newfs1list =
+          sequence(fs1.map(n =>
+            if(n.plain == src2) 
+              List((h2, n.renaming))
+            else
+              n.node.outs.toList.filter(o => o.label == l2 && o.dests.size == es2.size)
+                .map((_, n.renaming))
+          ))
+        for(l <- newfs1list) {
+          val caseofs = 
+            for(ds <- l.map{case (h,r) => (r comp h.source.renaming.inv comp h).dests}.transpose) 
+              yield add(CaseOf(cases1), e1 :: ds)
+          add(Construct(name), src1, caseofs)
+        }
+      }
+  }
+  
+  // factoring out caseof from branches (in total setting)
+  def caseCaseTotal: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
+          h2@Hyperedge(CaseOf(cases2), src2, e2 :: es2)) if 
+            fs1.exists(_.plain == src2) && 
+            e2.getVar.nonEmpty &&
+            varForCaseCaseTotal(h1, h2) != -1 =>
+      val vari = varForCaseCaseTotal(h1, h2)
+      trans("caseCaseTotal", h1, h2) {
+        val newfs1 =
+          for((f1,s) <- fs1 zip h1.shifts.tail) yield {
+            if(f1.plain == src2)
+              f1
+            else {
+              val f1shifteds = h2.shifts.tail.map(k => f1.renaming.mapVars(_ + k) comp f1.node)
+              add(CaseOf(cases2), variable(vari + s) :: f1shifteds)
+            }
+          }
+        
+        add(CaseOf(cases1), src1, e1 :: newfs1)
+      }
+  }
+  
+  private def varForCaseCaseTotal(h1: Hyperedge, h2: Hyperedge): Int = {
+    val Hyperedge(CaseOf(cases1), src1, e1 :: fs1) = h1
+    val Hyperedge(l2@CaseOf(cases2), src2, e2 :: es2) = h2
+    val e2var = e2.getVar.get
+    val (f1,s) = (fs1 zip h1.shifts.tail).find(_._1.plain == src2).get
+    if(e2var < s)
+      -1
+    else
+      f1.renaming(e2var - s)
   }
   
   /////////////////////////////////////////////////////////////////////////////
