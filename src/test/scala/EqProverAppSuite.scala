@@ -37,6 +37,7 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check --test --nogen --total ./samples/total/construct-caseof")
   cmd("--prove --integrity-check --test --nogen ./samples/total/idnat-idemp")
   cmd("--prove --integrity-check --test --nogen --total ./samples/total/add-comm-lemma")
+  cmd("--prove --integrity-check --test --nogen --total ./samples/total/add-comm")
   
   cmdnot("--prove --integrity-check --test --nogen --total ./samples/unprovable")
   cmdnot("--prove --integrity-check --test --nogen ./samples/unprovable")

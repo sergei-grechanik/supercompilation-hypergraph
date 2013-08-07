@@ -23,12 +23,19 @@ package object graphsc {
         case _ => isDefining(h)
       })
       
+    val noncaseofs = hypers.filter(!_.label.isInstanceOf[CaseOf])
+      
     // only caseofs can be multiple (due to unpropagated information)
     // but we cannot guarantee that all the equal def hyperedges has been merged
     // assert(hypers.size <= 1 || hypers.head.label.isInstanceOf[CaseOf])
     // and in total setting there may be multiple defining hyperedges
     // assert(hypers.isEmpty || hypers.tail.forall(_.label == hypers.head.label))
-    hypers
+    if(noncaseofs.isEmpty)
+      hypers
+    else {
+      assert(noncaseofs.isEmpty || noncaseofs.tail.forall(_.label == hypers.head.label))
+      noncaseofs
+    }
   }
   
   def nodesOf(h: Hyperedge): List[Node] =

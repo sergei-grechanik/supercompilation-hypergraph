@@ -108,6 +108,10 @@ case class Renaming(vector: List[Int]) {
     else
       None
   }
+  
+  // intersect two renamings
+  def &(r: Renaming): Renaming =
+    Renaming((vector zip r.vector).map{ case (i,j) => if(i == j) i else -1 })
 }
 
 object Renaming {

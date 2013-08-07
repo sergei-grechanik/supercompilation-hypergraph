@@ -42,6 +42,9 @@ class Node(initial_used: Set[Int]) {
       gluedTo.node ~~ n
     else
       n ~~ this
+      
+  def ~=~(n: RenamedNode): Boolean = this.deref ~=~ n
+  def ~=~(n: Node): Boolean = this.deref ~=~ n.deref
     
   // Sometimes the node was glued to some other node...
   // Imperative programming sucks, I know
@@ -77,7 +80,9 @@ class Node(initial_used: Set[Int]) {
     else definingHyperedgesNonStrict(this).filter(isDefining(_)) match {
       case Nil => None
       case h :: tl =>
-        definingHyperedgeCached = h
+        // In total setting caseofs are unsafe to cache
+        if(!h.label.isInstanceOf[CaseOf])
+          definingHyperedgeCached = h
         isVarCached = Some(h.label == Var())
         Some(h)
     }

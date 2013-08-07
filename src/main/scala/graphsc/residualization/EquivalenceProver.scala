@@ -1,10 +1,8 @@
 package graphsc
 package residualization
 
-class EquivalenceProver[S, L](scc: SCC = null)
+class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator[L])
     (implicit cc: CorrectnessChecker[S], lm: LikenessMeasure[L], ord: Ordering[L]) {
-  val likenesscalc = LikenessCalculator[L]()
-  import lm._
   import likenesscalc._
   
   type Hist = List[((Node, S), (Node, S))]

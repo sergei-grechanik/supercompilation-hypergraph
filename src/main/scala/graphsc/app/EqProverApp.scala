@@ -266,13 +266,14 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
+        val likenesscalc = LikenessCalculator[Int](conf.total())
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
-              lkl <- LikenessCalculator[Int](conf.total()).likenessN(l, r); if lkl._1 > 0) yield {
+              lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
             (lkl,l,r)
           }
         
-        var eprover = new EquivalenceProver(graph)
+        var eprover = new EquivalenceProver(graph, likenesscalc)
         
         if(conf.verbose())
           System.err.println("Performing merging by isomorphism...")
@@ -281,28 +282,36 @@ object EqProverApp {
             .filter(p => p._1._1 > 0 && !(p._2 ~~ p._3))
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
-        for(((i,ren),l,r) <- candidates 
-            if !stop && (!(l ~~ r) || (conf.total() /*&& !(l.deref ~=~ (ren comp r))*/ ))) {
-          val lpretty = l.prettyDebug
-          val rpretty = r.prettyDebug
-          val eq = eprover.prove(l.deref.node, r.deref.node)
-          if(eq != None) {
-            if(conf.verbose()) {
-              System.err.println("==These two are equal==")
-              System.err.println(lpretty)
-              System.err.println("=======================" + eq.get.renaming)
-              System.err.println(rpretty)
-              System.err.println("=======================\n")
-              //System.err.println(eq)
+          
+        for(((i,ren2),l1,r1) <- candidates; if !stop && (!(l1 ~~ r1) || conf.total())) {
+          val lderef = l1.deref;
+          val rderef = r1.deref;
+          val l = lderef.node;
+          val r = rderef.node;
+          val ren1 = lderef.renaming.inv comp ren2 comp rderef.renaming;
+          
+          for(ren <- if(!(l ~~ r)) List(ren1) else likenesscalc.viablePermutations(l)) {
+            val lpretty = l.prettyDebug
+            val rpretty = r.prettyDebug
+            val eq = eprover.prove(l.deref.node, r.deref.node, ren)
+            if(eq != None) {
+              if(conf.verbose()) {
+                System.err.println("==These two are equal==")
+                System.err.println(lpretty)
+                System.err.println("=======================" + eq.get.renaming)
+                System.err.println(rpretty)
+                System.err.println("=======================\n")
+                //System.err.println(eq)
+              }
+              graph.log("-- Proved by isomorphism")
+              eq.get.toLog(graph)
+              graph.log("")
+              eq.get.performGluing(graph)
+              val st = eprover.stats
+              eprover = new EquivalenceProver(graph, likenesscalc)
+              eprover.stats = st
+              checktask()
             }
-            graph.log("-- Proved by isomorphism")
-            eq.get.toLog(graph)
-            graph.log("")
-            eq.get.performGluing(graph)
-            val st = eprover.stats
-            eprover = new EquivalenceProver(graph)
-            eprover.stats = st
-            checktask()
           }
         }
         
