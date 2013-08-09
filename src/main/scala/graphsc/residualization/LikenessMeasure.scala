@@ -78,8 +78,8 @@ case class LikenessCalculator[L]
     else if(ldef.isEmpty || rdef.isEmpty || hist.exists(p => p._1 == l || p._2 == r))
       Some((zero, Renaming()))
     else {
-      val lfinals = ldef.filter(h => !h.label.isInstanceOf[CaseOf] || (!total && isDefining(h)))
-      val rfinals = rdef.filter(h => !h.label.isInstanceOf[CaseOf] || (!total && isDefining(h)))
+      val lfinals = ldef.filter(h => !h.label.isInstanceOf[CaseOf])
+      val rfinals = rdef.filter(h => !h.label.isInstanceOf[CaseOf])
       
       // there cannot be more than one non-caseof hyperedge even in total setting
       assert(lfinals.length <= 1 && rfinals.length <= 1)

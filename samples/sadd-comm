@@ -1,0 +1,7 @@
+
+import: lib/nat (sadd);
+
+test: sadd (S (S (S Z))) (S (S Z));
+
+prove: sadd x y = sadd y x;
+

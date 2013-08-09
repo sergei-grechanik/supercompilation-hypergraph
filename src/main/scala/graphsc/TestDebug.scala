@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-p -v -c10 -d10 -a10 --total --nogen  samples/total/add-comm")
+    cmd("-p -v -c10 -d10 -a10 --total --test   samples/sadd-comm")
   }
 
 }

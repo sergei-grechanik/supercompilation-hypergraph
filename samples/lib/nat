@@ -99,3 +99,9 @@ chmul i j f = i (j f);
 
 chexp i j = j i;
 
+sadd x y =
+    case x of {
+      Z -> case y of { S y1 -> S (sadd Z y1); Z -> Z; };
+      S x1 -> case y of { S y1 -> S (S (sadd x1 y1)); Z -> S (sadd x1 Z); };
+    };
+

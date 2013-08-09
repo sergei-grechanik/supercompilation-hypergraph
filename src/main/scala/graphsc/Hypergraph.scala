@@ -253,7 +253,7 @@ trait TheHypergraph extends Hypergraph {
       h.dests.minBy(_.node.insMut.size).node.insMut
       .find(x => x.label == h.label && x.dests == h.dests &&
           (!weakMerging || x.source.deref.renaming == h.source.deref.renaming)) match {
-        case Some(x) if h.source.node == x.source.node =>
+        //case Some(x) if h.source.node == x.source.node =>
         case Some(x) => glueNodes(x.source, h.source)
         case None => 
           val newh = addHyperedgeSimple(h)
@@ -358,7 +358,7 @@ trait TheHypergraph extends Hypergraph {
       addHyperedgeSimple(normalize(Hyperedge(Id(), l2, List(r2))))
       addHyperedgeSimple(normalize(Hyperedge(Id(), r2, List(l2))))
       
-      // Adding this hyperedges might trigger used set reduction
+      // Adding these hyperedges might trigger used set reduction
       // which in turn might perform node gluing
       val (l, r) = (l2.deref, r2.deref)
       

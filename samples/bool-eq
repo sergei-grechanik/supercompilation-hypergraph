@@ -1,0 +1,14 @@
+
+eq x y =
+  case x of {
+    T -> case y of { T -> T; F -> F };
+    F -> case y of { T -> F; F -> T };
+  };
+
+test: eq T F;
+test: eq F F;
+test: eq T T;
+test: eq F T;
+
+prove: eq x y = eq y x;
+

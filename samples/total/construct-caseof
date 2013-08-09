@@ -16,4 +16,9 @@ right x y = C
   })
   ;
 
+test: left (S A) B;
+test: left Z B;
+test: right (S A) B;
+test: right Z B;
+
 prove: left x y = right x y;
