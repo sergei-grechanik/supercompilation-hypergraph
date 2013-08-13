@@ -190,6 +190,8 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   
+  // TODO: Many of these transformations are ternary!
+  
   // factoring out caseofs from branches (in any setting)
   // case e of { A -> case x of {..}; B -> case x of {...} }  ->  case x of {...}
   def caseCaseSwap: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
@@ -201,7 +203,12 @@ trait Transformations extends Hypergraph {
             fs1.forall(f => f.plain == src2 || 
                 f.node.outs.exists(o => o.label == l2 && o.dests.size == h2.dests.size)) =>
       val vari = varForCaseCaseTotal(h1, h2)
+      // say, h1 and h2 are such that:
+      // h1: src1(x) = case e(x) of { A yA -> (rA fsA)(yA,x); B yB -> (rB fsB)(yB,x) }
+      // h2 = hA: fsA(y,x) = case x of { C z -> fsAC(z,y,x); D z -> fsAD(z,y,x) }
+      // h3 = hB: fsB(y,x) = case x of { C z -> fsBC(z,y,x); D z -> fsBD(z,y,x) }
       trans("caseCaseSwap", h1, h2) {
+        // newfs1list = [[(hA, rA, |yA|), (hB, rB, |yB|)]]
         val newfs1list =
           sequence((fs1 zip h1.shifts.tail).map { case (n,sh) =>
             if(n.plain == src2) 
@@ -215,23 +222,32 @@ trait Transformations extends Hypergraph {
                 .map(o => (o, n.renaming comp o.source.renaming.inv, sh))
           })
           
-        for(l <- newfs1list) {
+        for(l <- newfs1list) trans("subtrans of caseCaseSwap", l.map(_._1):_*) {
+          // l = [(hA, rA, |yA|), (hB, rB, |yB|)]
           val dests =
             for((h,r,s1) <- l) yield {
+              // say, (hA, rA, |yA|)
               for((d,s2) <- (h.dests zip h.shifts).tail) yield {
+                // (d,s2) <- [(fsAC, |z|), (fsAD, |z|)]
+                // say, d = fsAC(z, y, x)
                 d.renaming.mapVars(i =>
-                  if(i < s2) i + s1
+                  if(i < s2) i + s1 // i \in z
                   else {
-                    val j = r(i - s2)
-                    if(j < s1) j
-                    else j + s2
+                    // i \in (y, x)
+                    val j = r(i - s2) // j \in rA (y, x) = (y',x')
+                    if(j < s1) j // j \in y'
+                    else (j - s1) + s1 + s2 //j \in x' 
                   }
-                ) comp d.node 
+                ) comp d.node
+                // d = fsCA(y', z, x') = fsAC(z, y, x)
               }
             }
+          // dests = [[fsCA(y', z, x'), fsDA], [fsCB, fsDB]]
         
           val caseofs = 
-            for((ds,s2) <- dests zip h2.shifts.tail) 
+            for((ds,s2) <- dests.transpose zip h2.shifts.tail) 
+              // say, ds = [fsCA, fsCB], s2 = |z|
+              // case e(x) of { A y -> fsCA(y,z,x); B y -> fsCB(y,z,x) }
               yield add(CaseOf(cases1), (e1.renaming.mapVars(_ + s2) comp e1.node) :: ds)
         
           add(CaseOf(cases2), src1, variable(vari) :: caseofs)

@@ -1,0 +1,32 @@
+
+eq x y z =
+  case x of {
+    T u v  -> case y of { A k -> L x y z u v k; B -> L v u z y x; C k l -> L k l u v };
+    F u -> case y of { A k -> L k u z; B -> L u y; C k l -> L z l k };
+  };
+
+eq2 x y z =
+  case y of {
+    A k -> case x of { T u v ->  L x y z u v k; F u -> L k u z};
+    B -> case x of { T u v -> L v u z y x; F u -> L u y};
+    C k l -> case x of { T u v -> L k l u v; F u -> L z l k};
+  };
+
+test: eq (T U V) (A K) Z;
+test: eq (T U V) B Z;
+test: eq (T U V) (C K L) Z;
+test: eq (F U) (A K) Z;
+test: eq (F U) B Z;
+test: eq (F U) (C K L) Z;
+
+test: eq2 (T U V) (A K) Z;
+test: eq2 (T U V) B Z;
+test: eq2 (T U V) (C K L) Z;
+test: eq2 (F U) (A K) Z;
+test: eq2 (F U) B Z;
+test: eq2 (F U) (C K L) Z;
+
+
+
+prove: eq x y z = eq2 x y z;
+
