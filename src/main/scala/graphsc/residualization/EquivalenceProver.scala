@@ -137,7 +137,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator[L])
             
             // We cannot judge what variables are used if we've got a renaming from
             // the equivalence prover. Just FYI.
-            prove(ld.node, rd.node, Renaming(/*ld.node.used | rd.node.used*/), newhist) match {
+            prove(ld.node, rd.node, ld.renaming.inv comp rd.renaming, newhist) match {
               case None => curren = None
               case Some(t) => subtrees = t :: subtrees 
             }

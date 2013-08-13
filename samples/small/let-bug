@@ -1,0 +1,14 @@
+-- should fail
+
+
+g x y z = C x y z;
+
+f x y = g x x y;
+
+h x y = g y x x;
+
+test: f X Y;
+test: h X Y;
+
+prove: f x y = h x y;
+
