@@ -4,7 +4,10 @@ package object interpretation {
   type TrieSubst = Map[TrieVar, TrieVal]
   
   def runHyperedge(
-      h: Hyperedge, args: List[Value], nodeRunner: (RenamedNode, List[Value]) => Value): Value = {
+      h: Hyperedge, 
+      args: List[Value], 
+      nodeRunner: (RenamedNode, List[Value]) => Value,
+      total: Boolean = false): Value = {
     val Hyperedge(label, source, dests) = h
     label match {
       case Construct(name) =>
@@ -20,7 +23,13 @@ package object interpretation {
             val Some(((_, n), expr)) = (cases zip dests.tail).find(_._1._1 == cname)
             assert(cargs.size == n)
             nodeRunner(expr, cargs ++ args)
-          case Bottom => Bottom
+          case Bottom if !total => Bottom
+          case Bottom if total =>
+//            val ress =
+//              for(((_,n), expr) <- cases zip dests.tail) yield
+//                nodeRunner(expr, List.fill(n)(Bottom) ++ args)
+//            (ress(0) /: ress.tail)(_ & _)
+            ErrorBottom
           case ErrorBottom => ErrorBottom
         }
       case Let() =>
@@ -41,7 +50,8 @@ package object interpretation {
   
   def runHyperedgeAndStuff(
       h: Hyperedge, args: List[Value], 
-      nodeRunner: (RenamedNode, List[Value]) => ValueAndStuff): ValueAndStuff = {
+      nodeRunner: (RenamedNode, List[Value]) => ValueAndStuff, 
+      total: Boolean = false): ValueAndStuff = {
     val Hyperedge(label, source, dests) = h
     label match {
       case Construct(name) =>
@@ -59,7 +69,12 @@ package object interpretation {
             assert(cargs.size == n)
             val res = nodeRunner(expr, cargs ++ args)
             ValueAndStuff(res.value, what.cost + res.cost + 1, List(h))
-          case Bottom => ValueAndStuff(Bottom, 1, List(h))
+          case Bottom if !total => ValueAndStuff(Bottom, 1, List(h))
+          case Bottom if total =>
+            val ress =
+              for(((_,n), expr) <- cases zip dests.tail) yield
+                nodeRunner(expr, List.fill(n)(Bottom) ++ args)
+            (ress(0) /: ress.tail)(_ & _)
           case ErrorBottom => ValueAndStuff(ErrorBottom, 0, Nil)
         }
       case Let() =>

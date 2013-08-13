@@ -56,6 +56,8 @@ object EqProverApp {
         		"Makes everything a bit faster.")
     val test = opt[Boolean](noshort = true, descr = 
       "Enable testing on the fly using the tests specified in the input file")
+    val testLog = opt[Boolean](noshort = true, descr = 
+      "Enable tester logging")
     val integrityCheck = opt[Boolean](noshort = true, hidden = true)
     
     val cheat = opt[Boolean](noshort = true,
@@ -85,6 +87,7 @@ object EqProverApp {
         with SelfLetAdder
         with AutoTransformer
         with HyperLogger {
+          override val total = conf.total()
           override val integrityCheckEnabled = conf.integrityCheck()
           override val onTheFlyTesting = conf.test()
           override val prettifyingEnabled = !conf.nopretty()
@@ -100,6 +103,7 @@ object EqProverApp {
           
           var enableLoggingVar = conf.log()
           override def enableLogging = enableLoggingVar
+          override val hyperTesterLogging = conf.testLog()
           
           
           var residualizing = false
@@ -266,7 +270,7 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
-        val likenesscalc = LikenessCalculator[Int](conf.total())
+        val likenesscalc = LikenessCalculator[Int](true)//conf.total())
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
@@ -283,7 +287,7 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
           
-        for(((i,ren2),l1,r1) <- candidates; if !stop && (!(l1 ~~ r1) || conf.total())) {
+        for(((i,ren2),l1,r1) <- candidates; if !stop) {
           val lderef = l1.deref;
           val rderef = r1.deref;
           val l = lderef.node;

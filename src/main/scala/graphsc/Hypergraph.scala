@@ -2,6 +2,9 @@ package graphsc
 import scala.util.Random
 
 trait Hypergraph {
+  // In total setting some stuff behave differently
+  def total: Boolean = false
+  
   // h should connect nodes known to the hypergraph
   // h.source may be a free node, in this case the function should add or find an appropriate node 
   // This function may perform transformations
@@ -231,6 +234,8 @@ trait TheHypergraph extends Hypergraph {
         h
       }
     
+    log("-- addHyperedgeSimple " + hyperedgeToString(res))
+    
     res.source.node.outsMut += res
     res.dests.foreach(_.node.insMut.add(res))
     reduceUsed(res.source.node, sourcenode_used)
@@ -450,8 +455,9 @@ trait TheHypergraph extends Hypergraph {
           (ds,e.dests,e.shifts).zipped.map((d, d1, sh) => 
             d.renaming.inv comp srcren.shift(sh) comp d1.renaming)
       } {
-        (ds,rens,e.dests).zipped.foreach((d,r,d1) => 
-          glueNodes(d.plain, r comp d1.node))
+        (ds,rens,e.dests).zipped.foreach{(d,r,d1) => 
+          log("-- gluing nodes as children")
+          glueNodes(d.plain, r comp d1.node)}
         done = true
       }
       done
@@ -474,6 +480,7 @@ trait TheHypergraph extends Hypergraph {
           log("-- remove " + hyperedgeToString(h))
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
+          log("-- readding normalized hyperedge")
           addHyperedge(nor)
         } else if(isvar && h.label.isInstanceOf[CaseOf]) {
           // here h is not non-normal but we can still perform important gluings

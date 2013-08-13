@@ -4,8 +4,9 @@ case class Hyperedge(label: Label, source: RenamedNode, dests: List[RenamedNode]
   // if source is not invertible then this hyperedge reduces its used set
   // if dests are not invertible then they won't consume some variables
   // But non-invertible dests lead to problems during generalization,
-  // so we require them to be invertible (the only exception is when we are gluing)
-  require(label == Id() || dests.forall(_.isInvertible))
+  // so we used to require them to be invertible (the only exception is when we are gluing)
+  // But, well, we'd better fix the problems during generalization, I think.
+  //require(label == Id() || dests.forall(_.isInvertible))
   
   // A hyperedge should be read as a universally quantified statement
   // forall x y z . f(x,y) = C[g(x), h(y,z)]

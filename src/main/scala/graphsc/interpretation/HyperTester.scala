@@ -12,6 +12,7 @@ case class RunningContext(limit: Int = Int.MaxValue, visited: List[(Node, List[V
 
 trait HyperTester extends TheHypergraph {
   def onTheFlyTesting = false
+  def hyperTesterLogging = false
   
   val runCacheImpl = 
     collection.mutable.Map[Node, collection.mutable.Map[List[Value], ValueAndStuff]]()
@@ -33,10 +34,38 @@ trait HyperTester extends TheHypergraph {
     val n = node.deref.node
     val args =
       truncArgs(node.deref, argsUncut).map(_ | Bottom)
+    
+    if(hyperTesterLogging) {
+      log("-- runNode: " + nodeToString(n.deref) + " = ")
+      log(indent(n.prettyDebug, "-- "))
+      log("-- args: " + args)
+      log("-- ctxlimit: " + ctx.limit)
+    }
       
     val almost = runCache(n).get(args) match {
-      case Some(v) => v
-      case None => runNodeUncached(ctx, n, args)
+      case Some(v) =>
+        if(hyperTesterLogging) { 
+          log("-- cached: " + v.value)
+          log("")
+        }
+        v
+      case None => 
+        if(hyperTesterLogging) {
+          log("-- uncached, running")
+          logShift()
+        }
+        
+        val v = runNodeUncached(ctx, n, args)
+        
+        if(hyperTesterLogging) {
+          logUnshift()
+          log("-- got the result: " + v.value)
+          log("-- for this: " + nodeToString(n.deref) + " = ")
+          log(indent(n.prettyDebug, "-- "))
+          log("-- args: " + args)
+          log("")
+        }
+        v
     }
     
     // If the result contains bottom then it may have
@@ -56,6 +85,7 @@ trait HyperTester extends TheHypergraph {
       return ValueAndStuff(ErrorBottom, 0, Nil)
 
     var newctx = ctx.add(n,args)
+    var curlub = ValueAndStuff(ErrorBottom, 0, Nil)
 
     // Try id hyperedges first
     val outs = 
@@ -64,17 +94,19 @@ trait HyperTester extends TheHypergraph {
         case _ if isDefining(h) => 1
         case _ => 2
       })
-    
+      
     val values = 
       for(o <- outs) yield {
         val r = runHyperedgeUncached(newctx, o, args)
         
         // the answer may have been computed deeper
-        runCache(n).get(args) match {
-          case Some(x) =>
-            return x
-          case _ =>
-        }
+//        runCache(n).get(args) match {
+//          case Some(x) =>
+//            if(hyperTesterLogging)
+//              log("-- Got the result for node " + nodeToString(n.deref))
+//            return x
+//          case _ =>
+//        }
         
         // Next hyperedges mustn't take much longer to compute
         if(r.value != ErrorBottom) {
@@ -82,21 +114,36 @@ trait HyperTester extends TheHypergraph {
           if(newlim < newctx.limit)
             newctx = RunningContext(newlim, newctx.visited)
         }
+        
+        curlub = curlub | r
+        
+        if(curlub.value != ErrorBottom)
+          runCache(n) += args -> curlub
           
         r
       }
     
+    if(hyperTesterLogging)
+      log("-- Ok, we got values for hyperedges: " + values.map(_.value))
+    
     val lub = values.reduce(_ | _)
+    
+    if(hyperTesterLogging)
+      log("-- Their combination: " + lub.value)
     
     if(lub.value != ErrorBottom) {
       runCache(n) += args -> lub
       
       for((v,o) <- values zip outs if v != lub) {
+        if(hyperTesterLogging)
+          log("-- Checking one of the failed hyperedges")
         val test = runHyperedgeUncached(RunningContext(newctx.limit), o, args)
         // Sometimes it is just too difficult to compute the true value
         if(test.value != ErrorBottom)
           assert(test.value == lub.value)
         else {
+          if(hyperTesterLogging)
+            log("-- Check failed (which is not the end of the world)")
           // If we have a hyperedge like this:
           //   f x y = f x (S y)
           // we will get an infinite branch and hence this error message.
@@ -108,6 +155,9 @@ trait HyperTester extends TheHypergraph {
         }
       }
     }
+    
+    if(hyperTesterLogging)
+      log("-- Running node uncached done")
       
     lub
   }
@@ -117,8 +167,16 @@ trait HyperTester extends TheHypergraph {
       ctx: RunningContext, h: Hyperedge, argsUncut: List[Value]): ValueAndStuff = {
     val args = 
       truncArgs(h.source.renaming.inv comp h.asDummyNode, argsUncut)
+    
+    if(hyperTesterLogging) {
+      logShift()
+      log("-- runHyperedgeUncached: " + hyperedgeToString(h))
+      log("-- args: " + args)
+      log("-- ctxlimit: " + ctx.limit)
+      logShift()
+    }
       
-    var curctx = ctx
+    var curctx = ctx - hyperedgeCost(h)
     var subcost = 0
       
     val rv = runHyperedge(h, args, { (n, as) =>
@@ -126,7 +184,18 @@ trait HyperTester extends TheHypergraph {
       curctx -= c
       subcost += c
       v
-    })
+    }, total)
+    
+    if(hyperTesterLogging) {
+      logUnshift()
+      log("-- runHyperedgeUncached done") 
+      log("-- hyperedge was: " + hyperedgeToString(h))
+      log("-- args: " + args)
+      log("-- ctxlimit: " + ctx.limit)
+      log("-- result: " + rv)
+      logUnshift()
+      log("")
+    }
     
     ValueAndStuff(rv, subcost + hyperedgeCost(h), List(h))
   }
@@ -169,7 +238,9 @@ trait HyperTester extends TheHypergraph {
       val ctx = RunningContext(limitFromMinCost(r.cost))
       val res = runHyperedgeUncached(ctx, h, as)
       
-      if(res.value != r.value) {
+      // Actually ErrorBottom may indicate that there is a bug, but sometimes we just
+      // cannot evaluate some stuff
+      if(res.value != ErrorBottom && res.value != r.value) {
         System.err.println("Hyperedge test failed")
         System.err.println("args = " + as)
         System.err.println("Got " + res.value + "  should be " + r.value)

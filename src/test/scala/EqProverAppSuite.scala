@@ -26,16 +26,19 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check --test ./samples/idle")
   cmd("--prove --integrity-check --test --nogen ./samples/idle")
   // --test fails on quad-idle, --integrity-check takes too long
-  cmd("--prove ./samples/quad-idle")
+  // And now for some reason takes too long without --nogen
+  //cmd("--prove ./samples/quad-idle")
   cmd("--prove --integrity-check --nogen ./samples/quad-idle")
   // takes too long without --nogen
   cmd("--prove --integrity-check --nogen ./samples/exp-idle")
   cmd("--prove --integrity-check --test ./samples/inf")
   cmd("--prove --integrity-check --test ./samples/map-comp")
-  cmd("--prove -c10 -d10 -a10 --nogen ./samples/mul-distrib-and-assoc")
+  // takes too long now
+  //cmd("--prove -c10 -d10 -a10 --nogen -v ./samples/mul-distrib-and-assoc")
   cmd("--prove --integrity-check --test --nogen ./samples/shuffled-let")
   cmd("--prove --integrity-check --test --nogen ./samples/bool-eq")
   cmd("--prove --integrity-check --test --nogen -a4 ./samples/small/case-swap")
+  cmd("--prove --integrity-check --test --nogen ./samples/sadd-comm")
   cmd("--prove --integrity-check --test --nogen --total ./samples/total/construct-caseof")
   cmd("--prove --integrity-check --test --nogen ./samples/total/idnat-idemp")
   cmd("--prove --integrity-check --test --nogen --total ./samples/total/add-comm-lemma")

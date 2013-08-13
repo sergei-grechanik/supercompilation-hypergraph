@@ -4,6 +4,7 @@ package interpretation
 sealed trait Value {
   def size: Int
   def |(v: Value): Value
+  def &(v: Value): Value
   def isBottomless: Boolean
 }
 
@@ -32,6 +33,17 @@ case class Ctr(constructor: String, args: List[Value]) extends Value {
       throw new Exception("Values are incompatible")
   }
   
+  def &(v: Value): Value = v match {
+    case Ctr(c1, a1) if c1 == constructor && a1.length == args.length =>
+      Ctr(c1, args zip a1 map { case (l,r) => l & r })
+    case Ctr(c1, a1) =>
+      Bottom
+    case Bottom =>
+      Bottom
+    case ErrorBottom =>
+      ErrorBottom
+  }
+  
   override def isBottomless = args.forall(_.isBottomless)
 }
 
@@ -42,6 +54,10 @@ case object Bottom extends Value {
     case ErrorBottom => Bottom
     case v => v
   }
+  def &(v: Value): Value = v match {
+    case ErrorBottom => ErrorBottom
+    case v => Bottom
+  }
   override def isBottomless = false
 }
 
@@ -49,6 +65,7 @@ case object ErrorBottom extends Value {
   override def toString = "_[fail]_"
   override def size = 1
   def |(v: Value): Value = v
+  def &(v: Value): Value = ErrorBottom
   
   override def isBottomless = false
 }
@@ -57,6 +74,19 @@ case object ErrorBottom extends Value {
 case class ValueAndStuff(value: Value, cost: Int, preferred: List[Hyperedge]) {
   def |(other: ValueAndStuff) = {
     val newval = value | other.value
+    (newval == value, newval == other.value) match {
+      case (true, false) => this
+      case (false, true) => other
+      case _ =>
+        ValueAndStuff(newval, cost min other.cost,
+          if(cost < other.cost) preferred
+          else if(cost > other.cost) other.preferred
+          else (preferred ++ other.preferred).distinct)
+    }
+  }
+  
+  def &(other: ValueAndStuff) = {
+    val newval = value & other.value
     (newval == value, newval == other.value) match {
       case (true, false) => this
       case (false, true) => other
