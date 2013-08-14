@@ -139,21 +139,31 @@ trait Hypergraph {
         else
           Hyperedge(Let(), h.source, newhead :: newtail)
       case CaseOf(cases) =>
-        h.dests(0).node.outs.find(o => 
-          o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Unused]) match {
-          case Some(Hyperedge(Unused(), _, _)) =>
-            Hyperedge(Unused(), h.source, Nil)
-          case Some(Hyperedge(Construct(name), src2, args)) =>
-            (cases zip h.dests.tail).find(p => p._1._1 == name && p._1._2 == args.size) match {
-              case Some((_,branch)) =>
-                val bs = 
-                  args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
-                  (args.size until branch.arity).map(i => variable(i - args.size))
-                simplify(Hyperedge(Let(), h.source, List(branch) ++ bs))
-              case None =>
-                Hyperedge(Unused(), h.source, Nil)
-            }
-          case _ => h
+        lazy val dest1 = h.dests(1).renaming.mapVars(_ - h.shifts(1)) comp h.dests(1).node
+        if(total && 
+            (h.dests zip h.shifts).tail.forall{ 
+              case (d,s) => 
+                d.used.forall(_ >= s) && 
+                (d.renaming.mapVars(_ - s) comp d.node) ~=~ dest1}) {
+          Hyperedge(Id(), h.source, List(dest1))
+        }
+        else {
+          h.dests(0).node.outs.find(o => 
+            o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Unused]) match {
+            case Some(Hyperedge(Unused(), _, _)) =>
+              Hyperedge(Unused(), h.source, Nil)
+            case Some(Hyperedge(Construct(name), src2, args)) =>
+              (cases zip h.dests.tail).find(p => p._1._1 == name && p._1._2 == args.size) match {
+                case Some((_,branch)) =>
+                  val bs = 
+                    args.map(h.dests(0).renaming comp src2.renaming.inv comp _) ++ 
+                    (args.size until branch.arity).map(i => variable(i - args.size))
+                  simplify(Hyperedge(Let(), h.source, List(branch) ++ bs))
+                case None =>
+                  Hyperedge(Unused(), h.source, Nil)
+              }
+            case _ => h
+          }
         }
       case _ => h
     }

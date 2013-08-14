@@ -38,7 +38,7 @@ trait Transformations extends Hypergraph {
   
   def transNone = Fun2BiHProc(Nil)
   
-  def transTotal = partFun2BiHProc(caseConstrTotal) //& caseCaseTotal
+  def transTotal = partFun2BiHProc(caseConstrTotal) & caseCaseTotal
   
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -281,7 +281,9 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  // factoring out caseof from branches (in total setting)
+  // propagating subcaseofs to siblings
+  // case e of { A -> case x of {...}; B -> f }  ->  
+  //        case e of { A -> case x of {...}; B -> case x of {... f ... f ...} }
   def caseCaseTotal: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(CaseOf(cases2), src2, e2 :: es2)) if 
