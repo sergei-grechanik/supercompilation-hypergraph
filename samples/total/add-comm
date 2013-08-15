@@ -17,6 +17,13 @@ test: add (S (S Z)) (S (S (S Z)));
 
 --prove: idNat (add x y) = idNat (add y x);
 
+prop p1: add x y = case x of { S x -> S (add x y); Z -> idNat y; };
+prop p2: add x y = case x of { S x -> S (add x y); Z -> case y of { S y -> S (idNat y); Z -> Z } };
+prop p3: add x y = 
+  case y of { 
+    S y1 -> case x of { S x1 -> S (add x1 y); Z -> S (idNat y1) }; 
+    Z -> case x of { S x1 -> S (add x1 y); Z -> Z } };
+
 prop lemma: add x (S y) = S (add x y);
 prop idnat: idNat x = add x Z;
 prop almost: add x y = case y of { S y -> S (add x y); Z -> idNat x; };

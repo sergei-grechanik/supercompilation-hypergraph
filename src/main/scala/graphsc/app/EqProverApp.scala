@@ -233,13 +233,12 @@ object EqProverApp {
     while(!stop && generation < conf.generations()) {
       if(conf.verbose())
         System.err.println("Transforming...")
-      
+        
       graph.changed = false
           
       val trans =
         (if(conf.nogen()) tr.transNone else partFun2BiHProc(tr.letUp(maxarity))) &
-        (if(conf.total()) tr.transTotal else tr.transNone) &
-        tr.transDrive
+        (if(conf.total()) tr.transTotal else tr.transUntotal)
       if(!conf.supercompile())
         graph.transform(trans)
       //buf.commit()
