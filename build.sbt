@@ -8,6 +8,8 @@ scalacOptions += "-deprecation"
 
 testOptions in Test += Tests.Argument("-P")
 
+testOptions in Test += Tests.Argument("-oD")
+
 mainClass in Compile := Some("graphsc.app.EqProverApp")
 
 mainClass in oneJar := Some("graphsc.app.EqProverApp")

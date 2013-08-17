@@ -4,20 +4,21 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.FunSuite
 import org.scalatest.ParallelTestExecution
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 @RunWith(classOf[JUnitRunner])
 class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   
-  def cmd(s: String) {
+  def cmd(s: String, secs: Int = 30, res: Boolean = true) {
     test("eqprover " + s) {
-      assert(EqProverApp.mainBool(s.split(" ")) === Some(true))
+      assert(Await.result(future(EqProverApp.mainBool(s.split(" "))), secs.seconds) === Some(res))
     }
   }
   
-  def cmdnot(s: String) {
-    test("eqprover " + s) {
-      assert(EqProverApp.mainBool(s.split(" ")) === Some(false))
-    }
+  def cmdnot(s: String, secs: Int = 30) {
+    cmd(s, secs, false)
   }
   
   // small enough for generalization
