@@ -111,7 +111,7 @@ case class Renaming(vector: List[Int]) {
   
   // intersect two renamings
   def &(r: Renaming): Renaming =
-    Renaming((vector zip r.vector).map{ case (i,j) => if(i == j) i else -1 })
+    Renaming((vector zip r.vector).map{ case (i,j) => if(i == j) i else -1 }).normal
 }
 
 object Renaming {

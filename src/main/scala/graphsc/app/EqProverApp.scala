@@ -269,7 +269,8 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
-        val likenesscalc = LikenessCalculator[Int](true)//conf.total())
+        //val likenesscalc = new ByTestingLikenessCalculator(graph)
+        val likenesscalc = new LikenessCalculator(conf.total())
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
@@ -324,7 +325,7 @@ object EqProverApp {
           val stats = eprover.stats 
           for(n <- stats.toList.filter 
                 { case ((l,r),_) => 
-                    LikenessCalculator[Int](conf.total())
+                    (new LikenessCalculator(conf.total()))
                       .likeness(l.deref, r.deref).map(_._1) == Some(0) }
                 .sortBy(-_._2).take(conf.driveRecommended())
                 .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {

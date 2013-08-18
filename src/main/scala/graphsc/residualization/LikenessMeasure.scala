@@ -1,33 +1,16 @@
 package graphsc
 package residualization
 
-trait LikenessMeasure[L] {
-  def zero: L
-  def infinity: L
-  def combine(l: List[L]): L
-}
-
-object LikenessMeasure {
-  implicit object IntLikenessMeasure extends LikenessMeasure[Int] {
-    override def zero = 0
-    override def infinity = Int.MaxValue
-    override def combine(l: List[Int]) = 
-      (infinity :: l).min match {
-        case Int.MaxValue => Int.MaxValue
-        case n => n + 1
-      }
-  }
-}
-
-case class LikenessCalculator[L]
-    (total: Boolean = false)(implicit lm: LikenessMeasure[L], ord: Ordering[L]) {
-  import lm._
+class LikenessCalculator(total: Boolean = false) {
   
-  implicit def injectOr(r: Option[Renaming]) = new {
-    def |(l: Renaming): Option[Renaming] = r.flatMap(_ | l)
-    def |(l: Option[Renaming]): Option[Renaming] = 
-      for(x <- r; y <- l; k <- x | y) yield k 
-  }
+  def restrict(ren: Renaming)(res: Option[(Int, Renaming)]): Option[(Int, Renaming)] =
+    for((i,rn) <- res; newren <- ren | rn) yield (i,newren)
+  
+  def combine(l: List[Int]): Int = 
+    (Int.MaxValue :: l).min match {
+      case Int.MaxValue => Int.MaxValue
+      case n => n + 1
+    }
   
   def viablePermutations(r: RenamedNode): List[Renaming] =
     viablePermutations(r.node).map(p => r.renaming comp p comp r.renaming.inv)
@@ -58,25 +41,31 @@ case class LikenessCalculator[L]
   }
   
   def likeness(
-        l: RenamedNode, r: RenamedNode,
-        hist: List[(Node, Node)] = Nil): Option[(L, Renaming)] = {
-    likenessN(l.node, r.node, hist).map {
-      case (i,ren) => 
-        (i, l.renaming comp ren comp r.renaming.inv)
-    }
+        l: RenamedNode, r: RenamedNode, ren: Renaming = Renaming(),
+        hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] = restrict(ren) {
+    likenessN(l.node, r.node, l.renaming comp ren comp r.renaming.inv, hist)
+      .map{ case (i, newren) => (i, l.renaming.inv comp newren comp r.renaming) }
   }
   
   def likenessN(
-        l: Node, r: Node,
-        hist: List[(Node, Node)] = Nil): Option[(L, Renaming)] = {
+        l: Node, r: Node, ren: Renaming = Renaming(),
+        hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] = restrict(ren) {
     val ldef = definingHyperedgesNonStrict(l)
     val rdef = definingHyperedgesNonStrict(r)
+    
+    lazy val idren = Renaming(r.used) | ren
+    
+    lazy val goodids = 
+      l.outs.toList.collect{ case h if h.label == Id() => 
+         ((h.source.renaming.inv comp h.dests(0).renaming) | ren)}.flatten
  
-    if(l == r)
-      // in total setting a node may be equivalent to itself up to non-id renaming
-      Some((infinity, if(total) Renaming() else Renaming(r.used)))
+    if(l == r && idren.nonEmpty) 
+      Some((Int.MaxValue, idren.get))  
+    else if(l == r && goodids.nonEmpty)
+      // a node may be equivalent to itself up to non-id renaming
+      Some((Int.MaxValue, goodids(0)))
     else if(ldef.isEmpty || rdef.isEmpty || hist.exists(p => p._1 == l || p._2 == r))
-      Some((zero, Renaming()))
+      Some((0, ren))
     else {
       val lfinals = ldef.filter(h => !h.label.isInstanceOf[CaseOf])
       val rfinals = rdef.filter(h => !h.label.isInstanceOf[CaseOf])
@@ -86,104 +75,97 @@ case class LikenessCalculator[L]
       
       val fin =
         for(lh <- lfinals; rh <- rfinals) yield 
-          likenessH(lh, rh, hist) 
+          likenessH(lh, rh, ren, hist) 
       
       if(fin.nonEmpty)
         fin(0)
       else {
-        val ress =
-          for(lh <- ldef; rh <- rdef) yield
-            likenessH(lh, rh, hist)
-        
-        if(total) {
-          // when totality holds, little inconsistencies don't mean anything
-          ((None.asInstanceOf[Option[(L, Renaming)]] /: ress) {
-            case (None,b) => b
-            case (a,None) => a
-            case (Some((v1, ren1)), Some((v2, ren2))) =>
-              Some((ord.max(v1, v2), ren1 & ren2))
-          }).map{case (v,_) => (v,Renaming())}
-        } else {
-          ress.filter(_.nonEmpty) match {
-              case Nil =>
-                None
-              case l => l.maxBy(_.get._1)
-          }
+        // final hyperedges always contradict to caseofs when non-total 
+        if(!total && ((lfinals.nonEmpty && rdef.nonEmpty) || (rfinals.nonEmpty && ldef.nonEmpty)))
+          None
+        else {
+          val ress =
+            for(lh <- ldef; rh <- rdef) yield {
+              val l = likenessH(lh, rh, ren, hist)
+              // if scrutinee variables are the same and the caseofs are incompatible then
+              // the nodes cannot be equal
+              if(l == None &&
+                 lh.label.isInstanceOf[CaseOf] && rh.label.isInstanceOf[CaseOf] && 
+                 (lh.source.renaming.inv comp lh.dests(0)).getVar == 
+                   (ren comp rh.source.renaming.inv comp rh.dests(0)).getVar)
+                return None
+              else l match {
+                case None => (0, ren)
+                case Some(x) => x
+              }
+            }
+          Some(((0, ren) /: ress)((l,r) => (l._1 max r._1, l._2 & r._2)))
         }
       }
     }
-  }  
+  }
   
   def likenessH(
-        lh1: Hyperedge, rh1: Hyperedge,
-        hist: List[(Node, Node)] = Nil): Option[(L, Renaming)] = {
+        lh1: Hyperedge, rh1: Hyperedge, ren1: Renaming = Renaming(),
+        hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] = restrict(ren1) {
     val ln = lh1.source.node
     val rn = rh1.source.node
+    val ren = lh1.source.renaming comp ren1 comp rh1.source.renaming.inv
     
-    if(lh1.label != rh1.label || lh1.dests.size != rh1.dests.size)
-      None
-    else {
-      lh1.label match {
-        case Var() =>
-          Some((infinity, lh1.source.renaming comp rh1.source.renaming.inv))
-        case _ =>
-          val ldests = lh1.source.renaming.inv.compDests(lh1)
-          val rdests = rh1.source.renaming.inv.compDests(rh1)
-          
-          if(lh1.label == Let()) {
-            // If it's a let, we need to rearrange arguments
-            likeness(ldests(0), rdests(0), (ln,rn) :: hist).flatMap {
-              case (head_score, headren) =>
-                val ltail = ldests.tail
-                val rtail = rdests.tail
-                
-                val chld =
-                  for((i,j) <- headren.vector.zipWithIndex if i != -1) yield
-                    likeness(ltail(i), rtail(j), (ln,rn) :: hist)
-                
-                if(!chld.forall(_.isDefined))
-                  None
-                else {
-                  val rens = chld.map(_.get._2)
-                  val resren =
-                      (Some(Renaming()).asInstanceOf[Option[Renaming]] /: rens)(_ | _)
-                  resren.map {
-                    rr =>
-                      // if our head renaming doesn't cover all used variables
-                      // then we cannot return the full score
-                      if(chld.size < (ldests(0).used.size max rdests(0).used.size))
-                        (combine(lm.zero :: head_score :: chld.map(_.get._1)), rr)
-                      else
-                        (combine(head_score :: chld.map(_.get._1)), rr)
-                  }
-                }
-            }
-          }
-          else { // if it's not a let
-            val chld = (ldests,rdests).zipped.map(likeness(_, _, (ln,rn) :: hist))
+    val res =
+      if(lh1.label != rh1.label || lh1.dests.size != rh1.dests.size)
+        None
+      else {
+        lh1.label match {
+          case Var() => 
+            if(ren(0) == 0) Some((Int.MaxValue, ren))
+            else if(ren(0) == -1) (ren | Renaming(0 -> 0)).map((Int.MaxValue, _)) 
+            else None
+          case _ =>
+            val ldests = lh1.dests
+            val rdests = rh1.dests
             
-            if(!chld.forall(_.isDefined))
-              None
-            else {
-              // here we have to unshift our renamings
-              
-              val shifts = lh1.shifts
-              // these renamings make sure that bound varibales match
-              val shift_rens = shifts.map(n => Renaming(0 until n toSet))
-              
-              val rens = 
-                (chld.map(_.get._2), shift_rens, shifts).zipped.map(
-                    (a,b,n) => 
-                      if(n != -1) (a | b).map(_.unshift(n))
-                      else (a | b))
-                    
-              val resren = 
-                (Some(Renaming()).asInstanceOf[Option[Renaming]] /: rens)(_ | _)
+            var newren: Option[Renaming] = Some(ren)
+            
+            val scores =
+              for(((ld,rd),sh) <- ldests zip rdests zip lh1.shifts) yield {
+                val score =
+                  if(sh == -1) {
+                    likenessN(ld.node, rd.node, 
+                        ld.renaming.inv comp rd.renaming, (ln,rn) :: hist)
+                  } else {
+                    (newren.get.shift(sh) | Renaming(0 until sh toSet))
+                      .flatMap(likeness(ld, rd, _, (ln,rn) :: hist))
+                  } 
                 
-              resren.map((combine(chld.map(_.get._1)), _))
-            }
-          }
-      } 
-    }
+                score match {
+                  case None => return None
+                  case Some((sc,rn)) =>
+                    if(sh != -1) {
+                      newren = newren | rn.unshift(sh)
+                      if(newren.isEmpty) return None
+                    }
+                    sc
+                }
+              }
+            
+            Some((combine(scores), newren.get))
+        }
+      }
+    
+    res.map{ case (i, newren) => 
+      (i, lh1.source.renaming.inv comp newren comp rh1.source.renaming) }
   }
+}
+
+class NonrenamingLikenessCalculator(total: Boolean) extends LikenessCalculator(total) {
+  val lk = new LikenessCalculator(total)
+  
+  override def likenessN(
+        l: Node, r: Node, ren: Renaming = Renaming(),
+        hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] =
+    lk.likenessN(l, r, ren, hist) match {
+      case None => None
+      case Some((v, _)) => Some((v, ren))
+    }
 }

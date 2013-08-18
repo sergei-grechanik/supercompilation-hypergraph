@@ -5,6 +5,12 @@ package object graphsc {
     case Nil => List(Nil)
   }
   
+  implicit def injectOrIntoOptRenaming(r: Option[Renaming]) = new {
+    def |(l: Renaming): Option[Renaming] = r.flatMap(_ | l)
+    def |(l: Option[Renaming]): Option[Renaming] = 
+      for(x <- r; y <- l; k <- x | y) yield k 
+  }
+  
   def isDefining(h: Hyperedge): Boolean = h.label match {
     case Construct(_) => true
     case Tick() => true

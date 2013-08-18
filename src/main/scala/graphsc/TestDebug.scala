@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-p -v -c10 -d10 -a10 --test --nogen --total  samples/mul-distrib-and-assoc")
+    cmd("--prove -v --integrity-check --test --nogen --total ./samples/total/add-comm-lemma")
   }
 
 }

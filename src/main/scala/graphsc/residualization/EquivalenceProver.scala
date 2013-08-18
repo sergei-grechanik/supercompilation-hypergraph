@@ -1,8 +1,8 @@
 package graphsc
 package residualization
 
-class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator[L])
-    (implicit cc: CorrectnessChecker[S], lm: LikenessMeasure[L], ord: Ordering[L]) {
+class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
+    (implicit cc: CorrectnessChecker[S]) {
   import likenesscalc._
   
   type Hist = List[((Node, S), (Node, S))]
@@ -80,21 +80,20 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator[L])
       
       val pairs = 
         for((llab,lset) <- louts.iterator; (rlab,rset) <- routs.iterator; if llab == rlab; 
-            lh <- lset; rh <- rset; if lh.dests.size == rh.dests.size) yield {
-          likenessH(lh, rh).flatMap {
-            case (like, ren1) => (ren | ren1).map((like, lh, rh, _))
-          }
-        }
+            lh <- lset; rh1 <- rset; 
+            if lh.dests.size == rh1.dests.size;
+            rh <- varySecond(lh, rh1)) yield
+          likenessH(lh, rh, ren).map{ case (like, rn) => (like, lh, rh, rn) }
       
       val sorted_pairs = 
-        pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(_._1)(ord.reverse)
+        pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(-_._1)
       
       var result: Option[Renaming] = None
       var hypers: (Hyperedge, Hyperedge) = null
       var subtrees: List[EqProofTree] = null
         
       // for each pair of hyperedges while there is no result
-      for((like, lh, rh1, ren1) <- sorted_pairs; rh <- varySecond(lh, rh1) if result == None) {
+      for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
         subtrees = Nil
         
         val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
