@@ -269,8 +269,8 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
-        //val likenesscalc = new ByTestingLikenessCalculator(graph)
-        val likenesscalc = new LikenessCalculator(conf.total())
+        val likenesscalc = new ByTestingLikenessCalculator(graph)
+        //val likenesscalc = new LikenessCalculator(conf.total())
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
@@ -297,6 +297,14 @@ object EqProverApp {
           for(ren <- if(!(l ~~ r)) List(ren1) else likenesscalc.viablePermutations(l)) {
             val lpretty = l.prettyDebug
             val rpretty = r.prettyDebug
+//            if(conf.verbose()) {
+//              System.err.println("==Trying to prove==")
+//              System.err.println(lpretty)
+//              System.err.println("=======================" + ren)
+//              System.err.println(rpretty)
+//              System.err.println("=======================\n")
+//              //System.err.println(eq)
+//            }
             val eq = eprover.prove(l.deref.node, r.deref.node, ren)
             if(eq != None) {
               if(conf.verbose()) {

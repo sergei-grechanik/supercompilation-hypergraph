@@ -20,15 +20,20 @@ class ByTestingLikenessCalculator(graph: HyperTester) extends LikenessCalculator
   }
   
   def viableRenamings(l: Node, r: Node, ren: Renaming = Renaming()): List[Renaming] = {
-    val lvars = l.used.toList
-    val rvars = r.used.toList
-    
-    val res =
-      for(perm <- lvars.permutations; rn <- Renaming(rvars zip perm :_*) | ren;
-          if consistent(l, r, rn))
-        yield rn
-        
-    res.toList
+    if(l.used.size > r.used.size)
+      viableRenamings(r, l, ren.inv).map(_.inv)
+    else {
+      val rvars = r.used.toList
+      val lvars1 = l.used.toList
+      val lvars = lvars1 ++ List.fill(rvars.size - lvars1.size)(-1)
+      
+      val res =
+        for(perm <- lvars.permutations; rn <- Renaming(rvars zip perm :_*) | ren;
+            if consistent(l, r, rn))
+          yield rn
+          
+      res.toList
+    }
   }
   
   override def viablePermutations(n: Node): List[Renaming] = {
@@ -51,31 +56,13 @@ class ByTestingLikenessCalculator(graph: HyperTester) extends LikenessCalculator
   override def likenessN(
         l: Node, r: Node, ren: Renaming = Renaming(),
         hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] = {
-    val res =
-      viableRenamings(l, r, ren) match {
-        case Nil => None
-        case lst => Some((graph.runCache(l).size min graph.runCache(r).size, lst.reduce(_ & _)))
-      }
-    
-    val other = lc.likenessN(l, r, ren, hist)
-    
-    if(other.map(_._2) != res.map(_._2) && (res == None || 
-        other.exists(o => res.exists(r => (o._2 | r._2) == None)))) {
-      println("likenessN " + ren)
-      println("")
-      println(l.prettyDebug)
-      println("")
-      println(r.prettyDebug)
-      println("")
-      println("res = " + res)
-      println("oth = " + other)
-      println("")
-      println(graph.runCache(l).map(x => x._1 + " -> " + x._2.value).mkString("\n"))
-      println("")
-      println(graph.runCache(r).map(x => x._1 + " -> " + x._2.value).mkString("\n"))
-      println("")
-    }
-    
-    res
+    //lc.likenessN(l, r, ren, hist).flatMap {
+    //  case (i, ren1) =>
+        viableRenamings(l, r, ren) match {
+          case Nil => None
+          case lst => 
+            Some((1 + 0*100 + (graph.runCache(l).size min graph.runCache(r).size), lst.reduce(_ & _)))
+        }
+    //}
   }  
 }
