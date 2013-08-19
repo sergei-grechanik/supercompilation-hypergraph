@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("--prove --integrity-check --test -v --nogen ./samples/sadd-comm")
+    cmd("--prove -v --integrity-check --test --nogen --total ./samples/total/add-comm")
   }
 
 }

@@ -276,7 +276,7 @@ trait Transformations extends Hypergraph {
                     shift: Int, v: Int, hs: List[(Hyperedge, Renaming, Int)]): 
                         List[(Hyperedge, Renaming, Int)] = hs match {
     case Nil if total =>
-      val h = Hyperedge(CaseOf(cases), null, 
+      val h = Hyperedge(CaseOf(cases), (new FreeNode(Set())).deref, 
           variable(v) :: cases.map{ case (_,sh) => n.renaming.mapVars(_ + sh) comp n.node })
       List((h, Renaming(h.used), shift))
     case _ => hs

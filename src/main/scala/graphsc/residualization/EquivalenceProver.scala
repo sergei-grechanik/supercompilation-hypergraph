@@ -210,8 +210,7 @@ case class EqProofTree(
   private def performGluing1(g: Hypergraph) {
     for((_,_,l) <- out; t <- l)
       t.performGluing(g)
-    if(nodes._1.deref.node != nodes._2.deref.node)
-      g.add(Id(), renaming comp nodes._2, List(nodes._1.deref))
+    g.add(Id(), renaming comp nodes._2, List(nodes._1.deref))
   }
   
   // Fix renamings. When we prove equivalence we cannot infer correct renamings,
