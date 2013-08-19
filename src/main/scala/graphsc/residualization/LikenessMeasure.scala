@@ -90,7 +90,8 @@ class LikenessCalculator(total: Boolean = false) {
               // if scrutinee variables are the same and the caseofs are incompatible then
               // the nodes cannot be equal
               if(l == None &&
-                 lh.label.isInstanceOf[CaseOf] && rh.label.isInstanceOf[CaseOf] && 
+                 lh.label.isInstanceOf[CaseOf] && rh.label.isInstanceOf[CaseOf] &&
+                 isDefining(lh) && isDefining(rh) &&
                  (lh.source.renaming.inv comp lh.dests(0)).getVar == 
                    (ren comp rh.source.renaming.inv comp rh.dests(0)).getVar)
                 return None

@@ -38,31 +38,20 @@ class ByTestingLikenessCalculator(graph: HyperTester) extends LikenessCalculator
   
   override def viablePermutations(n: Node): List[Renaming] = {
     val res = viableRenamings(n, n)
-    
     val other = lc.viablePermutations(n)
-    if(other.toSet != res.toSet) {
-      println("viablePermutations")
-      println(n.prettyDebug)
-      println("res = " + res)
-      println("oth = " + other)
-      println("")
-      println(graph.runCache(n).map(x => x._1 + " -> " + x._2.value).mkString("\n"))
-      println("")
-    }
-    
-    res
+    (res.toSet & other.toSet).toList
   }
   
   override def likenessN(
         l: Node, r: Node, ren: Renaming = Renaming(),
         hist: List[(Node, Node)] = Nil): Option[(Int, Renaming)] = {
-    //lc.likenessN(l, r, ren, hist).flatMap {
-    //  case (i, ren1) =>
+    lc.likenessN(l, r, ren, hist).flatMap {
+      case (i, ren1) =>
         viableRenamings(l, r, ren) match {
           case Nil => None
           case lst => 
-            Some((1 + 0*100 + (graph.runCache(l).size min graph.runCache(r).size), lst.reduce(_ & _)))
+            Some((i*100 + (graph.runCache(l).size min graph.runCache(r).size), lst.reduce(_ & _)))
         }
-    //}
+    }
   }  
 }

@@ -269,8 +269,8 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
-        val likenesscalc = new ByTestingLikenessCalculator(graph)
-        //val likenesscalc = new LikenessCalculator(conf.total())
+        //val likenesscalc = new ByTestingLikenessCalculator(graph)
+        val likenesscalc = new LikenessCalculator(conf.total())
         val like =
           for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
