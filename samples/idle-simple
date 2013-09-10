@@ -1,0 +1,10 @@
+
+idle x =
+  case x of {
+    Z -> Z;
+    S x -> idle (idle x)
+  };
+
+test: idle (S (S (S Z)));
+
+prove: idle x = idle (idle x);

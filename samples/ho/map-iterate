@@ -1,0 +1,5 @@
+
+import: ../lib/list (map, iterate);
+
+prove: map f (iterate f a) = iterate f (f a);
+

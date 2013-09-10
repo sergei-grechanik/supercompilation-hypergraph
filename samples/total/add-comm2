@@ -1,0 +1,9 @@
+-- add-nat has idNat inside add, in this case idNat are outside
+
+import: ../lib/nat (add,idNat);
+
+test: add (S (S Z)) (S (S (S Z)));
+
+prove: idNat (add x y) = idNat (add y x);
+
+

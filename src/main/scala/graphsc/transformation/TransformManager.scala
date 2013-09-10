@@ -4,6 +4,7 @@ import scala.util.Random
 
 trait BiTransformManager extends Hypergraph with DepthTracker {
   var changed = true
+  var lastPairsProcessed = 0
   val updatedPairs = collection.mutable.Set[(Hyperedge, Hyperedge)]()
   
   // TODO: Find a better name
@@ -60,6 +61,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
         count += 1
       }
     }
+    lastPairsProcessed = count
     //println("Pairs transformed: " + count)
     updatedPairs.nonEmpty
   }

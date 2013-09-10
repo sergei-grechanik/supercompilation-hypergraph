@@ -1,0 +1,5 @@
+
+import: lib/list (length, concat, sum, map);
+
+prove: length (concat x) = sum (map length x);
+

@@ -1,4 +1,6 @@
 
+declare: g;
+
 f x y = case x of { S x1 -> g x y; Z -> g x y };
 
 prove: f x y = g x y;

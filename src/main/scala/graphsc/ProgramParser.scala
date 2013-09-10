@@ -115,14 +115,16 @@ sealed trait Expr {
   def allSubExprs: List[Expr] =
     this :: mapChildrenToList((_, b) => b.allSubExprs).flatten
   
-  def resolveUnbound(global: Set[String], bound: Set[String] = Set()): Expr = this match {
+  def resolveUnbound(
+      global: Set[String], strictly: Boolean, bound: Set[String] = Set()): Expr = this match {
     case ExprVar(v) if bound.contains(v) => ExprVar(v)
     case ExprVar(v) if global.contains(v) => ExprFun(v)
     case ExprVar(v) => ExprVar(v)
-    case ExprCall(ExprVar(v), Nil) => ExprVar(v).resolveUnbound(global, bound)
-    case ExprCall(ExprVar(v), as) if !bound.contains(v) =>
-      ExprCall(ExprFun(v), as.map(_.resolveUnbound(global, bound)))
-    case _ => mapChildren((newvs, b) => b.resolveUnbound(global, bound ++ newvs))
+    case ExprCall(ExprVar(v), Nil) if !strictly => 
+      ExprVar(v).resolveUnbound(global, strictly, bound)
+    case ExprCall(ExprVar(v), as) if !strictly && !bound.contains(v) =>
+      ExprCall(ExprFun(v), as.map(_.resolveUnbound(global, strictly, bound)))
+    case _ => mapChildren((newvs, b) => b.resolveUnbound(global, strictly, bound ++ newvs))
   }
   
   def mergeAppsAndLambdas: Expr = this match {
@@ -147,7 +149,7 @@ sealed trait Expr {
   }
   
   def bindUnbound: Expr = {
-    val fv = freeVars
+    val fv = freeVars.toList.sorted
     if(fv.isEmpty) 
       this
     else
@@ -294,8 +296,8 @@ case class Program(
   
   def allSubExprs: Iterable[Expr] = allExprs.flatMap(_.allSubExprs)
       
-  def resolveUnbound: Program =
-    mapExprs(_.resolveUnbound(defs.keySet))
+  def resolveUnbound(strictly: Boolean = true): Program =
+    mapExprs(_.resolveUnbound(defs.keySet, strictly))
     
   def mergeAppsAndLambdas: Program =
     mapExprs(_.mergeAppsAndLambdas)
@@ -432,8 +434,8 @@ case class Program(
     Program(defs, propdefs, newtests, roots, residualize, assumptions, prove)
   }
   
-  def simplify: Program = {
-    val p1 = this.resolveUnbound.mergeAppsAndLambdas.topLevelEtaExpand
+  def simplify(strict_decl: Boolean = true): Program = {
+    val p1 = this.resolveUnbound(strict_decl).mergeAppsAndLambdas.topLevelEtaExpand
     //println("Resolved and merged:\n" + p1)
     val p2 = p1.splitBadLambdas
     //println("Split bad:\n" + p2)
@@ -463,6 +465,12 @@ case class Program(
     }
       
     Program(defs.filterKeys(funs(_)), propdefs, tests, roots, residualize, assumptions, prove)
+  }
+  
+  def warnUndefined() {
+    for(ExprFun(f) <- allSubExprs)
+      if(!f.startsWith("@") && !defs.contains(f))
+        System.err.println("Warning: this functions seems undefined: " + f)
   }
   
   // Prepend "q." to every function name
@@ -511,14 +519,15 @@ case class Program(
   }
 }
 
-class ProgramParser(path: String, filename: String = "") extends RegexParsers {
+class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = true) 
+        extends RegexParsers {
   override val whiteSpace = """(\s|--.*\n)+""".r
   def fname = not("of\\b".r) ~> "[a-z$][a-zA-Z0-9$.@_]*".r
   def cname = "[A-Z#][a-zA-Z0-9$.@_]*".r
   def varname = fname | "_"
   
   def apply(g: NamedNodes, s: String): Program = {
-    val p = parseProg(s).simplify
+    val p = parseProg(s).simplify(strict_decl)
     p.loadInto(g)
     p
   }
@@ -542,8 +551,10 @@ class ProgramParser(path: String, filename: String = "") extends RegexParsers {
     
   def file = 
     ("\"[^\"]+\"" ^^ (s => s.substring(1,-1)) | """[^;\s]+""".r) ~ opt("as" ~> fname) ^^ { 
-        case s~None => ProgramParser.parseFile(path + "/" + s).resolveUnbound
-        case s~Some(q) => ProgramParser.parseFile(path + "/" + s).resolveUnbound.qualify(q)
+        case s~None => 
+          ProgramParser.parseFile(path + "/" + s).resolveUnbound(strict_decl)
+        case s~Some(q) => 
+          ProgramParser.parseFile(path + "/" + s).resolveUnbound(strict_decl).qualify(q)
       }
   
   def include: Parser[Program] =
@@ -615,11 +626,11 @@ class ProgramParser(path: String, filename: String = "") extends RegexParsers {
       { case vs~e => ExprLambda(vs, e) }
 }
 
-object ProgramParser extends ProgramParser("", "") {
-  def parseFile(path: String): Program = {
+object ProgramParser extends ProgramParser("", "", false) {
+  def parseFile(path: String, strict_decl: Boolean = true): Program = {
     val src = io.Source.fromFile(path)
     val srctext = src.mkString
     src.close()
-    (new ProgramParser((new File(path)).getParent(), path)).parseProg(srctext)
+    (new ProgramParser((new File(path)).getParent(), path, strict_decl)).parseProg(srctext)
   }
 }

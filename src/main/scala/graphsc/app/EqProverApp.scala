@@ -120,9 +120,10 @@ object EqProverApp {
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
-    val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound
-    val prog = if(conf.only()) preprog.removeUnreferenced.simplify else preprog.simplify
+    val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound()
+    val prog = if(conf.only()) preprog.removeUnreferenced.simplify() else preprog.simplify()
     val propdefs = collection.mutable.Set(prog.propdefs.toSeq:_*)
+    prog.warnUndefined()
     prog.loadInto(graph)
     
     // load props we want to prove as goals
@@ -243,6 +244,8 @@ object EqProverApp {
         graph.transform(trans)
       //buf.commit()
       
+      if(conf.verbose())
+        System.err.println("Pairs processed: " + graph.lastPairsProcessed)
       
       // Pairwise generalization
       if(conf.genPair()) {

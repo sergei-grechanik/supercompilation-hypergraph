@@ -1,0 +1,44 @@
+
+--import: ../lib/nat (add,idNat);
+
+add x y =
+  case x of {
+    S x -> S (add x y);
+    Z -> idNat y;
+  };
+
+idNat x =
+  case x of {
+    S x -> S (idNat x);
+    Z -> Z;
+  };
+
+mul x y =
+  case x of {
+    S x -> add y (mul x y);
+    Z -> Z;
+  };
+
+test: mul (S (S Z)) (S (S (S Z)));
+
+--prove: idNat (add x y) = idNat (add y x);
+
+prop p1: add x y = case x of { S x -> S (add x y); Z -> idNat y; };
+prop p2: add x y = case x of { S x -> S (add x y); Z -> case y of { S y -> S (idNat y); Z -> Z } };
+prop p3: add x y = 
+  case y of { 
+    S y1 -> case x of { S x1 -> S (add x1 y); Z -> S (idNat y1) }; 
+    Z -> case x of { S x1 -> S (add x1 y); Z -> Z } };
+
+prop lemma: add x (S y) = S (add x y);
+prop idnat: idNat x = add x Z;
+prop add_almost: add x y = case y of { S y -> S (add x y); Z -> idNat x; };
+
+--prove: add x y = case y of { S y -> add x (S y); Z -> add x Z; };
+--prove: add x y = case y of { S y -> add x (S y); Z -> idNat x; };
+--prop first: add x y = case y of { S y -> S (add x y); Z -> idNat x; };
+--prop second: add y x = case y of { S y -> S (add y x); Z -> idNat x; };
+
+prove: mul x y = mul y x;
+
+

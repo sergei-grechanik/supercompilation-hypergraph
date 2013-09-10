@@ -22,13 +22,13 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   }
   
   // small enough for generalization
-  //cmd("--prove --integrity-check --test -a4 ./samples/add-assoc")
+  cmd("--prove --integrity-check --test -a4 ./samples/add-assoc")
   cmd("--prove --integrity-check --test ./samples/dummy")
   cmd("--prove --integrity-check --test ./samples/even-double")
   cmd("--prove --integrity-check --test ./samples/idle")
   cmd("--prove --integrity-check --test ./samples/inf")
   cmd("--prove --integrity-check --test ./samples/map-comp")
-  //cmd("--prove --integrity-check ./samples/quad-idle")
+  //cmd("--prove --integrity-check --test ./samples/quad-idle")
   
   cmd("--prove --integrity-check --test -a4 --nogen ./samples/add-assoc")
   cmd("--prove --integrity-check --test --nogen ./samples/idle")
@@ -39,7 +39,10 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check --test --nogen -a4 ./samples/small/case-swap")
   cmd("--prove --integrity-check --test --nogen ./samples/sadd-comm")
   cmd("--prove --integrity-check --test --nogen ./samples/idnat-idemp")
-  //cmd("--prove -c10 -d10 -a10 --nogen -v ./samples/mul-distrib-and-assoc")
+  cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/mul-distrib-and-assoc", 60)
+  cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/or-even-odd")
+  cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/orElse-even-odd")
+  cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/orElseT-even-odd")
   
   // total
   cmd("--prove --integrity-check --test --nogen --total ./samples/total/construct-caseof")

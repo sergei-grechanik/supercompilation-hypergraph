@@ -1,0 +1,6 @@
+
+import: lib/nat (even, odd, const);
+import: lib/bool (or);
+
+prove: or (even x) (odd x) = const x T;
+

@@ -1,0 +1,8 @@
+
+import: ../lib/nat (mul,idNat);
+
+test: mul (S (S Z)) (S (S (S Z)));
+
+prove: idNat (mul x y) = idNat (mul y x);
+
+

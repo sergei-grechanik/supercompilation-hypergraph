@@ -1,0 +1,54 @@
+boolEq x y =
+  case x of {
+    T -> case y of { T -> T; F -> F };
+    F -> case y of { T -> F; F -> T };
+  };
+
+or x y =
+  case x of {
+    T -> case y of { T -> T; F -> T };
+    F -> case y of { T -> T; F -> F };
+  };
+
+and x y =
+  case x of {
+    T -> case y of { T -> T; F -> F };
+    F -> case y of { T -> F; F -> F };
+  };
+
+orElse x y =
+  case x of {
+    T -> T;
+    F -> y;
+  };
+
+andAlso x y =
+  case x of {
+    T -> y;
+    F -> F;
+  };
+
+orElseT x y =
+  case x of {
+    T -> T;
+    F -> case y of { T -> T; F -> F };
+  };
+
+andAlsoT x y =
+  case x of {
+    T -> case y of { T -> T; F -> F };
+    F -> F;
+  };
+
+xor x y =
+  case x of {
+    T -> case y of { T -> F; F -> T };
+    F -> case y of { T -> T; F -> F };
+  };
+
+not x =
+  case x of {
+    T -> F;
+    F -> T;
+  };
+

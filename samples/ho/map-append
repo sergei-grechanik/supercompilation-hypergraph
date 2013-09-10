@@ -1,0 +1,4 @@
+
+import: ../lib/list (map, append);
+
+prove: map f (append x y) = append (map f x) (map f y);  

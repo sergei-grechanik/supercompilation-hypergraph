@@ -1,4 +1,18 @@
 
+import: nat (add);
+
+map f x =
+  case x of {
+    C a x -> C (f a) (map f x);
+    N -> N;
+  };
+
+filter p x =
+  case x of {
+    C a x -> case (p a) of { T -> C a (filter p x); F -> filter p x };
+    N -> N;
+  };
+
 append x y = 
   case x of {
     C a x -> C a (append x y);
@@ -6,6 +20,26 @@ append x y =
   };
 
 cycle x = append x (cycle x);
+
+concat x =
+  case x of {
+    C a x -> append a (concat x);
+    N -> N;
+  };
+
+iterate f a = C a (iterate f (f a));
+
+length x =
+  case x of {
+    C a x -> S (length x);
+    N -> Z;
+  };
+
+sum x =
+  case x of {
+    C a x -> add a (sum x);
+    N -> Z;
+  };
 
 idList x =
   case x of {

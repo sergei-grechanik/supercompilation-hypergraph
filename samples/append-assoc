@@ -1,0 +1,4 @@
+
+import: lib/list (append);
+
+prove: append (append x y) z = append x (append y z);

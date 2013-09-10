@@ -5,6 +5,8 @@
 -- f x = F x;
 -- g x = G x;
 
+declare: f, g;
+
 mapf l =
   case l of {
     N -> N;

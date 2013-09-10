@@ -1,0 +1,6 @@
+
+import: ../lib/nat (even, odd);
+import: ../lib/bool (orElseT);
+
+prove: orElseT (even x) (odd x) ^ T;
+
