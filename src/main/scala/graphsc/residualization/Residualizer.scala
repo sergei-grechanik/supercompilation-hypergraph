@@ -18,8 +18,8 @@ class Residualizer[S](graph: Hypergraph, scc: SCC)
     case Id() => 2
     case Tick() => 2
     case Improvement() => 3
-    case CaseOf(_) if h.dests(0).getVarUnused.isDefined => 3
-    case CaseOf(_) => 30
+    case CaseOf(_) if h.dests(0).getVarUnused.isDefined => 5
+    case CaseOf(_) => 10
     case Let() => 30
   }
     

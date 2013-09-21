@@ -59,14 +59,10 @@ sealed trait Prop {
     }
   }
   
-  def checkWithoutLoading(g: NamedNodes): Boolean = try {
-    loadAsGoal(new HyperedgeFinder(g)) match {
-      case GoalPropEqModuloRen(l, r) => l ~~ r
-      case GoalPropEq(l, r) => l ~=~ r
-      case _ => false
-    }
+  def asGoalWithoutLoading(g: NamedNodes): Option[GoalProp] = try {
+    Some(loadAsGoal(new HyperedgeFinder(g)))
   } catch {
-    case _: HyperedgeNotFoundException => false
+    case _: HyperedgeNotFoundException => None
   }
 }
 

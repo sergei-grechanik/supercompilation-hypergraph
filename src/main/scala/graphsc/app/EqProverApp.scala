@@ -77,6 +77,7 @@ object EqProverApp {
     val conf = new Conf(args)
     val graph = new TheHypergraph
         with NamedNodes
+        with GoalChecker
         with Transformations
         with BiTransformManager 
         with DepthTracker
@@ -174,19 +175,16 @@ object EqProverApp {
     }
     
     def checktask() : Boolean = {
-      for((name, p) <- propdefs.toList) {
-        if(p.checkWithoutLoading(graph) && conf.verbose()) {
-          System.err.println("!!! prop " + name + ": " + p)
-          propdefs.remove((name, p))
+      if(conf.verbose())
+        for((name, p) <- propdefs.toList; g <- p.asGoalWithoutLoading(graph)) {
+          if(graph.checkGoal(g)) {
+            System.err.println("!!! prop " + name + ": " + p)
+            propdefs.remove((name, p))
+          }
         }
-      }
       
-      val achieved =
-        for(g <- goals) yield g match {
-          case GoalPropEqModuloRen(l, r) => l ~~ r
-          case GoalPropEq(l, r) => l ~=~ r
-          case _ => false
-        }
+      val achieved = goals.map(graph.checkGoal(_))
+
       if(achieved.nonEmpty && achieved.forall(_ == true)) {
         stop = true
         true

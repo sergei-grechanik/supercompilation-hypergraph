@@ -254,7 +254,9 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     val sb = new StringBuilder()
     for(n <- nodes) {
       val sig = nodeFunName(RenamedNode.fromNode(n))
-      sb.append("\n-- " + sig + "=\n" + indent(pretty(n), "--   ") + "\n\n")
+      try {
+        sb.append("\n-- " + sig + "=\n" + indent(pretty(n), "--   ") + "\n\n")
+      } catch {case _:NoSuchElementException => }
       for(h <- n.outs) {
         sb.append(sig + " = " + 
           indent1(prettyRename(h.source.renaming.inv, prettyHyperedge(h, nodeFunName))) + ";\n")

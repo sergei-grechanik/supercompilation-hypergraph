@@ -19,7 +19,7 @@ trait CorrectnessChecker[S] {
 }
 
 object CorrectnessChecker {
-  implicit object GuardedOrMonotoneCorrectnessChecker 
+  implicit object GuardedOrStructuralCorrectnessChecker 
       extends CorrectnessChecker[GuardedOrStructural] {
     type S = GuardedOrStructural
     override def apply(n: RenamedNode): S =
