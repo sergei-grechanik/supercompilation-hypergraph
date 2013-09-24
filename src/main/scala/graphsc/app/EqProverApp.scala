@@ -4,7 +4,6 @@ import graphsc._
 import interpretation._
 import transformation._
 import residualization._
-
 import org.rogach.scallop._
 
 object EqProverApp {
@@ -40,6 +39,7 @@ object EqProverApp {
     val supercompile = opt[Boolean](name = "super", 
         descr = "Traditional multiresult supercompilation")
     
+    val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
     val dumpCode = opt[Boolean](noshort = true, 
       descr = "Dump the graph to stdout in a form of a program")
@@ -80,19 +80,21 @@ object EqProverApp {
         with GoalChecker
         with Transformations
         with BiTransformManager 
-        with DepthTracker
+        with DepthTracker 
         with Prettifier 
         with HyperTester
         //with IntegrityCheckEnabled
         //with OnTheFlyTesting
         with SelfLetAdder
         with AutoTransformer
-        with HyperLogger {
+        with HyperLogger
+        with Visualizer {
           override val total = conf.total()
           override val integrityCheckEnabled = conf.integrityCheck()
           override val onTheFlyTesting = conf.test()
           override val prettifyingEnabled = !conf.nopretty()
           override val weakMerging = conf.weakMerging()
+          override val enableVisualizer = conf.gui()
           
           override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
               List[(Hyperedge, Hyperedge)] =
@@ -112,6 +114,11 @@ object EqProverApp {
             if(residualizing) c
             else super.limitFromMinCost(c)
         }
+    
+    if(conf.gui()) {
+      graph.pausable = true
+      graph.launchGUI()
+    }
     
     val maxarity = conf.arity()
     val maxdepth = conf.depth()

@@ -84,6 +84,7 @@ package object transformation {
     val Hyperedge(l2, src2, ds2) = h2
     // we restore the original used set because it makes it easier to transform
     val node = new Node(src2.used | h2.used)
+    node.gluedTo = src2
     val rnode = RenamedNode(src2.renaming.inv, node)
     
     val maxvar = (0 :: h1.dests.map(_.arity)).max + (0 :: h1.shifts).max

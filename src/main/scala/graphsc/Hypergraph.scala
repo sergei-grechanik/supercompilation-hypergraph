@@ -47,6 +47,7 @@ trait Hypergraph {
   def onNewHyperedge(h: Hyperedge) {}
   def beforeGlue(l: RenamedNode, r: Node) {}
   def afterGlue(l: Node) {}
+  def afterHyperedgeRemoved(h: Hyperedge) {}
   
   def log(s: String) {}
   def nodeToString(n: RenamedNode): String = n.toString()
@@ -62,11 +63,17 @@ trait Hypergraph {
     log("")
   }
   
+  def logAfterTrans(name: String, hs: Seq[Hyperedge]) {
+    log("-- trans done " + name)
+    log("")
+  }
+  
   def trans(name: String, hs: Hyperedge*)(body: =>Unit) {
     logTrans(name, hs)
     logShift()
     body
     logUnshift()
+    logAfterTrans(name, hs)
   }
   
   def glue(l: List[RenamedNode]): RenamedNode = l match {
@@ -490,6 +497,7 @@ trait TheHypergraph extends Hypergraph {
           log("-- remove " + hyperedgeToString(h))
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
+          afterHyperedgeRemoved(h)
           log("-- readding normalized hyperedge")
           addHyperedge(nor)
         } else if(isvar && h.label.isInstanceOf[CaseOf]) {

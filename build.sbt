@@ -20,6 +20,10 @@ libraryDependencies += "junit" % "junit" % "4.8.1" % "test"
 
 libraryDependencies += "org.rogach" %% "scallop" % "0.9.2"
 
+libraryDependencies += "org.tinyjee.jgraphx" % "jgraphx" % "2.0.0.1"
+
+libraryDependencies += "org.scala-lang" % "scala-swing" % "2.10.1"
+
 seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 
 seq(SbtStartScript.startScriptForClassesSettings: _*)
