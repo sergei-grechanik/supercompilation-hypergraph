@@ -8,7 +8,7 @@ import scala.util.Random
 import scala.swing.event._
 import com.mxgraph.model._
 import com.mxgraph.layout._
-import scala.concurrent.Channel
+import java.util.concurrent.Semaphore
 import java.awt.Dimension
 
 trait Visualizer extends Hypergraph with Prettifier {
@@ -196,15 +196,18 @@ trait Visualizer extends Hypergraph with Prettifier {
   }*/
 
   var pausable: Boolean = false
-  val pauseVar = new Channel[Unit]()
+  private val pauseVar = new Semaphore(0)
   
   def pause() {
     if(pausable)
-      pauseVar.read
+      pauseVar.acquire()
   }
   
   def unpause() {
-    pauseVar.write(Unit)
+    synchronized {
+      if(pauseVar.availablePermits() == 0)
+        pauseVar.release()
+    }
   }
 }
 
