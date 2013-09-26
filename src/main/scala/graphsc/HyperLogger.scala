@@ -67,12 +67,12 @@ trait HyperLogger extends Prettifier {
     super.beforeGlue(l, r)
   }
   
-  override def afterGlue(n: Node) {
+  override def afterGlue(n: Node, r: Node) {
     if(enableLogging) {
       log("-- glued: " + nodeToString(n.deref))
       log("")
     }
-    super.afterGlue(n)
+    super.afterGlue(n, r)
   }
   
   override def onUsedReduced(n: Node) {

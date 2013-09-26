@@ -100,9 +100,9 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     super.beforeGlue(l, r)
   }
   
-  override def afterGlue(n: Node) {
+  override def afterGlue(n: Node, r: Node) {
     prettyUpdateIns(n)
-    super.afterGlue(n)
+    super.afterGlue(n, r)
   }
   
   override def onUsedReduced(n: Node) {

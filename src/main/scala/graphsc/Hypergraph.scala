@@ -45,9 +45,9 @@ trait Hypergraph {
   def onNewNode(n: Node) {}
   def onUsedReduced(n: Node) {}
   def onNewHyperedge(h: Hyperedge) {}
-  def beforeGlue(l: RenamedNode, r: Node) {}
-  def afterGlue(l: Node) {}
-  def afterHyperedgeRemoved(h: Hyperedge) {}
+  def beforeGlue(keep: RenamedNode, rem: Node) {}
+  def afterGlue(kept: Node, removed: Node) {}
+  def afterHyperedgeChanged(old: Hyperedge, cur: Hyperedge) {}
   
   def log(s: String) {}
   def nodeToString(n: RenamedNode): String = n.toString()
@@ -402,10 +402,10 @@ trait TheHypergraph extends Hypergraph {
       // unclear, I should think about redesigning it.
       val routs = r_node.mouts.toList
       val rins = r_node.mins.toList
-      for(h <- routs)
-        addHyperedgeSimple(canonize(h.deref)._2)
-      for(h <- rins)
-        addHyperedgeSimple(canonize(h.deref)._2)
+      for(h <- routs ++ rins) {
+        val newh = addHyperedgeSimple(canonize(h.deref)._2)
+        afterHyperedgeChanged(h, newh)
+      }
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
@@ -416,9 +416,10 @@ trait TheHypergraph extends Hypergraph {
         
       checkIntegrity()
       
-      normalizeIncident(l.node)
+      // We used to perform this call after normalizing incident hyperedges
+      afterGlue(l.node.deref.node, r_node)
       
-      afterGlue(l.node.deref.node)
+      normalizeIncident(l.node)
       
       // maybe there appeared some more nodes to glue 
       glueParents(l.node.deref.node)
@@ -497,9 +498,9 @@ trait TheHypergraph extends Hypergraph {
           log("-- remove " + hyperedgeToString(h))
           h.source.deref.node.outsMut -= h
           h.dests.map(_.deref.node.insMut -= h)
-          afterHyperedgeRemoved(h)
           log("-- readding normalized hyperedge")
           addHyperedge(nor)
+          afterHyperedgeChanged(h, nor)
         } else if(isvar && h.label.isInstanceOf[CaseOf]) {
           // here h is not non-normal but we can still perform important gluings
           todo = {() => glueChildren(h.deref); ()} :: todo

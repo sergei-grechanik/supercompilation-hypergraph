@@ -83,10 +83,10 @@ trait TransformManager extends Hypergraph with DepthTracker {
     super.onNewHyperedge(h)
   }
   
-  override def afterGlue(n: Node) {
+  override def afterGlue(n: Node, r: Node) {
     updatedHyperedges ++= n.outs
     updatedHyperedges ++= n.ins
-    super.afterGlue(n)
+    super.afterGlue(n, r)
   }
   
   override def onUsedReduced(n: Node) {
