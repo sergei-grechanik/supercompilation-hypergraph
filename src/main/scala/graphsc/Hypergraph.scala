@@ -572,6 +572,25 @@ trait TheHypergraph extends Hypergraph {
     sb.append("}\n")
     sb.toString
   }
+  
+  def toDotLight: String = {
+    val sb = new StringBuilder()
+    sb.append("digraph Hyper {\n")
+    for(n <- nodes) {
+      sb.append("\"" + n.uniqueName + "\"[label=\"" + nodeDotLabel(n) + "\", shape=box];\n")
+      for(h <- n.outs) {
+        sb.append("\"" + h.toString + "\";\n")
+        sb.append("\"" + n.uniqueName + "\" -> \"" + h.toString + "\";\n")
+        for(d <- h.dests) {
+          sb.append("\"" + h.toString + "\" -> \"" + d.node.uniqueName + "\";\n")
+        }
+      }
+      sb.append("\n")
+    }
+    sb.append("}\n")
+    sb.toString
+  }
+  
   // TODO: Move this function somewhere, it was copypasted from Prettifier
   private def prettyRename(r: Renaming, orig: String): String = {
     "v([0-9]+)v".r.replaceAllIn(orig, 

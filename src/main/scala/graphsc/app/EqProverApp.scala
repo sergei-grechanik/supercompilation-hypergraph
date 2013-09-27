@@ -41,6 +41,7 @@ object EqProverApp {
     
     val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
+    val dumpDot2 = opt[Boolean](noshort = true, descr = "Dump the graph to stdout (lightweight)")
     val dumpCode = opt[Boolean](noshort = true, 
       descr = "Dump the graph to stdout in a form of a program")
     val dumpGenCode = opt[String](noshort = true, 
@@ -412,6 +413,10 @@ object EqProverApp {
     
     if(conf.dumpDot()) {
       println(graph.toDot)
+    }
+    
+    if(conf.dumpDot2()) {
+      println(graph.toDotLight)
     }
     
     if(conf.dumpCode()) {

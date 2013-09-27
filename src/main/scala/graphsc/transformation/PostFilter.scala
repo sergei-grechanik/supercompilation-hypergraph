@@ -19,7 +19,7 @@ case class PostFilter(graph: Hypergraph, filter: Hyperedge => Boolean) extends H
   override def logTrans(name: String, hs: Seq[Hyperedge]) { graph.logTrans(name, hs) }
   
   override def trans(name: String, hs: Hyperedge*)(body: =>Unit) {
-    super.trans(name, hs: _*) {
+    graph.trans(name, hs: _*) {
       body
       if(buffer.forall(filter))
         buffer.foreach(graph.addHyperedge(_))

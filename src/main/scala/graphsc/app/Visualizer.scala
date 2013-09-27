@@ -1,36 +1,40 @@
 package graphsc.app
 
 import graphsc._
-
 import scala.swing._
 import scala.util.Random
 import scala.swing.event._
 import java.util.concurrent.Semaphore
 import java.awt.Dimension
-
 import org.apache.commons.collections15.Transformer
-
+import org.apache.commons.collections15.Predicate
 import edu.uci.ics.jung
 import edu.uci.ics.jung.algorithms.layout._
 import edu.uci.ics.jung.graph.DirectedOrderedSparseMultigraph
 import edu.uci.ics.jung.visualization._
-
 import scala.collection.JavaConversions._
+import java.awt.event.InputEvent
+
+import VisualizationStuff._
+import edu.uci.ics.jung.visualization.layout.ObservableCachingLayout
 
 object VisualizationStuff {
   implicit class TransformerFun[A,B](fun: A => B) extends Transformer[A,B] {
     override def transform(a: A): B = fun(a)
   }
   
+  implicit class PredicateFun[A](fun: A => Boolean) extends Predicate[A] {
+    override def evaluate(a: A): Boolean = fun(a)
+  }
+  
   def tr[A,B](fun: A => B) = new TransformerFun(fun)
+  def pr[A](fun: A => Boolean) = new PredicateFun(fun)
   
   class Mut[T](var value: T)
   
   type V = Either[Node, Mut[Hyperedge]]
   type E = (Renaming, V, V)
 }
-
-import VisualizationStuff._
 
 trait Visualizer extends Hypergraph with Prettifier {
   def enableVisualizer = true
@@ -111,6 +115,20 @@ trait Visualizer extends Hypergraph with Prettifier {
     super.onNewNode(n)
   }
   
+  var beingTransformed = Set[Hyperedge]()
+  
+  override def trans(name: String, hs: Hyperedge*)(body: =>Unit) {
+    if(enableVisualizer) {
+      val oldBT = beingTransformed 
+      beingTransformed = oldBT ++ hs.map(normalize(_))
+      pause()
+      super.trans(name, hs:_*)(body)
+      pause()
+      beingTransformed = oldBT.map(normalize(_))
+    } else
+      super.trans(name, hs:_*)(body)
+  }
+  
   override def onNameChanged(n: Node, oldname: String) {
     if(enableVisualizer) {
 
@@ -136,18 +154,47 @@ trait Visualizer extends Hypergraph with Prettifier {
 
 class HypergraphMainFrame(graph: Visualizer) extends MainFrame {
   
-  val layout = new SpringLayout(graph.graph, tr((_:E) => 100))
+  var hideVarConsts = false
+  
+  val frl = new FRLayout(graph.graph)
+  
+  val layout = new SpringLayout(graph.graph, 
+      tr((e:E) => if(e._2.isLeft && e._3.isLeft) 20 else 100))
   val view = new VisualizationViewer[V, E](layout)
+  
+  layout.setSize(new Dimension(10000, 10000))
+  frl.setSize(new Dimension(1000, 1000))
+  layout.setForceMultiplier(1)
+  layout.setStretch(0.2)
   
   view.setBackground(java.awt.Color.WHITE);
   
-  private val gm = new control.DefaultModalGraphMouse();
-  gm.setMode(control.ModalGraphMouse.Mode.TRANSFORMING);
+  private val gm = new control.PluggableGraphMouse()
+  gm.add(new control.TranslatingGraphMousePlugin(java.awt.event.InputEvent.BUTTON1_MASK))
+  gm.add(new control.ScalingGraphMousePlugin(new control.CrossoverScalingControl(), 0, 1.1f, 0.9f))
+  gm.add(new control.PickingGraphMousePlugin(
+      InputEvent.BUTTON3_MASK, 
+      InputEvent.BUTTON3_MASK | InputEvent.SHIFT_MASK))
+  
   view.setGraphMouse(gm)
   
   val sr = new renderers.VertexLabelAsShapeRenderer(view.getRenderContext())
   view.getRenderContext().setVertexShapeTransformer(sr)
   view.getRenderer().setVertexLabelRenderer(sr)
+  
+  view.getRenderContext().setVertexIncludePredicate(
+      pr(p => !hideVarConsts || (p.element match {
+        case Left(n) if n.isReal && (n.isVar ||
+             n.outs.exists(h => 
+               h.dests.isEmpty &&
+               (h.label.isInstanceOf[Unused] || h.label.isInstanceOf[Construct]))) =>
+          false
+        case Right(m) if m.value.label.isInstanceOf[Construct] && m.value.dests.isEmpty =>
+          false
+        case Right(m) if m.value.label.isInstanceOf[Var] || m.value.label.isInstanceOf[Unused] =>
+          false
+        case _ => true
+      })))
   
   view.getRenderContext().setVertexLabelTransformer(tr{
     case Left(n) =>
@@ -160,15 +207,13 @@ class HypergraphMainFrame(graph: Visualizer) extends MainFrame {
     case Left(n) => 
       if(n.beingGlued) java.awt.Color.decode("#ffaaaa") 
       else java.awt.Color.decode("#ccccff")
-    case Right(h) =>
-      java.awt.Color.decode("#aaffaa")
+    case Right(m) =>
+      if(graph.beingTransformed(m.value)) java.awt.Color.decode("#ffbb33")
+      else java.awt.Color.decode("#aaffaa")
     })
       
   val wrapped = Component.wrap(view)
   
-  //listenTo(wrapped.mouse.wheel)
-  //listenTo(wrapped.mouse.clicks)
-  //listenTo(wrapped.mouse.moves)
   listenTo(wrapped.keys)
   
   reactions += {
@@ -176,11 +221,18 @@ class HypergraphMainFrame(graph: Visualizer) extends MainFrame {
       e.key match {
         case event.Key.N =>
           graph.unpause()
+          view.repaint()
+        case event.Key.H =>
+          hideVarConsts = !hideVarConsts
+          view.repaint()
+        case event.Key.L =>
+          view.setGraphLayout(frl)
+          view.repaint()
+          layout.setInitializer(frl)
+          view.setGraphLayout(layout)
+          view.repaint()
         case _ =>
       }
-//    case MouseWheelMoved(_,_,_,rot) =>
-//      if(rot > 0) graphComponent.zoomOut()
-//      else if(rot < 0) graphComponent.zoomIn()
   }
   
   preferredSize = new Dimension(640, 480)
