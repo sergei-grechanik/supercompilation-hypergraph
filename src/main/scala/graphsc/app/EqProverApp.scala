@@ -38,6 +38,8 @@ object EqProverApp {
         descr = "Traditional pairwise generalization")
     val supercompile = opt[Boolean](name = "super", 
         descr = "Traditional multiresult supercompilation")
+    val dontMergeUseless = opt[Boolean](noshort = true, 
+        descr = "Don't merge by nodes by iso if that doesn't lead to more node merging")
     
     val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -279,12 +281,17 @@ object EqProverApp {
           System.err.println("Computing likeness...")
         val nodes = graph.allNodes.toList
         //val likenesscalc = new ByTestingLikenessCalculator(graph)
-        val likenesscalc = new LikenessCalculator(conf.total())
+        val likenesscalc = new DefaultLikenessCalculator(conf.total())
+        //val likenesscalc = 
+        //  new CachingLikenessCalculator(new DefaultLikenessCalculator(conf.total()))
         //val likenesscalc = new OldLikenessCalculator(true)//conf.total())
         val like =
-          for(l <- nodes; r <- nodes; if l != r && l.hashCode <= r.hashCode; 
+          for(l <- nodes; r <- nodes; 
+              if !(l ~~ r) && l.hashCode <= r.hashCode;
+              if !conf.dontMergeUseless() || LikenessCalculator.notCompletelyUseless(l, r);
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
-            (lkl,l,r)
+            val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
+            (rl,lkl,l,r)
           }
         
         var eprover = new EquivalenceProver(graph, likenesscalc)
@@ -292,12 +299,11 @@ object EqProverApp {
         if(conf.verbose())
           System.err.println("Performing merging by isomorphism...")
         val candidates = 
-          like.toList.sortBy(-_._1._1)
-            .filter(p => p._1._1 > 0 && !(p._2 ~~ p._3))
+          like.toList.sortBy(p => -p._2._1)
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
           
-        for(((i,ren2),l1,r1) <- candidates; if !stop) {
+        for(((rl, (i,ren2),l1,r1), j) <- candidates.zipWithIndex; if !stop) {
           val lderef = l1.deref;
           val rderef = r1.deref;
           val l = lderef.node;
@@ -307,23 +313,35 @@ object EqProverApp {
           for(ren <- if(!(l ~~ r)) List(ren1) else likenesscalc.viablePermutations(l)) {
             val lpretty = l.prettyDebug
             val rpretty = r.prettyDebug
-//            if(conf.verbose()) {
-//              System.err.println("==Trying to prove==")
+            if(conf.verbose()) {
+//              System.err.println("==Trying to prove== likeness: " + i + " idx: " + j)
+//              System.err.println("== reverse likeness: " + likenesscalc.reverseLikeness(l, r))
 //              System.err.println(lpretty)
 //              System.err.println("=======================" + ren)
 //              System.err.println(rpretty)
 //              System.err.println("=======================\n")
-//              //System.err.println(eq)
-//            }
+              //System.err.println(eq)
+            }
             val eq = eprover.prove(l.deref.node, r.deref.node, ren)
             if(eq != None) {
               if(conf.verbose()) {
-                System.err.println("==These two are equal==")
+                System.err.println("==These two are equal== likeness: " + i + " idx: " + j)
+                //System.err.println("== reverse likeness: " + likenesscalc.reverseLikeness(l, r))
                 System.err.println(lpretty)
                 System.err.println("=======================" + eq.get.renaming)
                 System.err.println(rpretty)
                 System.err.println("=======================\n")
                 //System.err.println(eq)
+//                def printstuff(t: EqProofTree) {
+//                  System.err.println("---- reverse likeness: " + 
+//                    likenesscalc.reverseLikeness(t.nodes._1, t.nodes._2))
+//                  System.err.println(t.nodes._1.prettyDebug)
+//                  System.err.println("----------------------" + eq.get.renaming)
+//                  System.err.println(t.nodes._2.prettyDebug)
+//                  System.err.println("----------------------\n")
+//                  t.out.foreach(_._3.foreach(printstuff(_)))
+//                }
+//                printstuff(eq.get)
               }
               graph.log("-- Proved by isomorphism")
               eq.get.toLog(graph)
@@ -332,6 +350,7 @@ object EqProverApp {
               val st = eprover.stats
               eprover = new EquivalenceProver(graph, likenesscalc)
               eprover.stats = st
+              //likenesscalc.cached.clear()
               checktask()
             }
           }
@@ -343,8 +362,7 @@ object EqProverApp {
           val stats = eprover.stats 
           for(n <- stats.toList.filter 
                 { case ((l,r),_) => 
-                    (new LikenessCalculator(conf.total()))
-                      .likeness(l.deref, r.deref).map(_._1) == Some(0) }
+                    likenesscalc.likeness(l.deref, r.deref).map(_._1) == Some(0) }
                 .sortBy(-_._2).take(conf.driveRecommended())
                 .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
             graph.drive(n)

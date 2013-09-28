@@ -2,7 +2,8 @@ package graphsc
 package residualization
 
 
-class OldLikenessCalculator(total: Boolean = false) extends LikenessCalculator(total) {
+class OldLikenessCalculator(total: Boolean = false) 
+        extends DefaultLikenessCalculator(total) {
 
   type L = Int
   def zero = 0

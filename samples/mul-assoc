@@ -1,4 +1,4 @@
--- Doesn't work yet
+-- Works better with --dont-merge-useless
 
 add x y =
   case x of {

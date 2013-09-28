@@ -3,8 +3,9 @@ package residualization
 
 import graphsc.interpretation._
 
-class ByTestingLikenessCalculator(graph: HyperTester) extends LikenessCalculator(graph.total) {
-  val lc = new LikenessCalculator(graph.total)
+class ByTestingLikenessCalculator(graph: HyperTester) 
+    extends DefaultLikenessCalculator(graph.total) {
+  val lc = new DefaultLikenessCalculator(graph.total)
   
   def consistent(l: Node, r: Node, ren: Renaming): Boolean = {
     graph.runCache(l).forall{
