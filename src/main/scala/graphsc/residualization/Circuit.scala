@@ -4,6 +4,19 @@ package residualization
 object Circuit {
   type Circuit = List[(Node, Hyperedge, Int)]
   
+  def norm(c: Circuit): Circuit = {
+    val lst =
+      for((i,t) <- c.inits.toList.reverse zip c.tails.toList) yield {
+        val nc = t ++ i
+        assert(nc.length == c.length)
+        (nc, nc.zipWithIndex.map(p => p._1._2.label.hashCode() * p._2).sum)
+      }
+    lst.minBy(_._2)._1
+  }
+  
+  def backbone(c: Circuit): List[(Label, Int)] =
+    c.map(p => (p._2.label, p._3))
+  
   // Find elementary circuits using Johnson's algorithm
   def circuits[S](scc: SCC, maxlen: Int = 1000)
                  (implicit cc: CorrectnessChecker[S]): List[Circuit] = {
@@ -36,7 +49,7 @@ object Circuit {
                 circuits += 1
                 if(cc.safe(s1)) {
                   safe_circuits += 1
-                  result = hist.reverse :: result
+                  result = ((n, h, i) :: hist).reverse :: result
                 }
                 //print("circuits: " + circuits + "  safe: " + safe_circuits + "\r")
                 good = true

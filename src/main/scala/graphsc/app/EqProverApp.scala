@@ -374,6 +374,16 @@ object EqProverApp {
       gendump()
       checktask()
       
+//      println("hypers: " + graph.allHyperedges.size)
+//      println("Counting circuits...")
+//      val circs =
+//        Circuit.circuits[GuardedOrStructural](graph)
+//            .map(Circuit.norm(_)).map(c => (c.head._1, Circuit.backbone(c)))
+//      println("Circuits: " + circs.length)
+//      val mostcomm = circs.groupBy(_._2).maxBy(_._2.length)
+//      println("Most common backbone: " + mostcomm._1 + " " + mostcomm._2.length)
+//      println(mostcomm._2.map(x => x._1.prettyDebug).mkString("\n"))
+      
       if(!graph.changed)
         stop = true
     }
