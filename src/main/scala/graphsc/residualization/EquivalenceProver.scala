@@ -6,10 +6,46 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
   import likenesscalc._
   
   type Hist = List[((Node, S), (Node, S))]
+  type HistSet = Set[((Node, S), (Node, S))]
   
-  val cache = collection.mutable.Map[(Node, Node, Renaming, Hist), Option[EqProofTree]]()
+  val checkedIndependently = collection.mutable.Set[(Node, Node)]()
+  
+  val cache = collection.mutable.Map[(Node, Node), 
+                 List[((Renaming, HistSet), Option[EqProofTree])]]().withDefaultValue(Nil)
   
   var stats = collection.mutable.Map[(Node, Node), Int]()
+  
+  def filterUnreachable(n: Node, ns: Set[Node]): Set[Node] = {
+    val visited = collection.mutable.Set[Node]()
+    val res = collection.mutable.Set[Node]()
+    
+    def go(n: Node) {
+      if(!visited(n)) {
+        visited += n
+        if(ns(n)) {
+          res += n
+        } else {
+          for(h <- n.outs; m <- h.dests)
+            go(m.node)
+        }
+      }
+    }
+    
+    go(n)
+    res.toSet
+  }
+  
+  // Advanced history filtering: doesn't seem to be very useful
+  def filterHistory(l: Node, r: Node, h: Hist): Hist = {
+    val lreach = filterUnreachable(l, h.map(_._1._1).toSet)
+    val rreach = filterUnreachable(r, h.map(_._2._1).toSet)
+    h.filter(x => lreach(x._1._1) && rreach(x._2._1))
+  }
+  
+  def moreRestrictive(more: (Renaming, HistSet), less: (Renaming, HistSet)): Boolean = {
+    less._1.toMap.toSet.subsetOf(more._1.toMap.toSet) &&
+    less._2.subsetOf(more._2)
+  }
   
   def prove(
       l1: Node, 
@@ -27,26 +63,73 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
         hist2
       }
     
-    val swap = l1.hashCode > r1.hashCode
+    val lind = hist1.indexWhere(_._1._1 == l1)
+    val rind = hist1.indexWhere(_._2._1 == r1)
+
+    val renid = (ren1 | Renaming(r1.used))
     
-    val args@(l, r, ren, hist) =
-      if(!swap) (l1, r1, ren1, hist1)
-      else {
-        val (lh,rh) = hist1.unzip
-        (r1, l1, ren1.inv, rh zip lh)
+    if(l1.deref ~=~ (ren1 comp r1))
+      Some(EqProofTree(ren1, (l1,r1)))
+    else if(l1 == r1 && renid.nonEmpty)
+      renid.map(EqProofTree(_, (l1,r1)))
+    else if(lind != -1 && rind != -1) {
+      hist1.find(p => p._1._1 == l1 && p._2._1 == r1) match {
+        case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) =>
+          // I thought we should add some variables to ren (if they guarantee correctness)
+          // But now I think they will be there if they guarantee correctness.
+          Some(EqProofTree(ren1, (l1,r1)))
+        case _ => None
       }
-    
-    cache.getOrElseUpdate(args, {
-      val res = proveUncached(l, r, ren, hist)
+    } else if(lind != -1 || rind != -1) {
+      // Well, we trade precision for efficiency here
+      None
+    } else {
+      val swap = l1.hashCode > r1.hashCode
       
-      if(res == None && likeness(l.deref,r.deref) != None)
-        if(stats.contains((l,r)))
-          stats((l,r)) += 1
-        else
-          stats += (l,r) -> 1
-        
-      res
-    }).map(t => if(swap) t.swap else t)
+      // Advanced history filtering: doesn't seem to be very useful
+      //val hist0 = filterHistory(l1, r1, hist1)
+      
+      val args@(l, r, ren, hist) =
+        if(!swap) (l1, r1, ren1, hist1)
+        else {
+          val (lh,rh) = hist1.unzip
+          (r1, l1, ren1.inv, rh zip lh)
+        }
+      
+      val histset = hist.toSet
+      
+      // Trying to prove l = r if we haven't tried yet doesn't seem to be useful
+//      if(!checkedIndependently.contains((l,r))) {
+//        stuff.add((l,r))
+//        prove(l, r)
+//      }
+      
+      val lst = cache((l,r))
+      
+      (lst.filter(x => 
+          moreRestrictive((ren, histset), x._1) && 
+          x._2.forall(t => (t.renaming | ren).isDefined)) match {
+        case ress if ress.nonEmpty =>
+          ress.find(x => x._2.nonEmpty).map(_._2).getOrElse(None)
+        case Nil =>
+          val res = proveUncached(l, r, ren, hist)
+          
+          if(res == None && likeness(l.deref,r.deref) != None) {
+            if(stats.contains((l,r)))
+              stats((l,r)) += 1
+            else
+              stats += (l,r) -> 1
+          }
+          
+          cache((l,r)) = 
+            ((ren,histset), res) ::
+              lst.filterNot(x => moreRestrictive(x._1, (ren,histset)) &&
+                                  (x._2, res).zipped.forall((t1,t2) => 
+                                    t1.renaming.toMap.toSet.subsetOf(t2.renaming.toMap.toSet)))
+                                    
+          res
+      }).map(t => if(swap) t.swap else t)
+    }
   }
     
   def proveUncached(
@@ -54,102 +137,81 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
       r: Node, 
       ren: Renaming = Renaming(), 
       hist: Hist = Nil): Option[EqProofTree] = {
-    val lind = hist.indexWhere(_._1._1 == l)
-    val rind = hist.indexWhere(_._2._1 == r)
-
-    val renid = (ren | Renaming(r.used))
+    //println("EQ " + l.uniqueName + " " + r.uniqueName + " " + ren + " " + hist)
+    val louts = l.outs.groupBy(_.label)
+    val routs = r.outs.groupBy(_.label)
     
-    if(l.deref ~=~ (ren comp r))
-      Some(EqProofTree(ren, (l,r)))
-    else if(l == r && renid.nonEmpty)
-      renid.map(EqProofTree(_, (l,r)))
-    else if(lind != -1 && rind != -1) {
-      hist.find(p => p._1._1 == l && p._2._1 == r) match {
-        case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) =>
-          // I thought we should add some variables to ren (if they guarantee correctness)
-          // But now I think they will be there if they guarantee correctness.
-          Some(EqProofTree(ren, (l,r)))
-        case _ => None
-      }
-    } else if(lind != -1 || rind != -1) {
-      // Well, we trade precision for efficiency here
-      None
-    } else {
-      val louts = l.outs.groupBy(_.label)
-      val routs = r.outs.groupBy(_.label)
+    val pairs = 
+      for((llab,lset) <- louts.iterator; (rlab,rset) <- routs.iterator; if llab == rlab; 
+          lh <- lset; rh1 <- rset; 
+          if lh.dests.size == rh1.dests.size;
+          rh <- varySecond(lh, rh1)) yield
+        likenessH(lh, rh, ren).map{ case (like, rn) => (like, lh, rh, rn) }
+    
+    val sorted_pairs = 
+      pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(-_._1)
+    
+    var result: Option[Renaming] = None
+    var hypers: (Hyperedge, Hyperedge) = null
+    var subtrees: List[EqProofTree] = null
       
-      val pairs = 
-        for((llab,lset) <- louts.iterator; (rlab,rset) <- routs.iterator; if llab == rlab; 
-            lh <- lset; rh1 <- rset; 
-            if lh.dests.size == rh1.dests.size;
-            rh <- varySecond(lh, rh1)) yield
-          likenessH(lh, rh, ren).map{ case (like, rn) => (like, lh, rh, rn) }
+    // for each pair of hyperedges while there is no result
+    for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
+      subtrees = Nil
       
-      val sorted_pairs = 
-        pairs.collect{ case Some(p) => p }.toList.distinct.sortBy(-_._1)
+      val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
+      val newss1 =
+        (newhisthead :: hist).map(p => cc.through(p._1._2, lh)).transpose
+      val newss2 = 
+        (newhisthead :: hist).map(p => cc.through(p._2._2, rh)).transpose
       
-      var result: Option[Renaming] = None
-      var hypers: (Hyperedge, Hyperedge) = null
-      var subtrees: List[EqProofTree] = null
-        
-      // for each pair of hyperedges while there is no result
-      for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
-        subtrees = Nil
-        
-        val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
-        val newss1 =
-          (newhisthead :: hist).map(p => cc.through(p._1._2, lh)).transpose
-        val newss2 = 
-          (newhisthead :: hist).map(p => cc.through(p._2._2, rh)).transpose
-        
-        var curren: Option[Renaming] = 
-          Some(lh.source.renaming comp ren1 comp rh.source.renaming.inv)
-        
-        val lhs = lh.dests zip newss1 zip lh.shifts
-        val rhs = rh.dests zip newss2
-        
-        for((((ld, news1), sh), (rd, news2)) <- lhs zip rhs if curren != None) {
-          val newhist =
-            ((newhisthead :: hist) zip (news1 zip news2)).map {
-              case (((n1,_), (n2,_)), (s1, s2)) => 
-                ((n1, s1), (n2, s2)) 
-            }
-          
-          if(sh != -1) {
-            // it is a normal or shifted child
-            val shiftedren = curren.get.shift(sh) | Renaming(0 until sh toSet)
-            
-            val subtree =
-              shiftedren.flatMap(shren =>
-                prove(ld.node, rd.node, 
-                      ld.renaming.inv comp shren comp rd.renaming, 
-                      newhist))
-            
-            subtree.foreach { t => subtrees = t :: subtrees }     
-                    
-            curren = curren |
-              subtree.map(t => (ld.renaming comp t.renaming comp rd.renaming.inv).unshift(sh))
+      var curren: Option[Renaming] = 
+        Some(lh.source.renaming comp ren1 comp rh.source.renaming.inv)
+      
+      val lhs = lh.dests zip newss1 zip lh.shifts
+      val rhs = rh.dests zip newss2
+      
+      for((((ld, news1), sh), (rd, news2)) <- lhs zip rhs if curren != None) {
+        val newhist =
+          ((newhisthead :: hist) zip (news1 zip news2)).map {
+            case (((n1,_), (n2,_)), (s1, s2)) => 
+              ((n1, s1), (n2, s2)) 
           }
-          else {
-            // It's let's head
-            assert(lh.label == Let())
-            
-            // We cannot judge what variables are used if we've got a renaming from
-            // the equivalence prover. Just FYI.
-            prove(ld.node, rd.node, ld.renaming.inv comp rd.renaming, newhist) match {
-              case None => curren = None
-              case Some(t) => subtrees = t :: subtrees 
-            }
+        
+        if(sh != -1) {
+          // it is a normal or shifted child
+          val shiftedren = curren.get.shift(sh) | Renaming(0 until sh toSet)
+          
+          val subtree =
+            shiftedren.flatMap(shren =>
+              prove(ld.node, rd.node, 
+                    ld.renaming.inv comp shren comp rd.renaming, 
+                    newhist))
+          
+          subtree.foreach { t => subtrees = t :: subtrees }     
+                  
+          curren = curren |
+            subtree.map(t => (ld.renaming comp t.renaming comp rd.renaming.inv).unshift(sh))
+        }
+        else {
+          // It's let's head
+          assert(lh.label == Let())
+          
+          // We cannot judge what variables are used if we've got a renaming from
+          // the equivalence prover. Just FYI.
+          prove(ld.node, rd.node, ld.renaming.inv comp rd.renaming, newhist) match {
+            case None => curren = None
+            case Some(t) => subtrees = t :: subtrees 
           }
         }
-        
-        result = curren.map(lh.source.renaming.inv comp _ comp rh.source.renaming)
-        hypers = (lh, rh)
       }
-        
-      result.map(resren => 
-        EqProofTree(resren, (l,r), Some((hypers._1, hypers._2, subtrees.reverse))))
+      
+      result = curren.map(lh.source.renaming.inv comp _ comp rh.source.renaming)
+      hypers = (lh, rh)
     }
+      
+    result.map(resren => 
+      EqProofTree(resren, (l,r), Some((hypers._1, hypers._2, subtrees.reverse))))
   }
   
   // Since two let-expressions can match with some non-id rearrangement,
