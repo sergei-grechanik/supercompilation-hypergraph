@@ -38,8 +38,8 @@ object EqProverApp {
         descr = "Traditional pairwise generalization")
     val supercompile = opt[Boolean](name = "super", 
         descr = "Traditional multiresult supercompilation")
-    val dontMergeUseless = opt[Boolean](noshort = true, 
-        descr = "Don't merge by nodes by iso if that doesn't lead to more node merging")
+    val mergeUseless = opt[Boolean](noshort = true, 
+        descr = "Merge by nodes by iso even if that won't lead to more node merging")
     
     val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -286,13 +286,19 @@ object EqProverApp {
         //  new CachingLikenessCalculator(new DefaultLikenessCalculator(conf.total()))
         //val likenesscalc = new OldLikenessCalculator(true)//conf.total())
         val like =
-          for(l <- nodes; r <- nodes; 
-              if !(l ~~ r) && l.hashCode <= r.hashCode;
-              if !conf.dontMergeUseless() || LikenessCalculator.notCompletelyUseless(l, r);
+          (for(l <- nodes; r <- nodes; 
+              if l.hashCode < r.hashCode;
+              if conf.mergeUseless() || 
+                    LikenessCalculator.notCompletelyUseless(l, r) ||
+                    (graph.depths(l) == 0 && graph.depths(r) == 0);
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
             val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
             (rl,lkl,l,r)
-          }
+          }) ++
+          (for(l <- nodes; lkl <- likenesscalc.likenessN(l, l)) yield {
+            val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
+            (rl,lkl,l,l)
+          })
         
         var eprover = new EquivalenceProver(graph, likenesscalc)
         

@@ -86,7 +86,7 @@ class DefaultLikenessCalculator(total: Boolean = false) extends LikenessCalculat
 
   // tries to guess under what permutations the node may be invariant 
   def viablePermutations(n: Node): List[Renaming] = {
-    if(total && n.deref.getVarUnused.isEmpty && n.used.size > 1) {
+    if(n.deref.getVarUnused.isEmpty && n.used.size > 1) {
       val df = definingHyperedgesNonStrict(n)
       val constructs = df.filter(_.label.isInstanceOf[Construct])
       val caseofs = df.filter(_.label.isInstanceOf[CaseOf]) 

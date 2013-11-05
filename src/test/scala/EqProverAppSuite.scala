@@ -41,7 +41,7 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check --test --nogen ./samples/idnat-idemp")
   cmd("--prove -c10 -d10 -a10 --nogen ./samples/mul-distrib-and-assoc", 60)
   cmd("--prove -c10 -d10 -a10 --nogen ./samples/mul-distrib", 60)
-  cmd("--prove -c10 -d10 -a10 --nogen --dont-merge-useless ./samples/mul-assoc", 40)
+  cmd("--prove -c10 -d10 -a10 --nogen ./samples/mul-assoc", 40)
   cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/or-even-odd")
   cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/orElse-even-odd")
   cmd("--prove --test -c10 -d10 -a10 --nogen ./samples/orElseT-even-odd")
