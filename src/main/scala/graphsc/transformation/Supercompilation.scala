@@ -25,11 +25,10 @@ class Supercompilation(graph: Transformations, maxdepth: Int = 10) {
   }
   
   def makeSteps(n: Node, hist: List[Node], visited: Set[Node]): List[Hyperedge] = {
-    val gsteps = generalizationSteps(n, hist)
-    if(gsteps.nonEmpty)
-      gsteps
-    else
+    if(!whistle(n, hist, visited))
       drivingSteps(n)
+    else 
+      Nil
   }
   
   def whistle(n: Node, hist: List[Node], visited: Set[Node]): Boolean =

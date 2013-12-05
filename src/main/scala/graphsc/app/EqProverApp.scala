@@ -39,7 +39,9 @@ object EqProverApp {
     val supercompile = opt[Boolean](name = "super", 
         descr = "Traditional multiresult supercompilation")
     val mergeUseless = opt[Boolean](noshort = true, 
-        descr = "Merge by nodes by iso even if that won't lead to more node merging")
+        descr = "Merge nodes by iso even if that won't lead to more node merging")
+    val onlyRequested = opt[Boolean](noshort = true, 
+        descr = "Merge by iso only nodes specified in props")
     
     val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
     val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -221,7 +223,7 @@ object EqProverApp {
       if(conf.verbose())
         System.err.println("Supercompiling...")
         
-      val s = new Supercompilation(graph, 5)
+      val s = new Supercompilation(graph, 30)
       val ns = graph.namedNodes.values.toList
       val fromgoals =
         for(g <- goals) yield g match {
@@ -236,6 +238,7 @@ object EqProverApp {
       stats()
       gendump()
       checktask()
+      
     }
     
     // main loop
@@ -248,8 +251,7 @@ object EqProverApp {
       val trans =
         (if(conf.nogen()) tr.transNone else partFun2BiHProc(tr.letUp(maxarity))) &
         (if(conf.total()) tr.transTotal else tr.transUntotal)
-      if(!conf.supercompile())
-        graph.transform(trans)
+      graph.transform(trans)
       //buf.commit()
       
       if(conf.verbose())
@@ -285,7 +287,7 @@ object EqProverApp {
         //val likenesscalc = 
         //  new CachingLikenessCalculator(new DefaultLikenessCalculator(conf.total()))
         //val likenesscalc = new OldLikenessCalculator(true)//conf.total())
-        val like =
+        lazy val like =
           (for(l <- nodes; r <- nodes; 
               if l.hashCode < r.hashCode;
               if conf.mergeUseless() || 
@@ -299,13 +301,20 @@ object EqProverApp {
             val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
             (rl,lkl,l,l)
           })
+          
+        lazy val user =
+          goals.collect {
+            case GoalPropEqModuloRen(l, r) => (1, (1, Renaming()), l.node, r.node)
+            case GoalPropEq(l, r) => (1, (1, Renaming()), l.node, r.node)
+          }
         
         var eprover = new EquivalenceProver(graph, likenesscalc)
         
         if(conf.verbose())
           System.err.println("Performing merging by isomorphism...")
-        val candidates = 
-          like.toList.sortBy(p => -p._2._1)
+        val candidates =
+          if(conf.onlyRequested()) user
+          else like.toList.sortBy(p => -p._2._1)
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
           

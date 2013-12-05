@@ -83,6 +83,8 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
     } else if(lind != -1 || rind != -1) {
       // Well, we trade precision for efficiency here
       None
+    //} else if(l1.used.size != r1.used.size) {
+    //  None
     } else {
       val swap = l1.hashCode > r1.hashCode
       
@@ -100,7 +102,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
       
       // Trying to prove l = r if we haven't tried yet doesn't seem to be useful
 //      if(!checkedIndependently.contains((l,r))) {
-//        stuff.add((l,r))
+//        checkedIndependently.add((l,r))
 //        prove(l, r)
 //      }
       
@@ -126,7 +128,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
               lst.filterNot(x => moreRestrictive(x._1, (ren,histset)) &&
                                   (x._2, res).zipped.forall((t1,t2) => 
                                     t1.renaming.toMap.toSet.subsetOf(t2.renaming.toMap.toSet)))
-                                    
+          
           res
       }).map(t => if(swap) t.swap else t)
     }
@@ -137,7 +139,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
       r: Node, 
       ren: Renaming = Renaming(), 
       hist: Hist = Nil): Option[EqProofTree] = {
-    //println("EQ " + l.uniqueName + " " + r.uniqueName + " " + ren + " " + hist)
+    //println("EQ " + this.hashCode() + " " + l.uniqueName + " " + r.uniqueName + " " + ren)
     val louts = l.outs.groupBy(_.label)
     val routs = r.outs.groupBy(_.label)
     
