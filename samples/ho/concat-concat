@@ -1,0 +1,4 @@
+
+import: ../lib/list (map, concat);
+
+prove: concat (concat x) = concat (map concat x);

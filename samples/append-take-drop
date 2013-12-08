@@ -1,0 +1,11 @@
+import: lib/list (length, take, drop, append, idList);
+
+myId n x = case n of {
+  Z -> x;
+  S n -> case x of {
+    N -> N;
+    C a x -> C a (myId n x);
+  };
+};
+
+prove: append (take n x) (drop n x) = myId n x;

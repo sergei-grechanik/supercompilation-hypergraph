@@ -1,0 +1,3 @@
+import: lib/list (length, take, idList);
+
+prove: take (length x) x = idList x;

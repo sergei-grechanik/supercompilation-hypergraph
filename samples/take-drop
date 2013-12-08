@@ -1,0 +1,11 @@
+import: lib/list (take, drop);
+
+myN n x = case n of {
+  Z -> N;
+  S n -> case x of {
+    N -> N;
+    C a x -> myN n x;
+  };
+};
+
+prove: drop n (take n x) = myN n x;

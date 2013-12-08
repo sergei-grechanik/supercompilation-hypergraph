@@ -1,0 +1,12 @@
+
+import: lib/nat (even);
+import: lib/bool (not);
+
+evenSlow x =
+  case x of {
+    Z -> T;
+    S x -> not (evenSlow x);
+  };
+
+prove: even x = evenSlow x;
+

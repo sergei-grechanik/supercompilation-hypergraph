@@ -1,0 +1,3 @@
+import: lib/nat (add, const);
+
+prove: const x (const y (add x y)) = const x (const y (add y x));

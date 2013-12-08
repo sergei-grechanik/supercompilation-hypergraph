@@ -1,0 +1,8 @@
+f x y =
+  case x of {
+    Z -> Z;
+    S x -> f x y;
+  };
+
+prove: f x y = f x z;
+ 

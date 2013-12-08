@@ -1,0 +1,3 @@
+import: lib/nat (sumN, triangle);
+
+prove: sumN x = triangle x;

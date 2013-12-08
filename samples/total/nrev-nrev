@@ -1,3 +1,3 @@
-import: lib/list (nrev);
+import: ../lib/list (nrev);
 
 prove: nrev (nrev x) = idList x;

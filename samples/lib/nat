@@ -17,6 +17,12 @@ exp x y =
     Z -> S Z;
   };
 
+pred x =
+  case x of {
+    S x -> x;
+    Z -> Z;
+  };
+
 ack x y =
   case x of {
     Z -> S y;
@@ -33,6 +39,16 @@ idNat x =
     Z -> Z;
   };
 
+idNat2 x =
+  case x of {
+    Z -> Z;
+    S x -> case x of {
+      Z -> S Z;
+      S x -> S (S (idNat2 x));
+    };
+  };
+
+-- It's actually deepSeq
 const x y =
   case x of {
     S x -> const x y;
@@ -45,10 +61,39 @@ constz x =
     Z -> Z;
   };
 
+sumN x =
+  case x of {
+    Z -> Z;
+    S x -> add (S x) (sumN x);
+  };
+
+triangle x = half (mul (S x) x);
+
 double x =
   case x of {
     S x -> S (S (double x));
     Z -> Z;
+  };
+
+half n =
+  case n of {
+    Z -> Z;
+    S m -> case m of {
+      Z -> Z;
+      S k -> S (half k)
+    };
+  };
+
+mod2 x =
+  case x of {
+    S x -> smod2 x;
+    Z -> Z;
+  };
+
+smod2 x =
+  case x of {
+    S x -> mod2 x;
+    Z -> S Z;
   };
 
 even x =
@@ -98,6 +143,9 @@ chadd i j f a = i f (j f a);
 chmul i j f = i (j f);
 
 chexp i j = j i;
+
+chpred n f x = n (\g h -> h (g f)) (\u -> x) (\v -> v);
+
 
 sadd x y =
     case x of {

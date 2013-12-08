@@ -1,0 +1,3 @@
+import: lib/nat (qrevNat);
+
+prove: qrevNat (qrevNat x) = qrevNat x;

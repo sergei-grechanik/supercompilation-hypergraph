@@ -35,6 +35,24 @@ length x =
     N -> Z;
   };
 
+take n xs =
+  case n of {
+    Z -> N;
+    S m -> case xs of {
+      N -> N;
+      C a x -> C a (take m x);
+    };
+  };
+
+drop n xs =
+  case n of {
+    Z -> xs;
+    S m -> case xs of {
+      N -> N;
+      C a x -> drop m x;
+    };
+  };
+
 sum x =
   case x of {
     C a x -> add a (sum x);
@@ -51,6 +69,16 @@ seqList x y =
   case x of {
     C a x -> seqList x y;
     N -> y;
+  };
+
+intersperse a xs =
+  case xs of {
+    N -> N;
+    C x xs -> 
+      case xs of {
+        N -> C x N;
+        C _ _ -> C x (C a (intersperse a xs));
+      };
   };
 
 qrev x = qrevTo x N;

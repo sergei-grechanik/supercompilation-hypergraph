@@ -1,0 +1,4 @@
+
+import: ../lib/list (append, filter);
+
+prove: filter p (append xs ys) = append (filter p xs) (filter p ys);

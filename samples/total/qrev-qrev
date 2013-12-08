@@ -1,0 +1,11 @@
+import: ../lib/list (qrev);
+
+prove: qrevTo (qrevTo x y) N = case y of { C a y -> qrevTo (qrevTo x (C a y)) N; N -> qrevTo (qrevTo x N) N };
+prove: qrevTo (qrevTo x (C a y)) N = let { z = C a y } in qrevTo (qrevTo x z) N;
+prove: qrevTo x (C a (idList y)) = qrevTo (C a x) (idList y);
+prove: qrevTo (qrevTo (C a x) N) N = qrevTo (qrevTo x (C a N)) N;
+prove: qrevTo (qrevTo x (C a N)) N = let { y = C a N } in qrevTo (qrevTo x y) N;
+prove: qrevTo (qrevTo x N) N = qrevTo N (idList x);
+
+prove: qrevTo (qrevTo x y) N = qrevTo y (idList x);
+--prove: qrev (qrev x) = idList x;

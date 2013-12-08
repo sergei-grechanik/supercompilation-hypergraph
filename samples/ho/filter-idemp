@@ -1,0 +1,4 @@
+
+import: ../lib/list (filter);
+
+prove: filter p (filter p xs) = filter p xs;

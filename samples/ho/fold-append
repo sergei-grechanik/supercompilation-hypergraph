@@ -1,0 +1,3 @@
+import: lib/list (foldList, append);
+
+prove: foldList f (foldList f a ys) xs = foldList f a (append xs ys);

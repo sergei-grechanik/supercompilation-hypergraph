@@ -1,0 +1,3 @@
+import: lib/nat (mul, double);
+
+prove: mul x (double y) = double (mul x y);

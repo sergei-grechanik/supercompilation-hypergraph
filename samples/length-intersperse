@@ -1,0 +1,5 @@
+
+import: lib/list (length, intersperse);
+
+prove: length (intersperse x xs) = length (intersperse y xs);
+

@@ -1,0 +1,3 @@
+import: lib/nat (add, double);
+
+prove: double (add x y) = add (double x) (double y);

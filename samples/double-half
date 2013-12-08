@@ -1,0 +1,3 @@
+import: lib/nat (add, double, half, mod2, idNat2);
+
+prove: add (double (half x)) (mod2 x) = idNat2 x;
