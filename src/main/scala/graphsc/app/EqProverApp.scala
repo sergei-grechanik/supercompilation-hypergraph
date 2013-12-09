@@ -25,10 +25,10 @@ object EqProverApp {
       
     val only = opt[Boolean](descr = "Don't load unreferenced functions into graph")
 		
-    val arity = opt[Int](default = Some(3), descr = "Maximal arity of nodes")
-    val depth = opt[Int](default = Some(3), descr = "Depth limit")
-    val codepth = opt[Int](default = Some(3), descr = "Codepth limit")
-    val nogen = opt[Boolean](noshort = true, descr = "Disable unordered generalization")
+    val arity = opt[Int](default = Some(10), descr = "Maximal arity of nodes")
+    val depth = opt[Int](default = Some(10), descr = "Depth limit")
+    val codepth = opt[Int](default = Some(10), descr = "Codepth limit")
+    val gen = opt[Boolean](noshort = true, descr = "Enable unordered generalization")
     val noiso = opt[Boolean](noshort = true, descr = "Disable merging by isomorphism")
     val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
     val driveRecommended = opt[Int](noshort = true, default = Some(0), 
@@ -129,7 +129,7 @@ object EqProverApp {
     val maxdepth = conf.depth()
     val maxcodepth = conf.codepth()
     
-    if(!conf.nogen())
+    if(conf.gen())
       graph.autoTransformations ::= graph.unshare(maxarity)
         
     // read the file
@@ -249,7 +249,7 @@ object EqProverApp {
       graph.changed = false
           
       val trans =
-        (if(conf.nogen()) tr.transNone else partFun2BiHProc(tr.letUp(maxarity))) &
+        (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
         (if(conf.total()) tr.transTotal else tr.transUntotal)
       graph.transform(trans)
       //buf.commit()
