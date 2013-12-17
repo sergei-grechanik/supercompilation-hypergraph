@@ -23,9 +23,9 @@ for f in args.file:
     for run in tree.findall("run"):
 	opts = run.find("options").text
 	if opts:
-        	opt = run.find("base-command").text + " " + opts
+        	opt = (run.find("base-command").text or "") + " " + opts
 	else:
-		opt = run.find("base-command").text
+		opt = (run.find("base-command").text or "")
         table[run.find("test").text][opt].append(run)
         optsset.add(opt)
 

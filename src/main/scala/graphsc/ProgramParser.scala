@@ -227,11 +227,13 @@ sealed trait Expr {
   }
   
   override def toString: String = this match {
+    case ExprLambda(Nil, body) => "(" + body + ")"
     case ExprLambda(vars, body) => "\\" + vars.mkString(" ") + " -> " + body
     case ExprFun(name) => name
     case ExprVar(name) => name
     case ExprConstr(name) => name
     case ExprUnused() => "_" 
+    case ExprCall(ExprConstr(name), args) => name + " " + args.map("(" + _ + ")").mkString(" ")
     case ExprCall(fun, args) => "(" + fun + ") " + args.map("(" + _ + ")").mkString(" ") 
     case ExprCaseOf(expr, cases) => 
       val cs = cases.map{ case (c, vs, b) => c + vs.mkString(" ", " ", " ") + "-> " + b + "; " }
@@ -517,7 +519,7 @@ case class Program(
 
 class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = true) 
         extends RegexParsers {
-  override val whiteSpace = """(\s|--.*\n)+""".r
+  override val whiteSpace = """(\s|--.*\n|\{-(\s|.)*?-\})+""".r
   def fname = not("of\\b".r) ~> "[a-z$][a-zA-Z0-9$.@_]*".r
   def cname = "[A-Z#][a-zA-Z0-9$.@_]*".r
   def varname = fname | "_"

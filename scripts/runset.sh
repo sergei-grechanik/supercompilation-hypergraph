@@ -3,7 +3,7 @@
 TIMEOUT=60
 REPEAT=1
 REPEATALL=1
-COMMAND="./target/start"
+COMMAND=""
 PARALLEL=1
 MEM_LIMIT=4000000
 
@@ -58,7 +58,7 @@ export TESTSET
 export KEEP_TEMPDIR
 export MEM_LIMIT
 
-cp "$TESTSET" "$OUTDIR/testset"
+cat "$TESTSET" | grep -v "^[\s]*$" > "$OUTDIR/testset"
 git diff HEAD > "$OUTDIR/gitdiff"
 COMMIT="$(git rev-parse --short HEAD)"
 

@@ -53,6 +53,8 @@ object EqProverApp {
     val verbose = opt[Boolean](descr = "Be more verbose")
     val log = opt[Boolean](descr = "Log transformations to stdout")
     val stat = opt[Boolean](descr = "Print some statistics like number of nodes at the end")
+    val reformat = opt[String](noshort = true, 
+        descr = "Transform the test to the specified format (hosc, hipspec, hipspec-total)")
     
     val file = trailArg[String](required = true)
     
@@ -134,6 +136,10 @@ object EqProverApp {
         
     // read the file
     val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound()
+    if(conf.reformat.isDefined) {
+      Reformat(preprog, conf.reformat())
+      return None
+    }
     val prog = if(conf.only()) preprog.removeUnreferenced.simplify() else preprog.simplify()
     val propdefs = collection.mutable.Set(prog.propdefs.toSeq:_*)
     prog.warnUndefined()

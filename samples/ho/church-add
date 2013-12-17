@@ -1,4 +1,4 @@
-import: ../lib/nat (add, chadd, church, unchurch);
+import: ../lib/nat (add, chadd, church, unchurch, idNat);
 
 prove: unchurch (chadd (church x) (church y)) = idNat (add x y);
 
