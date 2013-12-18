@@ -1,0 +1,12 @@
+
+add x y =
+  case x of {
+    Val x ->
+      case x of {
+        Z -> y;
+        S x -> Val (S (add x y))
+      };
+    Bot -> Bot
+  };
+  
+prove: add (add x y) z = add x (add y z);

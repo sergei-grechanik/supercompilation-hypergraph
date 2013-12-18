@@ -12,9 +12,9 @@ mul x y =
     S x -> add y (mul x y)
   };
   
-mul3left x y z = mul (mul x y) z;
-mul3right x y z = mul x (mul y z);
+--mul3left x y z = mul (mul x y) z;
+--mul3right x y z = mul x (mul y z);
 
 test: mul (S (S (S (S Z)))) (S (S (S (S (S Z)))));
 
-prove: mul3left = mul3right
+prove: mul (mul x y) z = mul x (mul y z);

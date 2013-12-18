@@ -222,6 +222,13 @@ object Reformat {
     val (cons2type, argtypes, _) = guessTypes(prog)
     val types = cons2type.values.toSet
     
+//    for((c,ts) <- argtypes) {
+//      println(c + ":")
+//      for(t <- ts) {
+//        println("  " + t)
+//      }
+//    }
+    
     if(fmt == "hipspec" || fmt == "hipspec-total") {
       println("{-# LANGUAGE DeriveDataTypeable #-}")
       println("module Test where\n")
@@ -299,7 +306,7 @@ object Reformat {
     
     if(fmt == "hipspec" || fmt == "hipspec-total") {
       var propnum = 0
-      for(PropEq(e1, e2) <- prog.prove) {
+      for(PropEq(e1, e2) <- prog.prove.map(_.removeLambdas)) {
         println("prop_" + propnum + " " + (e1.freeVars ++ e2.freeVars).mkString(" ") + " = " +
             "(" + e1 + ") =:= (" + e2 + ")" )
         propnum += 1

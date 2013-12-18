@@ -1,5 +1,6 @@
 #!/bin/bash
 
+COOLDOWN=5
 TIMEOUT=60
 REPEAT=1
 REPEATALL=1
@@ -7,7 +8,7 @@ COMMAND=""
 PARALLEL=1
 MEM_LIMIT=4000000
 
-while getopts "hvo:c:s:t:r:R:p:km:" opt; do
+while getopts "hvo:c:s:t:r:R:p:km:d" opt; do
 	case "$opt" in
 	h)  echo "Usage: runset.sh -c ./target/start -o reports/report1 -s testset -t 60 -p 2 -- 'optset1' 'optset2' ..."
             exit 0
@@ -31,6 +32,8 @@ while getopts "hvo:c:s:t:r:R:p:km:" opt; do
 	k)  KEEP_TEMPDIR=1
 	    ;;
 	m)  MEM_LIMIT="$OPTARG"
+	    ;;
+	d)  COOLDOWN="$OPTARG"
 	    ;;
 	esac
 done
@@ -57,6 +60,7 @@ export COMMAND
 export TESTSET
 export KEEP_TEMPDIR
 export MEM_LIMIT
+export COOLDOWN
 
 cat "$TESTSET" | grep -v "^[\s]*$" > "$OUTDIR/testset"
 git diff HEAD > "$OUTDIR/gitdiff"
@@ -95,14 +99,11 @@ trap 'kill $(jobs -pr) 2> /dev/null; echo; exit 1' SIGINT SIGTERM
 for o in "$@"; do
 for t1 in `cat $TESTSET`; do
 for i in `seq 1 $REPEAT`; do
-	echo "$j"
-	echo "$i"
-	echo "$o"
-	echo "$t1"
+	echo "$(dirname $0)/single-run-wrapper.sh $j $i \"$o\" $t1"
 done
 done
 done
-done) | xargs -d "\n" -n 4 -P "$PARALLEL" "$(dirname $0)/single-run-wrapper.sh"
+done) | shuf | xargs -d "\n" -n1 -P "$PARALLEL" -- sh -c
 
 cat "$OUTDIR"/part-*-report.xml >> "$OUTDIR/report.xml"
 echo "</report>" >> "$OUTDIR/report.xml"

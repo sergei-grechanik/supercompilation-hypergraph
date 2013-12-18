@@ -29,6 +29,14 @@ sealed trait Prop {
     case PropNamed(_) => Nil
   }
   
+  def removeLambdas: Prop = this match {
+    case PropEq(ExprLambda(vs, lhs), ExprLambda(us, rhs)) if vs.size == us.size =>
+      val ns = vs.indices.map("_p_eta_" + _).toList
+      PropEq(lhs.renameFreeVarsUnsafe(vs.zip(ns).toMap), 
+             rhs.renameFreeVarsUnsafe(us.zip(ns).toMap))
+    case _ => this
+  }
+  
   def loadInto(g: NamedNodes) = this match {
     case PropEq(lhs, rhs) =>
       val free = (lhs.freeVars ++ rhs.freeVars).toList
@@ -106,6 +114,11 @@ sealed trait Expr {
     case ExprLet(expr, binds) =>
       f(binds.map(_._1), expr) :: binds.map{ case (v, b) => f(Nil, b) }
     case _ => Nil
+  }
+  
+  def renameFreeVarsUnsafe(map: Map[String, String]): Expr = this match {
+    case ExprVar(v) => ExprVar(map.getOrElse(v, v))
+    case _ => mapChildren((vs, e) => e.renameFreeVarsUnsafe(map -- vs))
   }
   
   def allSubExprs: List[Expr] =
@@ -323,7 +336,7 @@ case class Program(
         val ar = (0 :: defs(name).map(_.arity)).max
         if(ar <= as.size) e
         else {
-          val args = (0 until (ar - as.size)).map("$eta_" + _).toList
+          val args = (0 until (ar - as.size)).map("_eta_" + _).toList
           ExprLambda(args, ExprCall(ExprFun(name), as ++ args.map(ExprVar(_))))
         }
       case ExprFun(name) => go(ExprCall(ExprFun(name), Nil))

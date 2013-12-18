@@ -13,7 +13,7 @@ nrev x =
     C a x -> append (nrev x) (C a N)
   };
   
-rev x = revTo x Z;
+rev x = revTo x N;
 
 revTo x y =
   case x of {

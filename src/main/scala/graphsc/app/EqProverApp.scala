@@ -137,7 +137,7 @@ object EqProverApp {
     // read the file
     val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound()
     if(conf.reformat.isDefined) {
-      Reformat(preprog, conf.reformat())
+      Reformat(preprog.mergeAppsAndLambdas.topLevelEtaExpand, conf.reformat())
       return None
     }
     val prog = if(conf.only()) preprog.removeUnreferenced.simplify() else preprog.simplify()

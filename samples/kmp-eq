@@ -25,7 +25,7 @@ eqC y =
     C -> T;
   };
 
-if c x y =
+myif c x y =
   case c of {
     T -> x;
     F -> y;
@@ -41,7 +41,7 @@ m pp ss op os =
       case ss of {
         Nil -> F;
         Cons s ss ->
-          if (eq p s) (m pp ss op os) (n os op);
+          myif (eq p s) (m pp ss op os) (n os op);
       };
   };
 
@@ -60,21 +60,21 @@ mAAB s =
   case s of {
     Nil -> F;
     Cons s ss ->
-      if (eq A s) (mAB ss) (mAAB ss);
+      myif (eq A s) (mAB ss) (mAAB ss);
   };
 
 mAB s = 
   case s of {
     Nil -> F;
     Cons s ss ->
-      if (eq A s) (mB ss) (mAAB ss);
+      myif (eq A s) (mB ss) (mAAB ss);
   };
 
 mB s = 
   case s of {
     Nil -> F;
     Cons s ss ->
-      if (eq B s) T (if (eq A s) (mB ss) (mAAB ss));
+      myif (eq B s) T (myif (eq A s) (mB ss) (mAAB ss));
   };
 
 

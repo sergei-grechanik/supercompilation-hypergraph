@@ -3,6 +3,7 @@
 ./deepseq-idemp
 ./deepseq-s
 ./add-assoc
+./add-assoc-bot
 ./mul-assoc
 ./mul-distrib
 ./mul-double
@@ -38,7 +39,6 @@
 ./orElseT-even-odd
 ./orElse-even-odd
 
-./small/case-swap
 ./bool-eq
 ./sadd-comm
 ./sadd-assoc
