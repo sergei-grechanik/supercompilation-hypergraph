@@ -125,6 +125,7 @@ object Reformat {
       else cons2type1 ++ othertype.map((_, othertype))
       
     val argtypes = collection.mutable.Map[(String, Int), List[MyType]]()
+    val caseoftypes = collection.mutable.Map[ExprCaseOf, List[MyType]]()
     
     for((s,bs) <- prog.defs)
       go(ExprFun(s))
@@ -160,7 +161,7 @@ object Reformat {
         go(f, hist, varts) unify FunType(go(e, hist, varts), res)
         res
       case ExprCall(f, a :: as) => go(ExprCall(ExprCall(f, List(a)), as), hist, varts)
-      case ExprCaseOf(e, cs) =>
+      case expr@ExprCaseOf(e, cs) =>
         go(e, hist, varts) unify SumType(cons2type(cs(0)._1))
         val ts =
           for((c, vs, b) <- cs) yield {
@@ -169,17 +170,22 @@ object Reformat {
               argtypes.withDefaultValue(Nil)((c,i)) ::= t
             go(b, hist, varts ++ lst)
           }
-        ts.reduce(_ unify _)
+        val rtype = ts.reduce(_ unify _)
+        caseoftypes.withDefaultValue(Nil)(expr) ::= rtype
+        rtype
     }
       
     val argtypesred = //argtypes.mapValues(_.map(_.deref).toSet) 
       //argtypes.map(p => (p._1, p._2.reduce(_ | _)))
       argtypes.mapValues(_.map(_.deref)).map(p => (p._1, p._2.reduce(_ unify _).deref))
     
+    val caseoftypesred = 
+      caseoftypes.mapValues(_.map(_.deref)).map(p => (p._1, p._2.reduce(_ unify _).deref))
+      
     (cons2type, 
      argtypesred.groupBy(_._1._1).mapValues(x => x.toList.sortBy(_._1._2).map(_._2))
        .withDefaultValue(Nil), 
-     null)
+     caseoftypesred.toMap)
   }
   
   def guessTypevars(cons2type: Map[String, Set[String]], argtypes: Map[String, List[MyType]]):
@@ -218,8 +224,51 @@ object Reformat {
     else "T_" + t.mkString("_")
   }
   
+  def getSumTypes(t: MyType): List[Set[String]] = t match {
+    case SumType(s) => List(s)
+    case FunType(f, t) => getSumTypes(f) ++ getSumTypes(t)
+    case _ => Nil
+  }
+  
+  def mapSumTypes(t: MyType, cons2type: String => Set[String], 
+                  myany: MyType => MyType = x => x): MyType = t match {
+    case SumType(s) => SumType(cons2type(s.head))
+    case FunType(f, t) => 
+      FunType(mapSumTypes(f, cons2type, myany), mapSumTypes(t, cons2type, myany))
+    case _ => myany(t)  
+  }
+  
+  def mergeTypes(fmt: String, 
+      t: (Map[String, Set[String]], Map[String, List[MyType]], Map[ExprCaseOf, MyType]) ):
+        (Map[String, Set[String]], Map[String, List[MyType]], Map[ExprCaseOf, MyType], 
+            Map[Set[String], String]) = {
+    if(fmt == "hipspec") {
+      val types = mergeSets(
+          t._1.values.toList ++ 
+          t._2.values.flatten.flatMap(getSumTypes(_)) ++ t._3.values.flatMap(getSumTypes(_)))
+      
+      val myany = Set("My_S", "My_Z", "My_Bot")
+          
+      val typesbot = 
+        types.zipWithIndex.map(p => (p._1 + ("Bottom_" + p._2), "Bottom_" + p._2)).toMap + 
+        (myany -> "My_Bot")
+          
+      val cons2type =
+        typesbot.keys.map(s => s.toList.map((_, s))).flatten.toMap
+      
+      (cons2type, 
+       (t._2.mapValues(_.map(mapSumTypes(_, cons2type, _ => SumType(myany)))) ++
+         Set("My_Z" -> Nil, "My_Bot" -> Nil, "My_S" -> List(SumType(myany))))
+           .withDefaultValue(Nil),
+       t._3.mapValues(mapSumTypes(_, cons2type, _ => SumType(myany))),
+       typesbot)
+    } else
+      (t._1, t._2, t._3, null)
+  } 
+  
   def apply(prog: Program, fmt: String) {
-    val (cons2type, argtypes, _) = guessTypes(prog)
+    val (cons2type, argtypes, caseoftypes, bottoms) = 
+      mergeTypes(fmt, guessTypes(prog))
     val types = cons2type.values.toSet
     
 //    for((c,ts) <- argtypes) {
@@ -240,7 +289,7 @@ object Reformat {
     
     println()
     
-    if(fmt == "hosc" || fmt == "hipspec-total") {
+    {
       val tvars = guessTypevars(cons2type, argtypes)
       
       def typeToStr(t: MyType, pref: String): String = t match {
@@ -262,7 +311,7 @@ object Reformat {
         print("data " + typeName(t) + " " + tvars(t).mkString(" ")) 
         print(conslist.mkString(" = ", " | ", ""))
         
-        if(fmt == "hipspec-total") {
+        if(fmt != "hosc") {
           println(" deriving (Eq, Ord, Show, Typeable)")
           println()
           
@@ -298,8 +347,24 @@ object Reformat {
     
     println()
     
+    def mkBot(t: MyType): Expr = t match {
+      case SumType(s) => ExprConstr(bottoms(s))
+      case FunType(f, t) => ExprLambda(List("_"), mkBot(t))
+      case _ => ExprConstr("My_Bot")
+    }
+    
+    def adjustCaseofs(e: Expr): Expr = e match {
+      case _ if bottoms == null => e
+      case expr: ExprCaseOf =>
+        val bot = mkBot(caseoftypes(expr))
+        val ExprCaseOf(e, cs) = expr.mapChildren((_, e) => adjustCaseofs(e))
+        ExprCaseOf(e, cs ++ 
+            (cons2type(cs(0)._1) -- cs.map(_._1)).map(c => (c, argtypes(c).map(_ => "_"), bot)))
+      case _ => e.mapChildren((_, e) => adjustCaseofs(e))
+    }
+    
     for((name,bs) <- prog.defs; body <- bs) {
-      println(name + " = " + body + ";")
+      println(name + " = " + adjustCaseofs(body) + ";")
     }
     
     println()
@@ -308,7 +373,7 @@ object Reformat {
       var propnum = 0
       for(PropEq(e1, e2) <- prog.prove.map(_.removeLambdas)) {
         println("prop_" + propnum + " " + (e1.freeVars ++ e2.freeVars).mkString(" ") + " = " +
-            "(" + e1 + ") =:= (" + e2 + ")" )
+            "(" + adjustCaseofs(e1) + ") =:= (" + adjustCaseofs(e2) + ")" )
         propnum += 1
       }
     }
