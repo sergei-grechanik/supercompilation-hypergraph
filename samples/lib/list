@@ -77,7 +77,7 @@ intersperse a xs =
     C x xs -> 
       case xs of {
         N -> C x N;
-        C _ _ -> C x (C a (intersperse a xs));
+        C d1 d2 -> C x (C a (intersperse a xs));
       };
   };
 

@@ -8,7 +8,7 @@ COMMAND=""
 PARALLEL=1
 MEM_LIMIT=4000000
 
-while getopts "hvo:c:s:t:r:R:p:km:d" opt; do
+while getopts "hvo:c:s:t:r:R:p:km:d:" opt; do
 	case "$opt" in
 	h)  echo "Usage: runset.sh -c ./target/start -o reports/report1 -s testset -t 60 -p 2 -- 'optset1' 'optset2' ..."
             exit 0

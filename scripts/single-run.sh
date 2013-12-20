@@ -25,9 +25,11 @@ echo -e "\n$1\n" >> /dev/stderr
 
 export MY_TEMP_DIR="$2"
 
+ulimit -Sv $MEM_LIMIT
+
 /usr/bin/time --quiet -f "$TIMEFORMAT" -o "$2/stat" \
 timeout --kill-after=2 "$TIMEOUT" \
-	bash -c "ulimit -Sv $MEM_LIMIT; $1" > >(tee "$2/out" >> /dev/stdout) 2> >(tee "$2/err" >> /dev/stderr)
+	$1 > >(tee "$2/out" >> /dev/stdout) 2> >(tee "$2/err" >> /dev/stderr)
 
 #echo -e "exit-code $?" >> "$2/stat"
 

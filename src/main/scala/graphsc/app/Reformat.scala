@@ -264,7 +264,7 @@ object Reformat {
        typesbot)
     } else
       (t._1, t._2, t._3, null)
-  } 
+  }
   
   def apply(prog: Program, fmt: String) {
     val (cons2type, argtypes, caseoftypes, bottoms) = 
@@ -341,11 +341,42 @@ object Reformat {
           println()
         }
         else    
-          println()
+          println(";")
       }
     }
     
     println()
+    
+    var bndnum = 0;
+    
+    def renVar(v: String): (String, String) = {
+      bndnum += 1
+      (v, v + "_" + bndnum)
+    }
+    
+    def renameBoundVars(e: Expr, map: Map[String, String] = Map()): Expr = e match {
+      case _ if fmt != "hosc" => e
+      case ExprVar(v) => ExprVar(map.getOrElse(v, v))
+      case ExprLambda(vs, body) =>
+        val m = vs.map(renVar).toMap
+        ExprLambda(vs.map(m(_)), renameBoundVars(body, map ++ m))
+      case ExprLet(e, bs) =>
+        val m = bs.map(p => renVar(p._1)).toMap
+        ExprLet(renameBoundVars(e, map ++ m), bs.map(p => (m(p._1), renameBoundVars(p._2, map))))
+      case ExprCaseOf(e, cs) =>
+        val m = cs.flatMap(_._2).map(renVar).toMap
+        ExprCaseOf(renameBoundVars(e, map), 
+            cs.map(t => (t._1, t._2.map(m), renameBoundVars(t._3, map ++ m))))
+      case _ => e.mapChildren((_, e) => renameBoundVars(e, map))
+    }
+    
+    if(fmt == "hosc") {
+      val List(PropEq(e1, e2)) = prog.prove.map(_.removeLambdas)
+      println(renameBoundVars(e1) + " -- left-hand-side")
+      println(renameBoundVars(e2) + " -- right-hand-side")
+      
+      println("where")
+    }
     
     def mkBot(t: MyType): Expr = t match {
       case SumType(s) => ExprConstr(bottoms(s))
@@ -364,7 +395,7 @@ object Reformat {
     }
     
     for((name,bs) <- prog.defs; body <- bs) {
-      println(name + " = " + adjustCaseofs(body) + ";")
+      println(name + " = " + adjustCaseofs(renameBoundVars(body)) + ";")
     }
     
     println()
