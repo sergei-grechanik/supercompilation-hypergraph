@@ -34,6 +34,9 @@ object EqProverApp {
     val driveRecommended = opt[Int](noshort = true, default = Some(0), 
         descr = "Drive 2*<arg> recommended (by eqprover) nodes")
     val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
+    val noLetToId = opt[Boolean](noshort = true, descr = "Disable destructive let to id conversion")
+    val noLetReduce = opt[Boolean](noshort = true, descr = "Disable destructive let-var reduction")
+    val noAutoReduce = opt[Boolean](noshort = true, descr = "Disable destructive reduction")
     val genPair = opt[Boolean](noshort = true, 
         descr = "Traditional pairwise generalization")
     val supercompile = opt[Boolean](name = "super", 
@@ -101,6 +104,9 @@ object EqProverApp {
           override val onTheFlyTesting = conf.test()
           override val prettifyingEnabled = !conf.nopretty()
           override val weakMerging = conf.weakMerging()
+          override val autoLetToId = !conf.noLetToId()
+          override val autoLetReduce = !conf.noLetReduce()
+          override val autoReduce = !conf.noAutoReduce()
           override val enableVisualizer = conf.gui()
           
           override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
@@ -133,6 +139,18 @@ object EqProverApp {
     
     if(conf.gen())
       graph.autoTransformations ::= graph.unshare(maxarity)
+      
+    if(conf.noLetToId()) 
+      graph.autoTransformations ::= 
+        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letToId)))
+      
+    if(conf.noLetReduce()) 
+      graph.autoTransformations ::= 
+        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letVar)))
+   
+    if(conf.noAutoReduce()) 
+      graph.autoTransformations ::= 
+        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.caseReduce)))
         
     // read the file
     val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound()
@@ -475,6 +493,7 @@ object EqProverApp {
     if(conf.stat()) {
       println("#nodes " + graph.allNodes.size)
       println("#hyperedges " + graph.allHyperedges.size)
+      println("#generations " + generation)
     }
     
     if(conf.prove())

@@ -119,11 +119,21 @@ trait Hypergraph {
   def normalize(h: Hyperedge): Hyperedge =
     canonize(simplify(h))._2
     
+  def autoLetToId: Boolean = true
+  def autoLetReduce: Boolean = true
+  def autoReduce: Boolean = true
+    
   // Hyperedge simplifier
   def simplify(h_underef: Hyperedge): Hyperedge = {
     val h = varsToUnused(h_underef.deref)
     h.label match {
-      case Let() => 
+      case Let() if autoLetReduce && h.dests(0).getVar.isDefined =>
+        val i = h.dests(0).getVar.get
+        if(i < 0 || i >= h.dests.tail.size)
+          Hyperedge(Id(), h.source, List(unused))
+        else
+          Hyperedge(Id(), h.source, List(h.dests.tail(i)))
+      case Let() if autoLetToId => 
         val newhead = h.dests(0).plain
         val newtail = 
           (0 until newhead.arity toList).map { i =>
@@ -154,7 +164,7 @@ trait Hypergraph {
                 (d.renaming.mapVars(_ - s) comp d.node) ~=~ dest1}) {
           Hyperedge(Id(), h.source, List(dest1))
         }
-        else {
+        else if(autoReduce) {
           h.dests(0).node.outs.find(o => 
             o.label.isInstanceOf[Construct] || o.label.isInstanceOf[Unused]) match {
             case Some(Hyperedge(Unused(), _, _)) =>
@@ -171,7 +181,8 @@ trait Hypergraph {
               }
             case _ => h
           }
-        }
+        } else
+          h
       case _ => h
     }
   }

@@ -34,7 +34,7 @@ trait Transformations extends Hypergraph {
   }
   
   def transDrive =
-    letVar & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
+    letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
   
   def transNone = Fun2BiHProc(Nil)
   
@@ -92,6 +92,31 @@ trait Transformations extends Hypergraph {
           h2@Hyperedge(l, src2, gs)) if f.plain == src2 && l.isSimple && gs.nonEmpty =>
       trans("letOther", h1, h2) {
         add(l, src1, gs.map(g => add(Let(), (f.renaming comp g) :: es)))
+      }
+  }
+  
+  def letToId: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(Let(), src1, f1 :: es1),
+          h2@Hyperedge(Var(), src2, List())) if 
+            f1.plain != src2 && es1.forall(_.deref.getVar.isDefined) =>
+      val newhead = f1.plain
+      val newtail = 
+        (0 until newhead.arity toList).map { i =>
+          f1.renaming(i) match {
+            case j if j < 0 || j >= es1.size => unused
+            case j => es1(j)
+          }
+        }
+      
+      lazy val vec = newtail.map(_.deref.getVarUnused.get)
+      lazy val ren = Renaming(vec).normal
+      lazy val renhead = ren comp newhead
+      if(newtail.forall(_.deref.getVarUnused.isDefined) && 
+         vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size &&
+         renhead.isInvertible) {
+        trans("letToId", h1, h2) {
+          add(Id(), src1, List(renhead))
+        }
       }
   }
   

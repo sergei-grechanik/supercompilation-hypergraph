@@ -31,7 +31,11 @@ echo "<options>$o</options>"
 echo "<test>$t1</test>"
 echo "<date>$STARTDATE</date>"
 echo "<temp-dir>$MYTEMP</temp-dir>"
-cat "$MYTEMP/stat" | sed "s/^\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/"
+if cat "$MYTEMP/stat" | grep -q "Command terminated"; then
+	echo "<exit-code>125</exit-code>"
+else
+	cat "$MYTEMP/stat" | sed "s/^\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/"
+fi
 cat "$MYTEMP/out"  | sed -n "s/^#\([^ ]\+\) \([^ ]\+\)$/<\1>\2<\/\1>/p"
 echo "</run>") >> "$OUTDIR/part-$(basename "$MYTEMP")-report.xml"
 
