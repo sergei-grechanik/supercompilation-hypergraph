@@ -144,9 +144,9 @@ object EqProverApp {
       graph.autoTransformations ::= 
         PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letToId)))
       
-    if(conf.noLetReduce()) 
-      graph.autoTransformations ::= 
-        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letVar)))
+//    if(conf.noLetReduce()) 
+//      graph.autoTransformations ::= 
+//        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letVar)))
    
     if(conf.noAutoReduce()) 
       graph.autoTransformations ::= 
@@ -274,7 +274,8 @@ object EqProverApp {
           
       val trans =
         (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
-        (if(conf.total()) tr.transTotal else tr.transUntotal)
+        (if(conf.total()) tr.transTotal else tr.transUntotal) &
+        (if(conf.noLetReduce()) partFun2BiHProc(tr.letVar) else tr.transNone)
       graph.transform(trans)
       //buf.commit()
       

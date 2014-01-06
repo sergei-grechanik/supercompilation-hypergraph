@@ -32,12 +32,10 @@
 ./ho/fold-append
 ./shifted-cycle
 
-./even-double-acc-lemma
+./even-dbl-acc-lemma
 ./even-double-acc
 ./even-slow-fast
 ./or-even-odd
-./orElseT-even-odd
-./orElse-even-odd
 
 ./bool-eq
 ./sadd-comm

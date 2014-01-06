@@ -8,5 +8,5 @@ opts="${@:1:$(($#-1))}"
 cp "reformatted/hosc/$testname/Test1.hs" "$MY_TEMP_DIR/Test1.hs"
 cp "reformatted/hosc/$testname/Test2.hs" "$MY_TEMP_DIR/Test2.hs"
 
-"$(dirname $0)/../../hosc-original/target/start" $opts "$MY_TEMP_DIR/Test1.hs" "$MY_TEMP_DIR/Test2.hs"
+"$(dirname $0)/../../hosc/target/start" $opts "$MY_TEMP_DIR/Test1.hs" "$MY_TEMP_DIR/Test2.hs"
 

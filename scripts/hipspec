@@ -9,7 +9,7 @@ cp "reformatted/hipspec/$testname/Test.hs" "$MY_TEMP_DIR/Test.hs"
 
 cd "$MY_TEMP_DIR"
 
-hipspec -a $opts Test.hs | tee >(grep -q "Proved prop_0"; echo $? > grep_result)
+hipspec -au $opts Test.hs | tee >(grep -q "Proved prop_0"; echo $? > grep_result)
 
 res="$?"
 grepres="$(cat grep_result)"

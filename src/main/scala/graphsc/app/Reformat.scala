@@ -320,6 +320,20 @@ object Reformat {
           println("  coarbitrary = coarbitraryShow")
           println()
           
+          println("instance " + tvars(t).map("Partial " + _).mkString("(",",",") => ") +
+              "Partial (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
+          for(c <- t) {
+            if(argtypes(c).isEmpty)
+              println("  unlifted " + c + " = Prelude.return " + c)
+            else {
+              val nums = argtypes(c).toList.indices.toList.map("x" + _)
+              println("  unlifted (" + c + nums.mkString(" ", " ", "") + ") = " +
+                  c + " <$> " +
+                  nums.map("(lifted " + _ + ")").mkString(" <*> "))
+            }
+          }
+          println()
+          
           println("instance " + tvars(t).map("Arbitrary " + _).mkString("(",",",") => ") +
               "Arbitrary (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
           println("  arbitrary = sized $ \\s -> do")
@@ -395,6 +409,7 @@ object Reformat {
     }
     
     for((name,bs) <- prog.defs; body <- bs) {
+      println("-- function " + name)
       println(name + " = " + adjustCaseofs(renameBoundVars(body)) + ";")
     }
     
