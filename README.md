@@ -50,8 +50,9 @@ If you want to create an eclipse project, use the following command:
 ## Benchmarking
 
 There are a bunch of scripts to run several provers on test sets. Currently we support our prover,
-[HOSC](https://github.com/ilya-klyuchnikov/hosc), [MRSC](https://github.com/ilya-klyuchnikov/mrsc) 
-and [HipSpec](https://github.com/danr/hipspec). If you want to run HOSC or MRSC, you will need my
+[HOSC](https://github.com/ilya-klyuchnikov/hosc), [MRSC](https://github.com/ilya-klyuchnikov/mrsc),
+[HipSpec](https://github.com/danr/hipspec), and [Zeno](http://hackage.haskell.org/package/zeno). 
+If you want to run HOSC or MRSC, you will need my
 forked versions of them: [forked hosc](https://github.com/sergei-grechanik/hosc), 
 [forked mrsc](https://github.com/sergei-grechanik/mrsc). Build them with the same 
 `sbt start-script` command. Note that the wrapper for HOSC (`./scripts/hosc`) assumes that you've
@@ -70,8 +71,10 @@ Now you can run the test using something like this:
 
     ./scripts/runset.sh -s samples/december.set -t60 -o "reports/december-$(date +%h-%d-%H.%M)" -k -r3 -- \
         "./scripts/hipspec-total" \
-        "./scripts/hipspec" \
+        "./scripts/hipspec-partial" \
         "./scripts/hipspec-total --pvars" \
+        "./scripts/zeno-total" \
+        "./scripts/zeno-partial" \
         "./graphsc -p -v --stat"  \
         "./scripts/hosc hosc15" \
         "./scripts/hosc fasthlsc" \
@@ -82,10 +85,9 @@ This command will run the enumerated tools with the specified parameters on the 
 (`-s samples/december.set`), giving each tool
 60 seconds (`-t60`), keeping temporary files (`-k`, may be useful for debugging failed tests),
 repeating each combination of a test and a command 3 times (`-r3`), and putting the report, logs
-and stuff in `reports/december-blah-blah` (again, hopefully, 
-there are definitely many bugs in these scripts). The difference between `hipspec` and `hipspec-total` is
-that `hipspec-total` runs hipspec on normal test, and `hipspec` runs it on distorted tests to
-emulate partiality.
+and stuff in `reports/december-blah-blah`. The difference between `hipspec-total` and `hipspec-partial` is
+that `hipspec-total` runs hipspec on normal test, and `hipspec-partial` runs it on distorted tests to
+emulate partiality. The same applies to zeno.
 
 Now there will be a report in 
 `reports/december-blah-blah/report.xml`. To convert it into a human-readable table, use this command:

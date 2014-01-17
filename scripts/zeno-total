@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec  "$(dirname $0)/with-grep.sh" zeno-total "Proved \"Test.prop_0" zeno "$@"
+

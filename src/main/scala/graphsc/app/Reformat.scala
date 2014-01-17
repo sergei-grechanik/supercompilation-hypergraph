@@ -238,11 +238,11 @@ object Reformat {
     case _ => myany(t)  
   }
   
-  def mergeTypes(fmt: String, 
+  def mergeTypes(force_partial: Boolean, 
       t: (Map[String, Set[String]], Map[String, List[MyType]], Map[ExprCaseOf, MyType]) ):
         (Map[String, Set[String]], Map[String, List[MyType]], Map[ExprCaseOf, MyType], 
             Map[Set[String], String]) = {
-    if(fmt == "hipspec") {
+    if(force_partial) {
       val types = mergeSets(
           t._1.values.toList ++ 
           t._2.values.flatten.flatMap(getSumTypes(_)) ++ t._3.values.flatMap(getSumTypes(_)))
@@ -266,9 +266,22 @@ object Reformat {
       (t._1, t._2, t._3, null)
   }
   
-  def apply(prog: Program, fmt: String) {
+  trait ProverName
+  case object Hosc extends ProverName
+  case object Hipspec extends ProverName
+  case object Zeno extends ProverName
+  
+  def apply(prog: Program, frmt: String) {
+    val (prover, force_partial) = frmt match {
+      case "hosc" => (Hosc, false)
+      case "hipspec-total" => (Hipspec, false)
+      case "hipspec-partial" => (Hipspec, true)
+      case "zeno-total" => (Zeno, false)
+      case "zeno-partial" => (Zeno, true)
+    }
+    
     val (cons2type, argtypes, caseoftypes, bottoms) = 
-      mergeTypes(fmt, guessTypes(prog))
+      mergeTypes(force_partial, guessTypes(prog))
     val types = cons2type.values.toSet
     
 //    for((c,ts) <- argtypes) {
@@ -278,13 +291,19 @@ object Reformat {
 //      }
 //    }
     
-    if(fmt == "hipspec" || fmt == "hipspec-total") {
+    if(prover == Hipspec) {
       println("{-# LANGUAGE DeriveDataTypeable #-}")
       println("module Test where\n")
       println("import qualified Prelude")
       println("import Prelude (Eq, Ord, Show, Int, ($), (==), (-), (/))")
       println("import Control.Applicative ((<$>), (<*>))")
       println("import HipSpec")
+    } else if(prover == Zeno) {
+      println("module Test where\n")
+      println("import qualified Prelude")
+      println("import Prelude (Eq, Ord, Show, Int, ($), (==), (-), (/))")
+      println("import Control.Applicative ((<$>), (<*>))")
+      println("import Zeno")
     }
     
     println()
@@ -311,7 +330,7 @@ object Reformat {
         print("data " + typeName(t) + " " + tvars(t).mkString(" ")) 
         print(conslist.mkString(" = ", " | ", ""))
         
-        if(fmt != "hosc") {
+        if(prover == Hipspec) {
           println(" deriving (Eq, Ord, Show, Typeable)")
           println()
           
@@ -354,8 +373,10 @@ object Reformat {
           }
           println()
         }
-        else    
-          println(";")
+        else if(prover == Hosc)
+          println(";\n")
+        else
+          println()
       }
     }
     
@@ -369,7 +390,7 @@ object Reformat {
     }
     
     def renameBoundVars(e: Expr, map: Map[String, String] = Map()): Expr = e match {
-      case _ if fmt != "hosc" => e
+      case _ if prover != Hosc => e
       case ExprVar(v) => ExprVar(map.getOrElse(v, v))
       case ExprLambda(vs, body) =>
         val m = vs.map(renVar).toMap
@@ -384,7 +405,7 @@ object Reformat {
       case _ => e.mapChildren((_, e) => renameBoundVars(e, map))
     }
     
-    if(fmt == "hosc") {
+    if(prover == Hosc) {
       val List(PropEq(e1, e2)) = prog.prove.map(_.removeLambdas)
       println(renameBoundVars(e1) + " -- left-hand-side")
       println(renameBoundVars(e2) + " -- right-hand-side")
@@ -415,11 +436,17 @@ object Reformat {
     
     println()
     
-    if(fmt == "hipspec" || fmt == "hipspec-total") {
+    if(prover == Hipspec || prover == Zeno) {
       var propnum = 0
       for(PropEq(e1, e2) <- prog.prove.map(_.removeLambdas)) {
-        println("prop_" + propnum + " " + (e1.freeVars ++ e2.freeVars).mkString(" ") + " = " +
-            "(" + adjustCaseofs(e1) + ") =:= (" + adjustCaseofs(e2) + ")" )
+        prover match {
+          case Hipspec =>
+            println("prop_" + propnum + " " + (e1.freeVars ++ e2.freeVars).mkString(" ") + " = " +
+                "(" + adjustCaseofs(e1) + ") =:= (" + adjustCaseofs(e2) + ")" )
+          case Zeno =>
+            println("prop_" + propnum + " " + (e1.freeVars ++ e2.freeVars).mkString(" ") + " = " +
+                "prove((" + adjustCaseofs(e1) + ") :=: (" + adjustCaseofs(e2) + "))" )
+        }
         propnum += 1
       }
     }
