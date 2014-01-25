@@ -17,17 +17,19 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
     if(already.nodes(n))
       List(already)
     else if(n.outs.size == 1)
-      List(ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> n.outs.head)))
+      golist(n.outs.head.dests,
+          ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> n.outs.head)))
     else {
       // We start with 
-      //val hss =
-      //  graph.runCache(n).values.toList.sortBy(-_.cost).map(_.preferred) ++ 
-      //    n.definingHyperedge.toList.map(List(_))
-      val prefhs = graph.runCache(n).values.flatMap(_.preferred).toList
+      val hss =
+        graph.runCache(n).values.toList.sortBy(-_.cost).map(_.preferred) ++ 
+          n.definingHyperedge.toList.map(List(_))
+      //val prefhs = graph.runCache(n).values.flatMap(_.preferred).toList
       // TODO: Sometimes there may be a dead code that hasn't been tested
-      val hs = if(prefhs.isEmpty) n.definingHyperedge.toList else prefhs
+      //val hs = if(prefhs.isEmpty) n.definingHyperedge.toList else prefhs
+      val hs = if(hss.isEmpty) n.definingHyperedge.toList else hss.head
       hs.map(graph.normalize(_)).distinct.flatMap(h =>
-        golist(h.dests, ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> h))))
+        golist(h.dests, ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> h))))  
     }
   }
   

@@ -30,4 +30,4 @@ test: revTo (S (S (S Z))) (S Z);
 
 prove: nrev = rev;
 
---residualize: nrev;
+residualize: nrev;
