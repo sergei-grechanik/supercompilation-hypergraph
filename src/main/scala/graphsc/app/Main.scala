@@ -114,9 +114,12 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   
   
   var residualizing = false
-  override def limitFromMinCost(c: Int): Int =
-    if(residualizing) Int.MaxValue
+  override def limitFromMinCost(c: Double): Double =
+    if(residualizing) Double.MaxValue
     else super.limitFromMinCost(c)
+    
+  override def hyperedgeCost(h: Hyperedge): Double = 
+    super.hyperedgeCost(h) * (1 + (depth(h.source) + codepth(h.source))*0.2)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -516,6 +519,11 @@ object EqProverApp {
       for((n,h) <- res.hyperedges 
           if !n.isVar && !n.definingHyperedge.exists(
                             h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
+        println("depth: " + graph.depth(h.source) + " codepth: " + graph.codepth(h.source))
+        println("maxcost: " + (-1.0 :: graph.runCache(h.source.node).map(_._2.cost).toList).max)
+//        for((a,r) <- graph.runCache(h.source.node)) {
+//          println(a.mkString(" ") + "\t" + r.cost)
+//        }
         println(graph.nodeFunName(h.source) + " =\n" +
             indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
       }

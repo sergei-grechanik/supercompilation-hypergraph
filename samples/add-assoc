@@ -10,3 +10,5 @@ test: add (add (S (S Z)) (S Z)) (S (S (S Z)));
 test: add (S (S Z)) (add (S (S (S Z))) (S Z));
 
 prove: add (add x y) z = add x (add y z);
+
+residualize: add (add x y) z;

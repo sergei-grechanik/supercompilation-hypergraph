@@ -3,10 +3,11 @@ package interpretation
 
 class NonTerminationException(s: String = "") extends Exception(s)
 
-case class RunningContext(limit: Int = Int.MaxValue, visited: List[(Node, List[Value])] = List()) {
+case class RunningContext(limit: Double = Double.MaxValue, 
+                          visited: List[(Node, List[Value])] = List()) {
   def add(n: Node, a: List[Value]): RunningContext =
     RunningContext(limit, (n, a)::visited)
-  def -(c: Int): RunningContext =
+  def -(c: Double): RunningContext =
     RunningContext(limit - c, visited)
 }
 
@@ -46,6 +47,7 @@ trait HyperTester extends TheHypergraph {
       case Some(v) =>
         if(hyperTesterLogging) { 
           log("-- cached: " + v.value)
+          log("-- cost: " + v.cost)
           log("")
         }
         v
@@ -128,8 +130,10 @@ trait HyperTester extends TheHypergraph {
     
     val lub = values.reduce(_ | _)
     
-    if(hyperTesterLogging)
+    if(hyperTesterLogging) {
       log("-- Their combination: " + lub.value)
+      log("-- Its cost: " + lub.cost)
+    }
     
     if(lub.value != ErrorBottom) {
       runCache(n) += args -> lub
@@ -177,7 +181,7 @@ trait HyperTester extends TheHypergraph {
     }
       
     var curctx = ctx - hyperedgeCost(h)
-    var subcost = 0
+    var subcost = 0.0
       
     val rv = runHyperedge(h, args, { (n, as) =>
       val ValueAndStuff(v, c, _) = this.runNode(curctx, n, as)
@@ -193,6 +197,7 @@ trait HyperTester extends TheHypergraph {
       log("-- args: " + args)
       log("-- ctxlimit: " + ctx.limit)
       log("-- result: " + rv)
+      log("-- cost: " + (subcost + hyperedgeCost(h)))
       logUnshift()
       log("")
     }
@@ -201,7 +206,7 @@ trait HyperTester extends TheHypergraph {
   }
   
   // Pure hyperedge cost
-  def hyperedgeCost(h: Hyperedge): Int = h.label match {
+  def hyperedgeCost(h: Hyperedge): Double = h.label match {
     case Construct(name) => 1
     case CaseOf(cases) => 1
     case Let() => 1
@@ -231,7 +236,9 @@ trait HyperTester extends TheHypergraph {
     //  retestHyperedge(h)
   }
   
-  def limitFromMinCost(c: Int): Int = c*2 + 30
+  // If we are residualizing, this should be MaxValue 
+  // because otherwise the result may be non-deterministic
+  def limitFromMinCost(c: Double): Double = c*2 + 30
   
   def retestHyperedge(h: Hyperedge) {
     for((as, r) <- runCache(h.source.node)) {

@@ -71,7 +71,7 @@ case object ErrorBottom extends Value {
 }
 
 // Value together with information about minimal cost
-case class ValueAndStuff(value: Value, cost: Int, preferred: List[Hyperedge]) {
+case class ValueAndStuff(value: Value, cost: Double, preferred: List[Hyperedge]) {
   def |(other: ValueAndStuff) = {
     val newval = value | other.value
     (newval == value, newval == other.value) match {

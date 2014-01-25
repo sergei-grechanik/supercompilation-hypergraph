@@ -12,7 +12,7 @@ package object interpretation {
     label match {
       case Construct(name) =>
         // Bottoms are like ordinary bottoms, ErrorBottoms propagate through constructors
-        def subs = dests.map(nodeRunner(_, args))
+        val subs = dests.map(nodeRunner(_, args))
         if(subs.contains(ErrorBottom))
           ErrorBottom
         else
