@@ -13,7 +13,7 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   
   def cmd(s: String, secs: Int = 30, res: Boolean = true) {
     test("eqprover " + s) {
-      assert(Await.result(future(EqProverApp.mainBool(s.split(" "))), secs.seconds) === Some(res))
+      assert(Await.result(future(MainApp.mainBool(s.split(" "))), secs.seconds) === Some(res))
     }
   }
   

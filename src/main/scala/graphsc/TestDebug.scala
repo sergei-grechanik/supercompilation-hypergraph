@@ -14,7 +14,7 @@ object TestDebug {
   def main(args: Array[String]) {
     def cmd(s: String) {
       test("eqprover " + s) {
-        assert(EqProverApp.mainBool(s.split(" +")) == Some(true))
+        assert(MainApp.mainBool(s.split(" +")) == Some(true))
       }
     }
     
