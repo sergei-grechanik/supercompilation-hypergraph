@@ -1,0 +1,11 @@
+
+import: ../lib/bool (not);
+
+evenSlow x =
+  case x of {
+    Z -> T;
+    S x -> not (evenSlow x);
+  };
+
+residualize: evenSlow;
+

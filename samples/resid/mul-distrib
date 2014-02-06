@@ -1,0 +1,14 @@
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+
+mul x y =
+  case x of {
+    Z -> Z;
+    S x -> add y (mul x y)
+  };
+  
+residualize: add (mul x y) (mul z y);

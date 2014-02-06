@@ -1,0 +1,18 @@
+constz x = 
+  case x of {
+    S x -> constz x;
+    Z -> Z;
+  };
+
+f x =
+  case x of {
+    Z -> Z;
+    S x -> 
+      case constz x of {
+        Z -> f x;
+        S y -> Z;
+      };
+  };
+
+residualize: f;
+

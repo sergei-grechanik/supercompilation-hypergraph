@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Usage:
+# original-speed testname
+
+trap 'kill $(jobs -pr) 2> /dev/null; echo; exit 1' SIGINT SIGTERM
+
+testname="${!#}"
+opts="${@:1:$(($#-1))}"
+
+cp "reformatted/speed-benchmark/$testname/data" "$MY_TEMP_DIR/data"
+cp "reformatted/speed-benchmark/$testname/Test.hs" "$MY_TEMP_DIR/Test.hs"
+
+GHC_OPTIONS="-O" "$(dirname "$0")/run-test-with-main.sh" "$MY_TEMP_DIR/Test.hs" "$(dirname "$0")/Speed.hs" run < "$MY_TEMP_DIR/data" | tee >(grep -q "correct True"; echo $? > correctness)
+
+res="$?"
+grepres="$(cat correctness)"
+
+if [[ -z "$grepres" ]]; then
+	exit 1
+elif [[ "$grepres" = 0 ]]; then
+        exit "$res"
+else
+	exit 55
+fi
+

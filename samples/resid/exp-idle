@@ -1,0 +1,11 @@
+f x =
+  case x of {
+    Z -> Z;
+    S x -> 
+      case f x of {
+        Z -> f x;
+        S y -> Z;
+      };
+  };
+
+residualize: f;

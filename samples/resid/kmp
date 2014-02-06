@@ -25,7 +25,7 @@ eqC y =
     C -> T;
   };
 
-if c x y =
+myif c x y =
   case c of {
     T -> x;
     F -> y;
@@ -41,7 +41,7 @@ m pp ss op os =
       case ss of {
         Nil -> F;
         Cons s ss ->
-          if (eq p s) (m pp ss op os) (n os op);
+          myif (eq p s) (m pp ss op os) (n os op);
       };
   };
 
@@ -52,10 +52,5 @@ n os op =
   };
 
 matchAAB str = match (Cons A (Cons A (Cons B Nil))) str;
-
-test: matchAAB (Cons A (Cons A (Cons A (Cons A (Cons A Nil)))));
-test: matchAAB (Cons A (Cons A (Cons A (Cons B (Cons A Nil)))));
-test: matchAAB (Cons A (Cons A (Cons B (Cons A (Cons A Nil)))));
-test: matchAAB (Cons C (Cons A (Cons B (Cons A (Cons A (Cons B Nil))))));
 
 residualize: matchAAB;

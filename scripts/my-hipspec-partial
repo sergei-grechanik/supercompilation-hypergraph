@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec  "$(dirname $0)/with-grep.sh" hipspec-partial "Proved prop_0" ~/projs/hipspec/dist/build/hipspec/hipspec -au "$@"
+

@@ -1,0 +1,9 @@
+-- needs -a4
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+
+residualize: add (add x y) z;

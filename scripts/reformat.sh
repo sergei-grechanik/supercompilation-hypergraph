@@ -2,6 +2,7 @@
 
 
 filenm="$1"
+scripts=$(dirname "$0")
 dirnm=$(dirname "$1")
 
 shift
@@ -23,7 +24,9 @@ for f in $FMTS; do
 		elif [ "$f" = hipspec-total ] || [ "$f" = hipspec-partial ]; then
 			(cd  "reformatted/$f/$dirnm/$t"
 			cat Test.hs | sed -n "s/-- function \(.\+\)$/:t Test.\1/p" | ghci Test.hs | sed "s/^.*[^-]> /@@@/" | tr "\n" " " | sed "s/@@@/\n/g" | sed -n "s/^Test.\([^ ]\+ \+::.\+\)$/\1/p" >> Test.hs)
-		fi
+		elif [ "$f" = speed-benchmark ]; then
+                     GHC_OPTIONS="-O" $scripts/run-test-with-main.sh "reformatted/$f/$dirnm/$t/Test.hs" "$scripts/Speed.hs" gen > "reformatted/$f/$dirnm/$t/data"
+                fi
 	done
 done
 

@@ -1,0 +1,10 @@
+./add-assoc
+./even-slow-fast
+./double-add
+./quad-idle
+./mul-assoc
+./mul-double
+./kmp
+./exp-idle
+./idle
+./mul-distrib

@@ -1,0 +1,3 @@
+import: ../lib/nat (add, double);
+
+residualize: double (add x y);

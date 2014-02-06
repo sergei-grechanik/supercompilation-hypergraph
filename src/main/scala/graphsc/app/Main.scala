@@ -21,7 +21,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val residAutoTestOnly = opt[Boolean](noshort = true, descr =
     "Don't use user-specified tests for residualization")
     
-  val only = opt[Boolean](descr = "Don't load unreferenced functions into graph")
+  val only = opt[Boolean](noshort = true, descr = "Don't load unreferenced functions into graph")
   
   val arity = opt[Int](default = Some(10), descr = "Maximal arity of nodes")
   val depth = opt[Int](default = Some(10), descr = "Depth limit")
@@ -58,6 +58,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Transform the test to the specified format (hosc, hipspec, hipspec-total)")
   
   val file = trailArg[String](required = true)
+  val output = opt[String](descr = "Output to a file instead of stdout")
   
   val nopretty = opt[Boolean](noshort = true, 
       descr="Disable transforming nodes to readable programs on the fly. " +
@@ -159,11 +160,14 @@ object MainApp {
     if(conf.noAutoReduce()) 
       graph.autoTransformations ::= 
         PartialFunction(biHProc2HProc(partFun2BiHProc(graph.caseReduce)))
+     
+    val output = conf.output.get.fold(System.out)(o => new java.io.PrintStream(o))
         
     // read the file
     val preprog = ProgramParser.parseFile(conf.file()).resolveUnbound()
     if(conf.reformat.isDefined) {
-      Reformat(preprog.mergeAppsAndLambdas.topLevelEtaExpand, conf.reformat())
+      Console.withOut(output)(
+          Reformat(preprog.mergeAppsAndLambdas.topLevelEtaExpand, conf.reformat()))
       return None
     }
     val prog = if(conf.only()) preprog.removeUnreferenced.simplify() else preprog.simplify()
@@ -227,7 +231,7 @@ object MainApp {
       if(!conf.residAutoTestOnly())
         prog.loadTestsInto(graph)
       
-      performResidualization(graph, conf, resid)
+      performResidualization(graph, conf, resid, output)
     }
     
       
@@ -486,7 +490,7 @@ object MainApp {
   
   // residualization (by testing)
   def performResidualization(graph: MainHypergraphImplementation, conf: Conf,
-                             resid: List[RenamedNode]) {
+                             resid: List[RenamedNode], output: java.io.PrintStream) {
     val residlist =
       if(resid.nonEmpty) resid.map(_.deref)
       else graph.namedNodes.values.toList.map(_.deref)
@@ -515,26 +519,38 @@ object MainApp {
       System.err.println("Residual graphs count: " + subgraphs.size)
     if(subgraphs.nonEmpty) {
       val res = subgraphs.minBy(_.nodes.size)
-      println(res.nodes.size)
-      for((n,h) <- res.hyperedges 
-          if !n.isVar && !n.definingHyperedge.exists(
-                            h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
-        println("depth: " + graph.depth(h.source) + " codepth: " + graph.codepth(h.source))
-        println("maxcost: " + (-1.0 :: graph.runCache(h.source.node).map(_._2.cost).toList).max)
-//        for((a,r) <- graph.runCache(h.source.node)) {
-//          println(a.mkString(" ") + "\t" + r.cost)
-//        }
-        println(graph.nodeFunName(h.source) + " =\n" +
-            indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
+      
+      if(conf.stat()) {
+        println("#residual-nodes " + res.nodes.size)
+        println("#residual-hyperedges " + res.hyperedges.size)
       }
-      for((name,n) <- graph.namedNodes if res.nodes.contains(n.deref.node)) {
-        val dern = n.deref
-        val r = graph.nodeFunName(dern)
-        val l = name + graph.prettyRename(dern.renaming,
-                    (0 until dern.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
-        if(l != r)
-          println(l + " = " + r + ";")
-      }
+      
+      val to_resid = 
+        graph.namedNodes.filter(x => res.nodes(x._2.deref.node)) ++ 
+        resid.zipWithIndex.map { case (r,i) => ("residual_" + i, r) }
+        
+      Console.withOut(output)(
+        Reformat(ToProgram(graph, to_resid, res), "speed-benchmark"))
+      
+//      for((n,h) <- res.hyperedges 
+//          if !n.isVar && !n.definingHyperedge.exists(
+//                            h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
+//        println("depth: " + graph.depth(h.source) + " codepth: " + graph.codepth(h.source))
+//        println("maxcost: " + (-1.0 :: graph.runCache(h.source.node).map(_._2.cost).toList).max)
+////        for((a,r) <- graph.runCache(h.source.node)) {
+////          println(a.mkString(" ") + "\t" + r.cost)
+////        }
+//        println(graph.nodeFunName(h.source) + " =\n" +
+//            indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
+//      }
+//      for((name,n) <- graph.namedNodes if res.nodes.contains(n.deref.node)) {
+//        val dern = n.deref
+//        val r = graph.nodeFunName(dern)
+//        val l = name + graph.prettyRename(dern.renaming,
+//                    (0 until dern.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
+//        if(l != r)
+//          println(l + " = " + r + ";")
+//      }
     }
   }
 

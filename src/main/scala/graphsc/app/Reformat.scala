@@ -270,6 +270,7 @@ object Reformat {
   case object Hosc extends ProverName
   case object Hipspec extends ProverName
   case object Zeno extends ProverName
+  case object SpeedBenchmark extends ProverName
   
   def apply(prog: Program, frmt: String) {
     val (prover, force_partial) = frmt match {
@@ -278,6 +279,7 @@ object Reformat {
       case "hipspec-partial" => (Hipspec, true)
       case "zeno-total" => (Zeno, false)
       case "zeno-partial" => (Zeno, true)
+      case "speed-benchmark" => (SpeedBenchmark, false)
     }
     
     val (cons2type, argtypes, caseoftypes, bottoms) = 
@@ -291,7 +293,18 @@ object Reformat {
 //      }
 //    }
     
-    if(prover == Hipspec) {
+    if(prover == SpeedBenchmark) {
+      println("{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, DefaultSignatures #-}")
+      println("module Test where\n")
+      println("import qualified Prelude")
+      println("import Prelude (Eq, Ord, Show, ($), (==), (-), seq)")
+      println("import Control.Applicative ((<$>), (<*>))")
+      println("import Data.Typeable (Typeable)")
+      println("import Test.QuickCheck")
+      println("import Control.DeepSeq")
+      println("import GHC.Generics (Generic)")
+      println("import Data.Serialize (Serialize)")
+    } else if(prover == Hipspec) {
       println("{-# LANGUAGE DeriveDataTypeable #-}")
       println("module Test where\n")
       println("import qualified Prelude")
@@ -330,8 +343,11 @@ object Reformat {
         print("data " + typeName(t) + " " + tvars(t).mkString(" ")) 
         print(conslist.mkString(" = ", " | ", ""))
         
-        if(prover == Hipspec) {
-          println(" deriving (Eq, Ord, Show, Typeable)")
+        if(prover == Hipspec || prover == SpeedBenchmark) {
+          if(prover == SpeedBenchmark)
+            println(" deriving (Eq, Ord, Show, Typeable, Generic)")
+          else
+            println(" deriving (Eq, Ord, Show, Typeable)")
           println()
           
           println("instance " + tvars(t).map("Show " + _).mkString("(",",",") => ") +
@@ -339,19 +355,39 @@ object Reformat {
           println("  coarbitrary = coarbitraryShow")
           println()
           
-          println("instance " + tvars(t).map("Partial " + _).mkString("(",",",") => ") +
-              "Partial (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
-          for(c <- t) {
-            if(argtypes(c).isEmpty)
-              println("  unlifted " + c + " = Prelude.return " + c)
-            else {
-              val nums = argtypes(c).toList.indices.toList.map("x" + _)
-              println("  unlifted (" + c + nums.mkString(" ", " ", "") + ") = " +
-                  c + " <$> " +
-                  nums.map("(lifted " + _ + ")").mkString(" <*> "))
+          if(prover == Hipspec) {
+            println("instance " + tvars(t).map("Partial " + _).mkString("(",",",") => ") +
+                "Partial (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
+            for(c <- t) {
+              if(argtypes(c).isEmpty)
+                println("  unlifted " + c + " = Prelude.return " + c)
+              else {
+                val nums = argtypes(c).toList.indices.toList.map("x" + _)
+                println("  unlifted (" + c + nums.mkString(" ", " ", "") + ") = " +
+                    c + " <$> " +
+                    nums.map("(lifted " + _ + ")").mkString(" <*> "))
+              }
             }
+            println()
           }
-          println()
+          
+          if(prover == SpeedBenchmark) {
+            println("instance " + tvars(t).map("Serialize " + _).mkString("(",",",") => ") +
+                "Serialize (" + typeName(t) + " " + tvars(t).mkString(" ") + ")\n")
+            
+            println("instance " + tvars(t).map("NFData " + _).mkString("(",",",") => ") +
+                "NFData (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
+            for(c <- t) {
+              if(argtypes(c).isEmpty)
+                println("  rnf " + c + " = ()")
+              else {
+                val nums = argtypes(c).toList.indices.toList.map("x" + _)
+                println("  rnf (" + c + nums.mkString(" ", " ", "") + ") = " +
+                    nums.map("(rnf " + _ + ")").mkString(" `seq` "))
+              }
+            }
+            println()
+          }
           
           println("instance " + tvars(t).map("Arbitrary " + _).mkString("(",",",") => ") +
               "Arbitrary (" + typeName(t) + " " + tvars(t).mkString(" ") + ") where")
@@ -362,15 +398,33 @@ object Reformat {
                 t.filter(argtypes(_).isEmpty).mkString("[",",","]"))
             println("    else do")
           }
-          println("      x <- choose (0 :: Int, " + (t.size - 1) + ")")
-          println("      case x of")
-          for((c,i) <- t.zipWithIndex) {
-            if(argtypes(c).isEmpty)
-              println("        " + i + " -> Prelude.return " + c)
-            else
-              println("        " + i + " -> " + c + " <$> " + 
-                  argtypes(c).map(_ => "resize (s `Prelude.div` 2) arbitrary").mkString(" <*> "))
+          
+          if(prover == SpeedBenchmark) {
+            val zero_ar = t.filter(argtypes(_).isEmpty)
+            val nonzero_ar = t.filter(argtypes(_).nonEmpty) 
+            
+            if(zero_ar.isEmpty) println("      c_deeper (s - 1)")
+            else if(nonzero_ar.isEmpty) println("      c_finish")
+            else println("      frequency [(s - 1, c_deeper (s - 1)), (1, c_finish)]")
+            
+            println("    where")
+            println("     c_finish = elements " + zero_ar.mkString("[", ", ", "]"))
+            println("     c_deeper s = oneof " + 
+                nonzero_ar.map(c => c + " <$> " + 
+                    argtypes(c).map(_ => "resize s arbitrary").mkString(" <*> "))
+                  .mkString("[", ", ", "]"))
+          } else {
+            println("      x <- choose (0 :: Int, " + (t.size - 1) + ")")
+            println("      case x of")
+            for((c,i) <- t.zipWithIndex) {
+              if(argtypes(c).isEmpty)
+                println("        " + i + " -> Prelude.return " + c)
+              else
+                println("        " + i + " -> " + c + " <$> " + 
+                    argtypes(c).map(_ => "resize (s `Prelude.div` 2) arbitrary").mkString(" <*> "))
+            }
           }
+          
           println()
         }
         else if(prover == Hosc)
@@ -429,9 +483,18 @@ object Reformat {
       case _ => e.mapChildren((_, e) => adjustCaseofs(e))
     }
     
+    println("-- function definitions\n")
+    
     for((name,bs) <- prog.defs; body <- bs) {
       println("-- function " + name)
       println(name + " = " + adjustCaseofs(renameBoundVars(body)) + ";")
+    }
+    
+    if(prover == SpeedBenchmark) {
+      for((body,i) <- prog.residualize.zipWithIndex) {
+        println("-- function residual_" + i)
+        println("residual_" + i + " = " + adjustCaseofs(renameBoundVars(body.bindUnbound)) + ";")
+      }
     }
     
     println()

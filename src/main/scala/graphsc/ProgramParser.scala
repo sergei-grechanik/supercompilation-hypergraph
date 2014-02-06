@@ -121,6 +121,13 @@ sealed trait Expr {
     case _ => mapChildren((vs, e) => e.renameFreeVarsUnsafe(map -- vs))
   }
   
+  def renameFreeVarsUnsafe1(map: String => String): Expr = this match {
+    case ExprVar(v) => ExprVar(map(v))
+    case _ => 
+      mapChildren((vs, e) => 
+          e.renameFreeVarsUnsafe1(v => if(vs.contains(v)) v else map(v)))
+  }
+  
   def allSubExprs: List[Expr] =
     this :: mapChildrenToList((_, b) => b.allSubExprs).flatten
   
@@ -252,8 +259,8 @@ sealed trait Expr {
       val cs = cases.map{ case (c, vs, b) => c + vs.mkString(" ", " ", " ") + "-> " + b + "; " }
       "case " + expr + " of { " + cs.mkString  + "}"
     case ExprLet(expr, binds) =>
-      val bs = binds.map{ case (v, b) => v + " = " + b + "; " }
-      "let " + bs.mkString + "in " + expr
+      val bs = binds.map{ case (v, b) => v + " = " + b }
+      bs.mkString("let { ", "; ", " } in ") + expr
   }
 }
 

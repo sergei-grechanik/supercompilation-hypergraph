@@ -1,0 +1,3 @@
+import: ../lib/nat (mul, double);
+
+residualize: mul x (double y);

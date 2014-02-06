@@ -2,8 +2,6 @@ package graphsc
 package residualization
 
 import graphsc.interpretation._
-  
-case class ProgramSubgraph(nodes: Set[Node], hyperedges: Map[Node, Hyperedge])
 
 case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcount: Int = 1) {
     
