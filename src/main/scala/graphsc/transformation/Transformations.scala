@@ -33,10 +33,19 @@ trait Transformations extends Hypergraph {
     done
   }
   
+  def applyTransformation(
+        trans: (Hyperedge, Hyperedge) => Boolean, 
+        h1o: Hyperedge, h2o: Hyperedge): Boolean = {
+    var done = false
+    for((h1,h2) <- transformablePairs(normalize(h1o), normalize(h2o)))
+      done |= trans(h1,h2)
+    done
+  }
+  
   def transDrive =
     letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
   
-  def transNone = Fun2BiHProc(Nil)
+  def transNone = BFun2BiHProc(Nil)
   
   
   def transTotal = transDrive & caseConstrTotal & caseCaseSwap(true)
@@ -46,13 +55,15 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
     
   // let x = e in x  ->  e
-  def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letVar: (Hyperedge, Hyperedge) => Boolean = {
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           h2@Hyperedge(Var(), src2, List())) if f1.plain == src2 =>
       trans("letVar", h1, h2) {
         val varnum = f1.renaming(0)
         add(Id(), src1, List(es1 at varnum))
       }
+      true
+    case _ => false
   }
   
   def letLet: PartialFunction[(Hyperedge, Hyperedge), Unit] = {

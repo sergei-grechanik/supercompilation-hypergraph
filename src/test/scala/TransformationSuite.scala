@@ -16,6 +16,7 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
       maxdepth: Int = Int.MaxValue) {
     
     val transAll: BiHProcessor = {
+      import graphsc.transformation._
       import g._
         (letVar &
         letLet &

@@ -326,7 +326,7 @@ object MainApp {
       val trans =
         (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
         (if(conf.total()) tr.transTotal else tr.transUntotal) &
-        (if(conf.noLetReduce()) partFun2BiHProc(tr.letVar) else tr.transNone)
+        (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone)
       graph.transform(trans)
       //buf.commit()
       

@@ -3,11 +3,6 @@ package graphsc
 package transformation {
   trait HProcessor extends Function1[Hyperedge, Unit]
   
-  trait BiHFilter extends Function2[Hyperedge, Hyperedge, Boolean] {
-    def &(other: BiHFilter): BiHFilter =
-      (h1:Hyperedge, h2:Hyperedge) => this(h1,h2) && other(h1,h2)
-  }
-  
   trait BiHProcessor extends Function2[Hyperedge, Hyperedge, Unit] {
     def &(other: BiHProcessor): BiHProcessor = {
       val self = this
@@ -50,34 +45,37 @@ package transformation {
     }
   }
   
-  case class Fun2BiHProc(funs: List[PartialFunction[(Hyperedge, Hyperedge), Unit]]) 
+  case class BFun2BiHProc(funs: List[(Hyperedge, Hyperedge) => Boolean]) 
       extends BiHProcessor {
     override def apply(h1o: Hyperedge, h2o: Hyperedge) {
       for((h1,h2) <- transformablePairs(h1o, h2o))
-        funs.foreach(_.lift((h1,h2)))
+        funs.foreach(_(h1,h2))
     }
     
-    def &(other: Fun2BiHProc): Fun2BiHProc =
-      Fun2BiHProc(funs ++ other.funs)
+    def &(other: BFun2BiHProc): BFun2BiHProc =
+      BFun2BiHProc(funs ++ other.funs)
       
-    override def onSuccess(f: () => Unit): Fun2BiHProc =
-      Fun2BiHProc(funs.map(_.andThen(_ => f())))
+    override def onSuccess(f: () => Unit): BFun2BiHProc =
+      BFun2BiHProc(funs.map(g => 
+        (h1: Hyperedge,h2: Hyperedge) => 
+          if(g(h1,h2)) { 
+            f(); 
+            true 
+          } else false))
   }
 }
 
 package object transformation {
+  type BiHFilter = (Hyperedge, Hyperedge) => Boolean
  
   implicit def biHProc2HProc(p: BiHProcessor): HProcessor =
     BiHProc2HProc(p)
- 
-  implicit def partFun2BiHProc(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): Fun2BiHProc =
-    Fun2BiHProc(List(fun))
     
-  implicit def fun2BiHFilter(f: (Hyperedge, Hyperedge) => Boolean): BiHFilter =
-    new BiHFilter {
-      override def apply(h1: Hyperedge, h2: Hyperedge): Boolean =
-        f(h1, h2)
-    }
+  implicit def bFun2BiHProc(fun: (Hyperedge, Hyperedge) => Boolean): BFun2BiHProc =
+    BFun2BiHProc(List(fun))
+    
+  implicit def partFun2BiHProc(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BFun2BiHProc =
+    BFun2BiHProc(List((h1,h2) => fun.lift((h1,h2)).fold(false)(_ => true)))
     
   def transformablePairs(h1: Hyperedge, h2: Hyperedge): List[(Hyperedge, Hyperedge)] = {
     val Hyperedge(l1, src1, ds1) = h1
