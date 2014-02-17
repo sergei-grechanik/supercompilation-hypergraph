@@ -60,4 +60,9 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmdnot("--prove --integrity-check --test ./samples/total/add-comm-lemma")
   cmdnot("--prove --integrity-check --test --gen -a4 ./samples/small/let-bug")
   
+  // rules
+  cmd("--prove --integrity-check --test --total samples/rules/arith-square-of-sum-test")
+  cmd("--prove --integrity-check samples/rules/arith-square-of-sum")
+  cmd("--prove --integrity-check --test samples/rules/nrev-nat-1")
+  cmd("--prove samples/rules/even-dbl-acc-lemma-1")
 }

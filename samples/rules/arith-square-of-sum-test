@@ -1,0 +1,22 @@
+
+import: ../lib/nat (add, mul);
+
+rule: add x y = add y x;
+rule: add (add x y) z = add x (add y z);
+
+rule: mul x y = mul y x;
+rule: mul (mul x y) z = mul x (mul y z);
+
+rule: mul x (add y z) = add (mul x y) (mul x z);
+
+double x = add x x;
+square x = mul x x;
+
+prove: square (add x y)  = add (add (square x) (square y)) (double (mul x y));
+
+test: add (S (S (S Z))) (S (S Z));
+test: mul (S (S (S Z))) (S (S Z));
+test: square (add (S (S Z)) (S (S (S Z))));
+test: (\x y -> add (add (square x) (square y)) (double (mul x y))) (S (S Z)) (S (S (S Z)));
+
+

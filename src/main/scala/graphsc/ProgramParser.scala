@@ -14,6 +14,8 @@ case class ExprCall(fun: Expr, args: List[Expr]) extends Expr
 case class ExprCaseOf(expr: Expr, cases: List[(String, List[String], Expr)]) extends Expr
 case class ExprLet(expr: Expr, binds: List[(String, Expr)]) extends Expr
 
+/////////////////////////////////////////////////////////////////////////////////////////
+
 sealed trait GoalProp
 case class GoalPropEq(left: RenamedNode, right: RenamedNode) extends GoalProp
 case class GoalPropEqModuloRen(left: RenamedNode, right: RenamedNode) extends GoalProp
@@ -89,6 +91,27 @@ case class PropReturnsConstr(expr: Expr, constr: String) extends Prop {
 case class PropNamed(name: String) extends Prop {
   def mapExprs(f: Expr => Expr): PropNamed = this
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+sealed trait Rule {
+  def mapExprs(f: Expr => Expr): Rule
+  
+  def allExprs: List[Expr] = this match {
+    case RuleEq(l, r) => List(l, r)
+    case RuleGen(e) => List(e)
+  }
+}
+
+case class RuleEq(left: Expr, right: Expr) extends Rule {
+  def mapExprs(f: Expr => Expr): RuleEq = RuleEq(f(left), f(right))
+}
+
+case class RuleGen(expr: Expr) extends Rule {
+  def mapExprs(f: Expr => Expr): RuleGen = RuleGen(f(expr))
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 sealed trait Expr {
   def arity = this match {
@@ -207,16 +230,17 @@ sealed trait Expr {
     ExprCall(ExprLambda(psl.map(_._1), e), psl.map(_._2))
   }
   
-  def loadInto(g: NamedNodes, table: Map[String, Int] = Map()): RenamedNode = this match {
+  def loadInto(g: NamedNodes, vtable: Map[String, Int] = Map(), 
+               ftable: Map[String, RenamedNode] = Map()): RenamedNode = this match {
     case ExprLambda(vs, b) =>
       // Top-level lambdas can be loaded into a graph
       b.loadInto(g, vs.zipWithIndex.toMap)
     case ExprCall(ExprFun(f), as) =>
       val n = g.newNode(f, as.size)
       assert(n.arity <= as.size)
-      g.add(Let(), n :: as.map(_.loadInto(g, table)))
+      g.add(Let(), n :: as.map(_.loadInto(g, vtable, ftable)))
     case ExprCall(ExprConstr(c), as) =>
-      g.add(Construct(c), as.map(_.loadInto(g, table)))
+      g.add(Construct(c), as.map(_.loadInto(g, vtable, ftable)))
     case ExprCall(b, as) =>
       throw new Exception("An unknown function call cannot be loaded into the graph:\n" + this)
     case ExprConstr(c) =>
@@ -224,24 +248,28 @@ sealed trait Expr {
     case ExprFun(f) =>
       g(f)
     case ExprVar(v) =>
-      val i = table.getOrElse(v, throw new Exception("Unbound variable: " + this))
-      g.variable(i)
+      vtable.get(v) match {
+        case Some(i) => g.variable(i)
+        case None => ftable.getOrElse(v, throw new Exception("Unbound variable: " + this))
+      }
     case ExprUnused() =>
       g.unused
     case ExprCaseOf(expr, cases) =>
       val casenodes =
         cases.map{ case (c, vs, b) => 
           val vssize = vs.size
-          val newtable = table.mapValues(_ + vssize) ++ vs.zipWithIndex
-          ((c, vssize), b.loadInto(g, newtable)) }.sortBy(_._1)
-      g.add(CaseOf(casenodes.map(_._1)), expr.loadInto(g, table) :: casenodes.map(_._2))
+          val newvtable = vtable.mapValues(_ + vssize) ++ vs.zipWithIndex
+          val newftable = ftable.mapValues(n => n.renaming.mapVars(_ + vssize) comp n.node)
+          ((c, vssize), b.loadInto(g, newvtable, newftable)) }.sortBy(_._1)
+      g.add(CaseOf(casenodes.map(_._1)), expr.loadInto(g, vtable, ftable) :: casenodes.map(_._2))
     case ExprLet(expr, bnds) =>
       val bssize = bnds.size
-      val newtable = table.mapValues(_ + bssize) ++ bnds.map(_._1).zipWithIndex
-      val body = expr.loadInto(g, newtable)
+      val newvtable = vtable.mapValues(_ + bssize) ++ bnds.map(_._1).zipWithIndex
+      val newftable = ftable.mapValues(n => n.renaming.mapVars(_ + bssize) comp n.node)
+      val body = expr.loadInto(g, newvtable, newftable)
       val args = 
         (0 until body.arity).map(i => 
-          if(i < bssize) bnds(i)._2.loadInto(g, table)
+          if(i < bssize) bnds(i)._2.loadInto(g, vtable, ftable)
           else g.variable(i - bssize))
       g.add(Let(), body :: args.toList)
   }
@@ -264,6 +292,9 @@ sealed trait Expr {
   }
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
 case class Program(
     defs: Map[String, List[Expr]] = Map.empty,
     propdefs: Map[String, Prop] = Map.empty,
@@ -271,7 +302,8 @@ case class Program(
     roots: List[String] = Nil,
     residualize: List[Expr] = Nil,
     assumptions: List[Prop] = Nil,
-    prove: List[Prop] = Nil) {
+    prove: List[Prop] = Nil,
+    rules: List[Rule] = Nil) {
   
   // TODO: other components
   override def toString: String =
@@ -280,7 +312,8 @@ case class Program(
     "root: " + roots.mkString(", ") + ";\n" +
     residualize.map("residualize: " + _ + ";\n").mkString +
     assumptions.map("assume: " + _ + ";\n").mkString +
-    prove.map("prove: " + _ + ";\n").mkString
+    prove.map("prove: " + _ + ";\n").mkString +
+    rules.map("rules: " + _ + ";\n").mkString
     
   
   def ++(o: Program): Program =
@@ -293,7 +326,8 @@ case class Program(
         roots ++ o.roots,
         residualize ++ o.residualize,
         assumptions ++ o.assumptions,
-        prove ++ o.prove)
+        prove ++ o.prove,
+        rules ++ o.rules)
     
   // map all top-level expressions
   def mapExprs(f: Expr => Expr): Program = {
@@ -304,13 +338,15 @@ case class Program(
       roots,
       residualize.map(f),
       assumptions.map(_.mapExprs(f)),
-      prove.map(_.mapExprs(f)))
+      prove.map(_.mapExprs(f)),
+      rules.map(_.mapExprs(f)))
   }
   
   // all top-level expressions
   def allExprs: Iterable[Expr] =
       defs.values.flatten ++ propdefs.values.flatMap(_.allExprs) ++ tests ++ 
-      residualize ++ assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs)
+      residualize ++ assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs) ++
+      rules.flatMap(_.allExprs)
   
   def allSubExprs: Iterable[Expr] = allExprs.flatMap(_.allSubExprs)
       
@@ -331,7 +367,7 @@ case class Program(
           case e => e
         }
       }.view.force
-    Program(newdefs, propdefs, tests, roots, residualize, assumptions, prove)
+    Program(newdefs, propdefs, tests, roots, residualize, assumptions, prove, rules)
   }
   
   // allows writing f = g instead of f x = g x in props
@@ -391,9 +427,10 @@ case class Program(
     
     // Some functions may be undefined, so we should guess their arities
     val arities =
-      allSubExprs.collect{ case ExprCall(ExprFun(f), as) => (f, as.size) }
+      (allSubExprs.collect{ case ExprCall(ExprFun(f), as) => (f, as.size) }
         .groupBy(_._1).mapValues(_.map(_._2).max) ++ 
           defs.collect{ case (f, l@(_::_)) => (f, l.map(_.arity).min) }
+      ).withDefaultValue(0)
     
     def makeapps(f: Expr, as: List[Expr]) =
         (f /: as)((l,r) => ExprCall(ExprFun("@"), List(l, r)))
@@ -449,7 +486,7 @@ case class Program(
   // Factor out consts from the tests.
   def splitTests: Program = {
     val newtests = tests.map(_.factorConsts)
-    Program(defs, propdefs, newtests, roots, residualize, assumptions, prove)
+    Program(defs, propdefs, newtests, roots, residualize, assumptions, prove, rules)
   }
   
   def simplify(strict_decl: Boolean = true): Program = {
@@ -468,7 +505,7 @@ case class Program(
   def removeUnreferenced: Program = {
     val rexpr =
       propdefs.values.flatMap(_.allExprs) ++ tests ++ residualize ++
-      assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs)
+      assumptions.flatMap(_.allExprs) ++ prove.flatMap(_.allExprs) ++ rules.flatMap(_.allExprs)
     val funs = collection.mutable.Set[String]()
     val stack = collection.mutable.Stack[String](roots:_*)
     for(ExprFun(f) <- rexpr.flatMap(_.allSubExprs))
@@ -482,7 +519,8 @@ case class Program(
       }
     }
       
-    Program(defs.filterKeys(funs(_)), propdefs, tests, roots, residualize, assumptions, prove)
+    Program(defs.filterKeys(funs(_)), 
+        propdefs, tests, roots, residualize, assumptions, prove, rules)
   }
   
   def warnUndefined() {
@@ -499,7 +537,8 @@ case class Program(
     }
     val p = mapExprs(qual(null, _))
     Program(p.defs.map(p => q + "." + p._1 -> p._2), 
-      p.propdefs, p.tests, p.roots.map(q + "." + _), p.residualize, p.assumptions, p.prove)
+      p.propdefs, p.tests, p.roots.map(q + "." + _), 
+      p.residualize, p.assumptions, p.prove, p.rules)
   }
     
   def loadInto(g: NamedNodes) {
@@ -537,6 +576,8 @@ case class Program(
   }
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+
 class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = true) 
         extends RegexParsers {
   override val whiteSpace = """(\s|--.*\n|\{-(\s|.)*?-\})+""".r
@@ -565,7 +606,7 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
   
   def decl: Parser[Program] =
     definition | eqdecl | propdecl | testdecl | rootdecl | residdecl | assumedecl | provedecl |
-    decldecl | include
+    decldecl | include | ruledecl | gendecl
     
   def file = 
     ("\"[^\"]+\"" ^^ (s => s.substring(1,-1)) | """[^;\s]+""".r) ~ opt("as" ~> fname) ^^ { 
@@ -596,6 +637,12 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
   
   def provedecl: Parser[Program] = 
     ("prove:" ~> prop) ^^ (p => Program(prove = List(p)))
+  
+  def ruledecl: Parser[Program] = 
+    ("rule:" ~> propeq) ^^ { case PropEq(e1, e2) => Program(rules = List(RuleEq(e1, e2)))}
+  
+  def gendecl: Parser[Program] = 
+    ("generalize:" ~> repsep(expr, ",")) ^^ (es => Program(rules = es.map(RuleGen(_))))
     
   def rootdecl: Parser[Program] = 
     ("root:" ~> repsep(fname, ",")) ^^ (fs => Program(roots = fs))
@@ -610,11 +657,14 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
     ("declare:" ~> repsep(fname, ",")) ^^ (fs => Program(defs = fs.map(f => (f, Nil)).toMap))
     
   def prop: Parser[Prop] =
-    (expr <~ "=") ~ expr ^^ { case e1~e2 => PropEq(e1, e2) } |
+    propeq |
     (expr <~ "~") ~ expr ^^ { case e1~e2 => PropEqModuloRen(e1, e2) } |
     (expr <~ "^") ~ cname ^^ { case e~c => PropReturnsConstr(e, c) } |
     fname ^^ (n => PropNamed(n))
   
+  def propeq: Parser[PropEq] =
+    (expr <~ "=") ~ expr ^^ { case e1~e2 => PropEq(e1, e2) }
+    
   def expr: Parser[Expr] =
     caseof |
     let |

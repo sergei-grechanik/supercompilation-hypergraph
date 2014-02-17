@@ -49,7 +49,7 @@ trait Hypergraph {
   def afterGlue(kept: Node, removed: Node) {}
   def afterHyperedgeChanged(old: Hyperedge, cur: Hyperedge) {}
   
-  def log(s: String) {}
+  def log(s: => String) {}
   def nodeToString(n: RenamedNode): String = n.toString()
   def hyperedgeToString(h: Hyperedge): String = h.toString()
   
@@ -253,7 +253,7 @@ trait TheHypergraph extends Hypergraph {
     val rinv = h.source.renaming.inv
     val sourcenode_used = rinv comp h.used
     
-    assert(h.source.node.beingGlued || !h.label.isInstanceOf[Id])
+    assert(h.source.node.beingGlued || !h.label.isInstanceOf[Id] || h.source != h.dests.head)
     
     val res =
       if(h.source.node.isInstanceOf[FreeNode]) {
@@ -314,10 +314,17 @@ trait TheHypergraph extends Hypergraph {
     // a little note: if !src.isInvertible then the arity of src.node should be reduced
     // that is src is always invertible in some sense
     l match {
-      case Id() =>
+      case Id() if src.node != ds.head.node =>
         // glue nodes even if ds(0) is not invertible
         // because unspecified variables of ds(0) are really unused
         glueNodes(src, ds(0))
+      case Id() =>
+        // Nontrivial Id endohyperedges are ok, they represent commutativity
+        if(src != ds(0) && !src.node.outsMut.contains(h)) {
+          val newh = addHyperedgeSimple(h)
+          checkIntegrity()
+          onNewHyperedge(newh)
+        }
       case _ =>
         // If S e1 == S e2 then e1 == e2
         if(glueChildren(h))
@@ -631,7 +638,8 @@ trait TheHypergraph extends Hypergraph {
         for(h <- n.outs) {
           // Ids can be present in the hypergraph only during gluing
           assert(!h.label.isInstanceOf[Id] || 
-              (h.source.node.beingGlued && h.dests(0).node.beingGlued))
+              (h.source.node.beingGlued && h.dests(0).node.beingGlued) ||
+              (h.source ~~ h.dests.head && h.source != h.dests.head))
           assert(nodes(h.source.node))
           assert(h.dests.forall(n => nodes(n.node)))
           assert(h.dests.forall(n => n.node.gluedTo == null))

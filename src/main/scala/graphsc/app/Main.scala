@@ -82,12 +82,11 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
         with Transformations
         with BiTransformManager 
         with DepthTracker 
-        with Prettifier 
         with HyperTester
-        //with IntegrityCheckEnabled
-        //with OnTheFlyTesting
         with SelfLetAdder
         with AutoTransformer
+        with Triggers 
+        with Prettifier
         with HyperLogger
         with Visualizer {
   
@@ -175,6 +174,51 @@ object MainApp {
     prog.warnUndefined()
     prog.loadInto(graph)
     
+    val postponedActions = collection.mutable.Stack[NamedNodes => Unit]()
+    
+    // load rewriting rules
+    for(r <- prog.rules) r match {
+      case RuleEq(e1,e2) =>
+        graph.addPatternTrigger(e1, { (n,subst) =>
+          graph.log("-- rule trigger fired: " + 
+              graph.nodeToString(n) + " matches " + e1 + " -> " + e2)
+          logSubst(graph, subst)
+          
+          if(subst.values.exists(_.deref.getVarUnused == Some(-1)))
+            graph.log("-- discarded because one of the variables is unused")
+          else
+            postponedActions.push { g =>
+              g.trans("user-specified rule") {
+                graph.log("-- rewriting rule: " + 
+                    graph.nodeToString(n) + " matches " + e1 + " -> " + e2)
+                logSubst(graph, subst)
+                g.glue(List(n, e2.loadInto(g, Map(), subst)))
+              }
+            }
+          
+          graph.log("")
+        })
+      case RuleGen(e) =>
+        graph.addPatternTrigger(e, { (n,subst) =>
+          graph.log("-- generalize trigger fired: " + graph.pretty(n) + " matches " + e)
+          logSubst(graph, subst)
+          
+          if(subst.values.exists(_.deref.getVarUnused == Some(-1)))
+            graph.log("-- discarded because one of the variables is unused")
+          else
+            postponedActions.push { g =>
+              g.trans("user-specified generalization") {
+                graph.log("-- generalization: " + graph.nodeToString(n) + " matches " + e)
+                logSubst(graph, subst)
+                val bnds = subst.keys.map(s => s -> ExprVar(s)).toList
+                g.glue(List(n, ExprLet(e, bnds).loadInto(g, Map(), subst)))
+              }
+            }
+          
+          graph.log("")
+        })
+    }
+    
     // load props we want to prove as goals
     val goals =
       if(conf.prove())
@@ -220,7 +264,7 @@ object MainApp {
       performTraditionalSupercompilation(graph, conf, goals, resid)
       
     // Perform graph transformation
-    performTransformation(graph, conf, goals, checktask)
+    performTransformation(graph, conf, goals, checktask, postponedActions)
     
     // Perform residualization by testing
     if(conf.resid()) {
@@ -269,7 +313,8 @@ object MainApp {
   /////////////////////////////////////////////////////////////////////////////////////////
   
   def performTransformation(graph: MainHypergraphImplementation, conf: Conf, 
-                            goals: List[GoalProp], checktask_bool: () => Boolean) {    
+                            goals: List[GoalProp], checktask_bool: () => Boolean,
+                            postponedActions: collection.mutable.Stack[NamedNodes => Unit]) {    
     val maxarity = conf.arity()
     val maxdepth = conf.depth()
     val maxcodepth = conf.codepth()
@@ -318,10 +363,18 @@ object MainApp {
     
     // main loop
     while(!stop && generation < conf.generations()) {
-      if(conf.verbose())
-        System.err.println("Transforming...")
-        
       graph.changed = false
+      
+      if(postponedActions.nonEmpty) {
+        if(conf.verbose())
+          System.err.println("Applying rules...")
+        val list = postponedActions.toList
+        postponedActions.clear()
+        list.foreach(_(graph))
+      }
+      
+      if(conf.verbose())
+        System.err.println("Transforming...")  
           
       val trans =
         (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &

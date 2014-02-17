@@ -1,0 +1,34 @@
+
+even x =
+  case x of {
+    Z -> T;
+    S x -> odd x
+  };
+
+odd x =     
+  case x of {
+    Z -> F;
+    S x -> even x
+  };
+
+double x y =
+  case x of {
+    Z -> y;
+    S x -> double x (S (S y))
+  };
+
+true x =
+  case x of {
+    Z -> T;
+    S x -> true x
+  };
+
+test: even (double (S (S (S Z))) Z);
+
+generalize: even (double x (S y));
+
+prove: even (double (S x) (S y)) = let { y1 = S (S (S y)) } in even (double x y1);
+prove: odd (double (S x) y) = let { y1 = S (S y) } in odd (double x y1);
+
+prove: even (double x (S y)) = odd (double x y);
+

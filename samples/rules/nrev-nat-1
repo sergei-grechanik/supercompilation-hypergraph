@@ -1,0 +1,33 @@
+
+add x y =
+  case x of {
+    Z -> y;
+    S x -> S (add x y)
+  };
+
+nrev x =
+  case x of {
+    Z -> Z;
+    S x -> add (nrev x) (S Z)
+  };
+  
+rev x = revTo x Z;
+
+revTo x y =
+  case x of {
+    Z -> y;
+    S x -> revTo x (S y)
+  };
+
+test: nrev (S (S (S (S (S (S (S (S (S (S (S (S Z))))))))))));
+test: rev (S (S (S Z)));
+test: revTo (S (S (S Z))) (S Z);
+
+
+prove: nrev = rev;
+
+generalize: add (nrev x) y;
+
+fun2 x y = add (nrev x) (S y);
+
+residualize: nrev;

@@ -18,8 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("--reformat hipspec ./samples/add-assoc")
-    //cmd("--prove -v  --test   -a10 -d10 -c10 --nogen ./samples/quad-idle")
+    cmd("-pv samples/rules/arith")
   }
 
 }

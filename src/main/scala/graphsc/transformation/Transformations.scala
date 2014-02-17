@@ -43,7 +43,7 @@ trait Transformations extends Hypergraph {
   }
   
   def transDrive =
-    letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
+    anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
   
   def transNone = BFun2BiHProc(Nil)
   
@@ -53,7 +53,17 @@ trait Transformations extends Hypergraph {
   
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
-    
+
+  def anyId: (Hyperedge, Hyperedge) => Boolean = {
+    case (h1@Hyperedge(l1, src1, es1),
+          h2@Hyperedge(Id(), src2, List(e2))) =>
+      trans("anyId", h1, h2) {
+        add(l1, src1, es1.map(e => if(e.plain == src2) e.renaming comp e2 else e))
+      }
+      true
+    case _ => false
+  }
+  
   // let x = e in x  ->  e
   def letVar: (Hyperedge, Hyperedge) => Boolean = {
     case (h1@Hyperedge(Let(), src1, f1 :: es1),

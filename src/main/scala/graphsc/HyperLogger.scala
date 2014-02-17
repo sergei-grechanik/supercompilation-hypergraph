@@ -4,7 +4,7 @@ trait HyperLogger extends Prettifier {
   def enableLogging = true
   var logshift = 0
   
-  override def log(s: String) {
+  override def log(s: => String) {
     if(enableLogging) {
       val ind = List.fill(logshift)("  ").mkString("")
       println(ind + s.replace("\n", "\n" + ind))

@@ -11,7 +11,7 @@ case class PostFilter(graph: Hypergraph, filter: Hyperedge => Boolean) extends H
     buffer += h
   }
   
-  override def log(s: String) { graph.log(s) }
+  override def log(s: => String) { graph.log(s) }
   override def nodeToString(n: RenamedNode): String = graph.nodeToString(n)
   override def hyperedgeToString(h: Hyperedge): String = graph.hyperedgeToString(h)
   override def logShift() { graph.logShift() }

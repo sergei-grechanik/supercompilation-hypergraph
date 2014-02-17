@@ -106,4 +106,11 @@ package object transformation {
     
     pairs
   }
+  
+  
+  type Subst = Map[String, RenamedNode]
+  
+  def logSubst(g: Hypergraph, subst: Subst) {
+    for((s,r) <- subst) g.log("--   " + s + " -> " + g.nodeToString(r))
+  }
 }
