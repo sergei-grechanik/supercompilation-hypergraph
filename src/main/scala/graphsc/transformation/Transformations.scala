@@ -44,12 +44,18 @@ trait Transformations extends Hypergraph {
   
   def transDrive =
     anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
+    
+  def transDrive2 =
+    //anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick & letCaseOf2All
+    anyId & letLet & caseGen & letOther & caseVar & caseTick &
+    letCaseOf2All & /*letCaseOfLetCaseOf2 &*/ letCaseOfBranches
+    
   
   def transNone = BFun2BiHProc(Nil)
   
   
-  def transTotal = transDrive & caseConstrTotal & caseCaseSwap(true)
-  def transUntotal = transDrive & caseCaseSwap(false)
+  def transTotal = caseConstrTotal & caseCaseSwap(true)
+  def transUntotal = partFun2BiHProc(caseCaseSwap(false))
   
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -233,6 +239,162 @@ trait Transformations extends Hypergraph {
           add(Tick(), src1, List(caseof))
         }
       }
+  }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  
+  // Specialized versions of letCaseOf combined with some caseOf transformations
+  
+  def letCaseOf2(pat: PartialFunction[Label, Unit])
+                (h1: Hyperedge, h2: Hyperedge): Boolean = (h1,h2) match {
+    case (Hyperedge(Let(), src1, e1 :: fs1),
+          Hyperedge(CaseOf(cases), src2, e2 :: fs2)) if e1.plain == src2 && e2.node.isVar =>
+      val Some(v) = (e1.renaming comp e2).getVar
+      var res = false
+      for(h3@Hyperedge(l, _, _) <- fs1(v).node.outs if pat.isDefinedAt(l))
+        res ||= letCaseOfDoStuff(h1, h2, h3, v)
+      res
+    case (Hyperedge(Let(), src1, e1 :: fs1),
+          Hyperedge(l, src2, _)) if pat.isDefinedAt(l) && e1.plain != src2 =>
+      val v = fs1.indexWhere(_.plain == src2)
+      var res = false
+      for(h3@Hyperedge(CaseOf(_), src2, e2 :: _) <- e1.node.outs 
+          if (e1.renaming comp src2.renaming.inv comp e2).getVar == Some(v))
+        res ||= letCaseOfDoStuff(h1, h3, h2, v)
+      res
+    case _ => false
+  }
+  
+  def letCaseOf2All = letCaseOf2{ case _ => } _
+  def letCaseOf2Reduce = letCaseOf2{ case Construct(_) => } _
+  def letCaseOf2Unused = letCaseOf2{ case Unused() => } _
+  def letCaseOf2CaseOf = letCaseOf2{ case CaseOf(_) => } _
+  def letCaseOf2Var = letCaseOf2{ case Var() => } _
+  
+  private final def letCaseOfDoStuff(
+      hlet: Hyperedge, hcase: Hyperedge, hstuff: Hyperedge, v: Int): Boolean = hstuff.label match {
+    case Construct(c) =>
+      trans("letCaseOfReduce", hlet, hcase, hstuff) {
+        val Some(((_,n),d)) =
+          (hcase.label.asInstanceOf[CaseOf].cases zip hcase.dests.tail)
+            .find(p => p._1._1 == c && p._1._2 == hstuff.dests.size)
+        val vren = hlet.dests(v + 1).renaming
+        val bnds = hstuff.dests.map(vren comp hstuff.source.renaming.inv comp _)
+        val branch = (hlet.dests(0).renaming comp hcase.source.renaming.inv).shift(n) comp d
+        add(Let(), hlet.source, branch :: (bnds ++ hlet.dests.tail))
+      }
+      true
+    case Unused() =>
+      trans("letCaseOfUnused", hlet, hcase, hstuff) {
+        add(Unused(), hlet.source, Nil)
+      }
+      true
+    case Var() =>
+      letCaseOf(hlet, hcase.source.renaming.inv comp hcase)
+      true
+    case CaseOf(cases2) if hstuff.dests(0).node.isVar =>
+      trans("letCaseOfCaseOf", hlet, hcase, hstuff) {
+        val vren = hlet.dests(v + 1).renaming comp hstuff.source.renaming.inv
+        val newbranches2 =
+          for((g,sh) <- hstuff.dests.tail zip hstuff.shifts.tail) yield {
+            val newbnds = for((b,i) <- hlet.dests.tail.zipWithIndex) yield {
+              if(i == v) vren.shift(sh) comp g
+              else b.renaming.mapVars(_ + sh) comp b.node
+            }
+            add(Let(), hlet.dests(0) :: newbnds)
+          }
+        val newvar2 = vren comp hstuff.dests(0)
+        add(CaseOf(cases2), hlet.source, newvar2 :: newbranches2 )
+      }
+      true
+    case _ => false
+  }
+  
+  // caseCase for two let-caseof combinations
+  // let ... x = let in case y of {} ... in case x of {}  ->
+  //    let ... let ... in case x of {} ... in case y of ...
+  def letCaseOfLetCaseOf2: (Hyperedge, Hyperedge) => Boolean = (h1,h2) =>
+    (h1.label,h2.label) match {
+      case (Let(), Let()) if h1.dests(0).plain != h2.source =>
+        val e1 = h1.dests(0)
+        var res = false
+        for(hc1@Hyperedge(CaseOf(_), src3, e3 :: _) <- e1.node.outs;
+            v <- (e1.renaming comp src3.renaming.inv comp e3).getVar;
+            if h1.dests(v + 1).plain == h2.source;
+            hc2@Hyperedge(CaseOf(_), _, e4 :: _) <- h2.dests(0).node.outs; 
+            if e4.node.isVar)
+          res ||= letCaseOfLetCaseOf2DoStuff(h1, hc1, v, h2, hc2)
+        res
+      case (Let(), CaseOf(_)) if h1.dests(0).plain == h2.source =>
+        val Some(v) = (h1.dests(0).renaming comp h2.dests(0)).getVar
+        var res = false
+        for(hl2@Hyperedge(Let(), _, e3 :: _) <- h1.dests(v + 1).node.outs;
+            hc2@Hyperedge(CaseOf(_), _, e4 :: _) <- e3.node.outs; 
+            if e4.node.isVar)
+          res ||= letCaseOfLetCaseOf2DoStuff(h1, h2, v, hl2, hc2)
+        for(hl1@Hyperedge(Let(), _, e3 :: es) <- h1.source.node.ins; if !(e3 ~~ h1.source);
+            hc1@Hyperedge(CaseOf(_), src, e4 :: _) <- e3.node.outs;
+            v <- (e3.renaming comp src.renaming.inv comp e4).getVar;
+            if es(v) ~~ h1.source)
+          res ||= letCaseOfLetCaseOf2DoStuff(hl1, hc1, v, h1, h2)
+        res
+      case _ => false
+    }
+  
+  private final def letCaseOfLetCaseOf2DoStuff(
+      hlet1: Hyperedge, hcase1: Hyperedge, v: Int, 
+      hlet2: Hyperedge, hcase2: Hyperedge): Boolean = {
+    if(hlet2.source.deref.getVarUnused.isEmpty) {
+      trans("letCaseOfLetCaseOf2", hlet1, hcase1, hlet2, hcase2) {
+        val m = hlet2.dests.tail.size
+        val ren2 = hlet2.dests(0).renaming comp hcase2.source.renaming.inv
+        
+        val newbranches =
+          for((g,sh) <- (hcase2.dests zip hcase2.shifts).tail) yield {
+            val newfs = 
+              for((f,i) <- hlet1.dests.tail.zipWithIndex) yield {
+                if(i == v) ren2.shift(sh) comp g
+                else f.renaming.mapVars(_ + sh + m) comp f.node
+              }
+            add(Let(), hlet1.dests(0) :: newfs)
+          }
+        
+        val newcase2 = add(hcase2.label, (ren2 comp hcase2.dests(0)) :: newbranches)
+        
+        val origvars = (0 until hlet1.source.arity).map(variable(_))
+        val ren1 = hlet1.dests(v + 1).renaming comp hlet2.source.renaming.inv
+        val newes = hlet2.dests.tail.map(ren1 comp _)
+        
+        add(Let(), hlet1.source, newcase2 :: newes ++ origvars)
+      }
+      true
+    } else
+      false
+  }
+  
+  // Push let into branches partially
+  // let ... x = stuff ... in case x of { C -> f }  ->
+  //    let x = stuff in case x of { C -> let ... in f }
+  def letCaseOfBranches: (Hyperedge, Hyperedge) => Boolean = {
+    case (h1@Hyperedge(Let(), src1, f :: es),
+          h2@Hyperedge(CaseOf(cases), src2, g :: hs)) if f.plain == src2 && g.node.isVar =>
+      val Some(v) = (f.renaming comp g).getVar
+        if(es(v).getVarUnused != Some(-1)) {
+        trans("letCaseOfBranches", h1, h2) {
+          val newhs = (cases zip hs).map { case ((_,n),h) =>
+              val newes = es.map(e => e.renaming.mapVars(_ + n + 1) comp e.node)
+              val ys = (0 until n).map(variable(_)).toList 
+              add(Let(), (f.renaming.shift(n) comp h) :: ys ++ newes)
+            }
+          val origvars = (0 until src1.arity).map(variable(_)).toList
+          val newcaseof = add(CaseOf(cases), variable(0) :: newhs)
+          add(Let(), src1, newcaseof :: es(v) :: origvars)
+        }
+      true
+      } else
+        false
+    case _ => false
   }
   
   /////////////////////////////////////////////////////////////////////////////

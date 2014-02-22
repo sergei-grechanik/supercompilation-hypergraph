@@ -48,8 +48,10 @@ package transformation {
   case class BFun2BiHProc(funs: List[(Hyperedge, Hyperedge) => Boolean]) 
       extends BiHProcessor {
     override def apply(h1o: Hyperedge, h2o: Hyperedge) {
-      for((h1,h2) <- transformablePairs(h1o, h2o))
-        funs.foreach(_(h1,h2))
+      for(f <- funs)
+        for((h1,h2) <- transformablePairs(h1o.deref, h2o.deref))
+          f(h1,h2)
+          //funs.foreach(_(h1,h2))
     }
     
     def &(other: BFun2BiHProc): BFun2BiHProc =

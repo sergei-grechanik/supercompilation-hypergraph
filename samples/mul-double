@@ -1,3 +1,6 @@
 import: lib/nat (mul, double);
 
+test: double (mul (S (S Z)) (S (S (S Z))));
+test: mul (S (S (S Z))) (double (S (S (S Z))));
+
 prove: mul x (double y) = double (mul x y);

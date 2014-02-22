@@ -135,6 +135,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
           case (e,i) => "b" + i + "b = " + indent1(e, "      ")
         }
         val in = indent1(prettyfun(h.dests(0)), "   ")
+        def args1(i: Int) = if(i < 0 || i >= args.size) "<ERROR>" else args(i)
         
         val letres =
           "let\n" + indent(vars.mkString(";\n"), "  ") + "\nin " + 
@@ -142,7 +143,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
         
         lazy val callres =
           "v([0-9]+)v".r.replaceAllIn(in, m => "(" + 
-              java.util.regex.Matcher.quoteReplacement(args(m.group(1).toInt)) + ")" )
+              java.util.regex.Matcher.quoteReplacement(args1(m.group(1).toInt)) + ")" )
             
         if(args.forall(!_.contains("\n")) && callres.size < letres.size && !preserveLets)
           callres

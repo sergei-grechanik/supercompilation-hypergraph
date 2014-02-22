@@ -43,6 +43,9 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Merge nodes by iso even if that won't lead to more node merging")
   val onlyRequested = opt[Boolean](noshort = true, 
       descr = "Merge by iso only nodes specified in props")
+  val drive2 = opt[Boolean](noshort = true, descr = "Use the second set of driving rules")
+  val nobuf = opt[Boolean](noshort = true, 
+      descr = "Disable bufferization of new edges, may lead to unstable behaviour")
   
   val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
   val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -320,14 +323,15 @@ object MainApp {
     val maxcodepth = conf.codepth()
     
     // This buffer stores all hyperedges that will be added to the graph
-    val buf = graph//HyperBuffer(graph)
+    val buffer = HyperBuffer(graph)
+    val bufgraph = if(conf.nobuf()) graph else buffer
     // This buffer stores hyperedges for each transformation and makes sure
     // that no hyperedge exceeds the maximal arity
     val tr =
       if(conf.cheat())
-        new PostFilter(buf, h => h.arity <= maxarity) with Transformations
+        new PostFilter(bufgraph, h => h.arity <= maxarity) with Transformations
       else
-        new PostFilter(buf, h => h.used.size <= maxarity) with Transformations
+        new PostFilter(bufgraph, h => h.used.size <= maxarity) with Transformations
       
     
     var generation = 0
@@ -378,10 +382,11 @@ object MainApp {
           
       val trans =
         (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
+        (if(conf.drive2()) tr.transDrive2 else tr.transDrive) &
         (if(conf.total()) tr.transTotal else tr.transUntotal) &
         (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone)
       graph.transform(trans)
-      //buf.commit()
+      buffer.commit()
       
       if(conf.verbose())
         System.err.println("Pairs processed: " + graph.lastPairsProcessed)
