@@ -167,13 +167,13 @@ trait Triggers extends Hypergraph with NamedNodes {
       case ExprCall(ExprConstr(c), as) =>
         as.zipWithIndex.find { case (a,i) =>
           def fun(n: RenamedNode, subst: Subst) {
-            // n = a(map)
+            // n = a(subst)
             log("-- " + nodeToString(n) + " matches " + a)
             logSubst(this, subst)
             
             addInTrigger(n.node, Construct(c), as.size, i, fun1)
             def fun1(h: Hyperedge) {
-              // h.dests(i) = ren comp n = a(ren comp map)
+              // h.dests(i) = ren comp n = a(ren comp subst)
               val ren = h.dests(i).renaming comp n.deref.renaming.inv
               val pairs = for((p,j) <- (h.dests zip as).zipWithIndex; if j != i) yield p
               
@@ -187,9 +187,63 @@ trait Triggers extends Hypergraph with NamedNodes {
           }
           addPatternTriggerMB(a, fun)
         }.isDefined
+      case ExprCaseOf(e0, cases_unsorted) =>
+        val cases = cases_unsorted.sortBy(_._1)
+        val cases1 = cases.map(x => (x._1, x._2.size)) 
+        val es = ((Nil, e0) :: cases.map(x => (x._2, x._3))).zipWithIndex
+        es.find { case ((vs,e),i) =>
+          def fun(n: RenamedNode, subst: Subst) {
+            // n = e(subst)
+            log("-- " + nodeToString(n) + " matches " + e)
+            logSubst(this, subst)
+            
+            val vsnodes = for((v,i) <- vs.zipWithIndex; r <- subst.get(v)) yield (r,i)
+            addDifferentVarsTrigger(vsnodes.map(_._1), fun1)
+            def fun1() {
+              // Here we know that subst(vs) are different variables 
+              addInTrigger(n.node, CaseOf(cases1), cases1.size + 1, i, fun2)
+              def fun2(h: Hyperedge) {
+                // h.dests(i) = ren comp n = e(ren comp subst)
+                val ren = h.dests(i).renaming comp n.deref.renaming.inv
+                
+                val varlen = vs.size
+                val subst_no_vs = (subst -- vs).mapValues(x => (ren comp x).shiftVars(-varlen))
+                // Make sure that subst values don't use bound variables and
+                // that vsnodes are variables from 0 to varlen
+                if(subst_no_vs.forall(_._2.used.forall(_ >= varlen)) &&
+                   vsnodes.forall(p => (ren comp p._1).getVar.get == p._2)) {
+                  log("-- " + nodeToString(h.dests(i)) + " matches " + e)
+                  log("-- And may be a branch of " + expr)
+                  log("-- common subst:")
+                  logSubst(this, subst_no_vs)
+                  // I was too lazy to write whatever code should go here, 
+                  // so I just use an out trigger
+                  addOutPatternTrigger(h.source.deref, expr, f, subst_no_vs)
+                } else {
+                  log("-- " + nodeToString(n) + " matches " + e)
+                  log("-- But can't be a branch of " + expr)
+                  logSubst(this, subst)
+                }
+              }
+            }
+          }
+          addPatternTriggerMB(e, fun)
+        }.isDefined
       case _ =>
         false
     }
+  }
+  
+  def addDifferentVarsTrigger(list: List[RenamedNode], f: () => Unit): Unit = list match {
+    case Nil => f()
+    case v::vs=>
+      if(!vs.contains(v)) {
+        addDifferentVarsTrigger(vs, fun)
+        def fun() {
+          if(!vs.exists(v ~=~ _))
+            addOutTrigger(v.deref.node, Var(), 0, _ => f())
+        }
+      }
   }
   
   def addOutPatternTriggers(list: List[(RenamedNode, Expr)], 
@@ -206,6 +260,7 @@ trait Triggers extends Hypergraph with NamedNodes {
   def addOutPatternTrigger(node: RenamedNode, expr: Expr, 
         f: (RenamedNode, Subst) => Unit, subst: Subst = Map()): Boolean = {
     log("-- addOutPatternTrigger " + nodeToString(node) + " =? " + expr)
+    logSubst(this, subst)
     expr match {
       case ExprConstr(c) => addOutPatternTrigger(node, ExprCall(expr, Nil), f, subst)
       case ExprFun(name) => 
@@ -262,6 +317,50 @@ trait Triggers extends Hypergraph with NamedNodes {
           def fun1(lst: List[RenamedNode], subst: Subst) {
             // h.source = name(as(subst))
             log("-- " + nodeToString(h.source) + " matches " + expr)
+            logSubst(this, subst)
+            f(node.deref, subst)
+          }
+        }
+        true
+      case ExprCaseOf(e0, cases_unsorted) =>
+        val cases = cases_unsorted.sortBy(_._1)
+        val cases1 = cases.map(x => (x._1, x._2.size)) 
+        val es = (Nil, e0) :: cases.map(x => (x._2, x._3))
+        addOutTrigger(node.deref.node, CaseOf(cases1), cases1.size + 1, fun)
+        def fun(h: Hyperedge) {
+          // node = case e0(subst) of ... = ren comp h.source
+          val ren = node.deref.renaming comp h.source.deref.renaming.inv
+          
+          val actions =
+            for((d, (vs, e)) <-(ren comp h).dests zip es) yield { 
+              (next: Subst => Unit, subst: Subst) =>
+                val sh = vs.size
+                addOutPatternTrigger(d, e, fun1, 
+                    subst.mapValues(_.shiftVars(sh)) ++ 
+                      vs.zipWithIndex.toMap.mapValues(variable(_)))
+                def fun1(r: RenamedNode, newsubst: Subst) {
+                  val newsubst_no_vs = newsubst -- vs
+                  // Make sure that newsubst values don't use bound variables
+                  if(newsubst_no_vs.forall(_._2.used.forall(_ >= sh))) {
+                    val ultimate_newsubst = 
+                      subst ++ newsubst_no_vs.mapValues(_.shiftVars(-sh))
+                    log("-- " + nodeToString(r) + " matches " + e)
+                    log("-- which is a branch of " + expr + " with ultimate subst:")
+                    logSubst(this, ultimate_newsubst)
+                    next(ultimate_newsubst)
+                  } else {
+                    log("-- " + nodeToString(r) + " matches " + e)
+                    log("-- which could be a branch of " + expr)
+                    log("-- but it uses bound variables in a wrong way")
+                    logSubst(this, newsubst)
+                  }
+                }
+            }
+          
+          (actions :\ fun2 _)((f,g) => f(g,_))(subst)
+          
+          def fun2(subst: Subst) {
+            log("-- " + nodeToString(node) + " matches " + expr)
             logSubst(this, subst)
             f(node.deref, subst)
           }

@@ -142,7 +142,10 @@ case class RenamedNode(renaming: Renaming, node: Node) {
         
   def isInvertible =
     node.used.size == used.size
-        
+    
+  def shiftVars(n: Int): RenamedNode =
+    renaming.mapVars(_ + n) comp node
+    
   def getVar: Option[Int] =
     if(node.isVar && renaming(0) != -1)
       Some(renaming(0))
