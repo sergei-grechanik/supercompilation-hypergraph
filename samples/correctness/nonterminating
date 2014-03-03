@@ -1,0 +1,28 @@
+
+f x y = 
+    case x of {
+        S x -> f x (S y);
+        Z -> 
+            case y of {
+                S y -> f (S Z) y;
+                Z -> Z;
+            };
+    };
+
+g x y = 
+    case x of {
+        S x -> g x (S y);
+        Z -> 
+            case y of {
+                S y -> g (S Z) y;
+                Z -> Z;
+            };
+    };
+
+--import: lib/nat (add, mul);
+
+--assume: f Z (S y) = mul (S Z) (S (S Z));
+--assume: g Z (S y) = mul (S Z) (S Z);
+
+prove: f = g;
+--prove: S Z = Z;

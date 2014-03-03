@@ -1,0 +1,15 @@
+
+f x y =
+  case x of {
+    S x1 -> f x1 y;
+    Z -> S (f y (S y));
+  };
+
+g x y =
+  case x of {
+    S x1 -> g x1 y;
+    Z -> S (g y (S y));
+  };
+
+prove: f = g;
+

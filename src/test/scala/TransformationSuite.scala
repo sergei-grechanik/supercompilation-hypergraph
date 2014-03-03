@@ -69,13 +69,13 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
     info(nodes1 + " nodes, " + hyperedges1 + " hyperedges")
     
     if(residuate) {
-      val g_filtered = new TheHypergraph with IntegrityCheckEnabled with TransformManager
-      val tf = new TerminationFilter(g_filtered)
-      val Some(n_filtered) = tf(main)
-      assert(HyperRunner.run(n_filtered, input) === res)
-      
-      info("After ''residualization'' " + g_filtered.allNodes.size + 
-            " nodes, " + g_filtered.allHyperedges.size + " hyperedges")
+//      val g_filtered = new TheHypergraph with IntegrityCheckEnabled with TransformManager
+//      val tf = new TerminationFilter(g_filtered)
+//      val Some(n_filtered) = tf(main)
+//      assert(HyperRunner.run(n_filtered, input) === res)
+//      
+//      info("After ''residualization'' " + g_filtered.allNodes.size + 
+//            " nodes, " + g_filtered.allHyperedges.size + " hyperedges")
     }
       
     info("")

@@ -1,0 +1,16 @@
+-- It's productive, so...
+
+zip xs ys =
+  case xs of {
+    N -> ys;
+    C x xs1 -> C x (zip ys xs1);
+  };
+
+zip1 xs ys =
+  case xs of {
+    N -> ys;
+    C x xs1 -> C x (zip1 ys xs1);
+  };
+
+prove: zip = zip1;
+

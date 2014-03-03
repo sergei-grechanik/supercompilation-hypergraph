@@ -45,6 +45,7 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --test -c10 -d10 -a10 ./samples/or-even-odd")
   cmd("--prove --test -c10 -d10 -a10 ./samples/orElse-even-odd")
   cmd("--prove --test -c10 -d10 -a10 ./samples/orElseT-even-odd")
+  cmd("--prove --integrity-check samples/shifted-cycle")
   
   // total
   cmd("--prove --integrity-check --test --total ./samples/total/construct-caseof")
@@ -65,4 +66,11 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check samples/rules/arith-square-of-sum")
   cmd("--prove --integrity-check --test samples/rules/nrev-nat-1")
   cmd("--prove samples/rules/even-dbl-acc-lemma-1")
+  
+  // correctness checker
+  cmd("--prove --integrity-check samples/correctness/ackermann")
+  cmd("--prove --integrity-check samples/correctness/zip")
+  cmd("--prove --integrity-check samples/correctness/fading-pulse")
+  cmdnot("--prove --integrity-check samples/correctness/eatswap")
+  cmdnot("--prove --integrity-check -g5 samples/correctness/nonterminating")
 }

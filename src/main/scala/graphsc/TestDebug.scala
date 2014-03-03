@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-pv samples/rules/arith")
+    cmd("-pv samples/add-assoc")
   }
 
 }

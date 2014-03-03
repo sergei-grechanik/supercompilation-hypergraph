@@ -462,45 +462,44 @@ object MainApp {
           for(ren <- if(!(l ~~ r)) List(ren1) else likenesscalc.viablePermutations(l)) {
             val lpretty = l.prettyDebug
             val rpretty = r.prettyDebug
-            if(conf.verbose()) {
-//              System.err.println("==Trying to prove== likeness: " + i + " idx: " + j)
-//              System.err.println("== reverse likeness: " + likenesscalc.reverseLikeness(l, r))
-//              System.err.println(lpretty)
-//              System.err.println("=======================" + ren)
-//              System.err.println(rpretty)
-//              System.err.println("=======================\n")
-              //System.err.println(eq)
-            }
+
             val eq = eprover.prove(l.deref.node, r.deref.node, ren)
             if(eq != None) {
-              if(conf.verbose()) {
-                System.err.println("==These two are equal== likeness: " + i + " idx: " + j)
-                //System.err.println("== reverse likeness: " + likenesscalc.reverseLikeness(l, r))
-                System.err.println(lpretty)
-                System.err.println("=======================" + eq.get.renaming)
-                System.err.println(rpretty)
-                System.err.println("=======================\n")
-                //System.err.println(eq)
-//                def printstuff(t: EqProofTree) {
-//                  System.err.println("---- reverse likeness: " + 
-//                    likenesscalc.reverseLikeness(t.nodes._1, t.nodes._2))
-//                  System.err.println(t.nodes._1.prettyDebug)
-//                  System.err.println("----------------------" + eq.get.renaming)
-//                  System.err.println(t.nodes._2.prettyDebug)
-//                  System.err.println("----------------------\n")
-//                  t.out.foreach(_._3.foreach(printstuff(_)))
-//                }
-//                printstuff(eq.get)
+              try {
+                val proof = eq.get.propagateRenamings
+                val correct = proof.checkCorrectness
+                
+                if(conf.verbose()) {
+                  if(correct)
+                    System.err.println("==These two are equal== likeness: " + i + " idx: " + j)
+                  else
+                    System.err.println("==Correctness check failed== likeness: " + i + " idx: " + j)
+                  System.err.println(lpretty)
+                  System.err.println("=======================" + eq.get.renaming)
+                  System.err.println(rpretty)
+                  System.err.println("=======================\n")
+                }
+                
+                if(correct) {
+                  graph.log("-- Proved by isomorphism")
+                  eq.get.toLog(graph)
+                  graph.log("")
+                  eq.get.performGluing(graph)
+                  val st = eprover.stats
+                  eprover = new EquivalenceProver(graph, likenesscalc)
+                  eprover.stats = st
+                  //likenesscalc.cached.clear()
+                  checktask()
+                }
+              } catch {
+                case _: NoSuchElementException =>
+                  // Sometimes renaming propagation fails. Actually this is a bug somewhere
+                  // in the eqprover, but I don't have time for this, so just ignore
+                  // TODO: fix this, can be observed on exp-idle
+                  graph.log("-- Renaming propagation failed:")
+                  eq.get.toLog(graph)
+                  graph.log("")
               }
-              graph.log("-- Proved by isomorphism")
-              eq.get.toLog(graph)
-              graph.log("")
-              eq.get.performGluing(graph)
-              val st = eprover.stats
-              eprover = new EquivalenceProver(graph, likenesscalc)
-              eprover.stats = st
-              //likenesscalc.cached.clear()
-              checktask()
             }
           }
         }
@@ -522,16 +521,6 @@ object MainApp {
       stats()
       gendump()
       checktask()
-      
-//      println("hypers: " + graph.allHyperedges.size)
-//      println("Counting circuits...")
-//      val circs =
-//        Circuit.circuits[GuardedOrStructural](graph)
-//            .map(Circuit.norm(_)).map(c => (c.head._1, Circuit.backbone(c)))
-//      println("Circuits: " + circs.length)
-//      val mostcomm = circs.groupBy(_._2).maxBy(_._2.length)
-//      println("Most common backbone: " + mostcomm._1 + " " + mostcomm._2.length)
-//      println(mostcomm._2.map(x => x._1.prettyDebug).mkString("\n"))
       
       if(!graph.changed)
         stop = true
@@ -589,26 +578,6 @@ object MainApp {
         
       Console.withOut(output)(
         Reformat(ToProgram(graph, to_resid, res), "speed-benchmark"))
-      
-//      for((n,h) <- res.hyperedges 
-//          if !n.isVar && !n.definingHyperedge.exists(
-//                            h => h.label.isInstanceOf[Construct] && h.dests.isEmpty )) {
-//        println("depth: " + graph.depth(h.source) + " codepth: " + graph.codepth(h.source))
-//        println("maxcost: " + (-1.0 :: graph.runCache(h.source.node).map(_._2.cost).toList).max)
-////        for((a,r) <- graph.runCache(h.source.node)) {
-////          println(a.mkString(" ") + "\t" + r.cost)
-////        }
-//        println(graph.nodeFunName(h.source) + " =\n" +
-//            indent(graph.prettyHyperedge(h, graph.nodeFunName), "  ") + ";\n")
-//      }
-//      for((name,n) <- graph.namedNodes if res.nodes.contains(n.deref.node)) {
-//        val dern = n.deref
-//        val r = graph.nodeFunName(dern)
-//        val l = name + graph.prettyRename(dern.renaming,
-//                    (0 until dern.node.arity).map("v" + _ + "v").mkString(" ", " ", ""))
-//        if(l != r)
-//          println(l + " = " + r + ";")
-//      }
     }
   }
 

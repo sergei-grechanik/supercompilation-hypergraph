@@ -1,10 +1,11 @@
 package graphsc
 package residualization
 
-class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
-    (implicit cc: CorrectnessChecker[S]) {
+class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator) {
+  import CorrectnessChecker._
   import likenesscalc._
   
+  type S = RSMatrix
   type Hist = List[((Node, S), (Node, S))]
   type HistSet = Set[((Node, S), (Node, S))]
   
@@ -74,7 +75,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
       renid.map(EqProofTree(_, (l1,r1)))
     else if(lind != -1 && rind != -1) {
       hist1.find(p => p._1._1 == l1 && p._2._1 == r1) match {
-        case Some(((_, lsafety), (_, rsafety))) if cc.safe(lsafety) && cc.safe(rsafety) =>
+        case Some(((_, lsafety), (_, rsafety))) if lsafety.locallySafe && rsafety.locallySafe =>
           // I thought we should add some variables to ren (if they guarantee correctness)
           // But now I think they will be there if they guarantee correctness.
           Some(EqProofTree(ren1, (l1,r1)))
@@ -161,12 +162,15 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator)
     for((like, lh, rh, ren1) <- sorted_pairs; if result == None) {
       subtrees = Nil
       
-      val newhisthead = ((l, cc(l.deref)), (r, cc(r.deref)))
-      val newss1 =
-        (newhisthead :: hist).map(p => cc.through(p._1._2, lh)).transpose
-      val newss2 = 
-        (newhisthead :: hist).map(p => cc.through(p._2._2, rh)).transpose
+      val lh_matrices = hyperedgeToMatrix(lh)
+      val rh_matrices = hyperedgeToMatrix(rh)
       
+      val newhisthead = ((l, idMatrix(l.deref)), (r, idMatrix(r.deref)))
+      val newss1 =
+        (newhisthead :: hist).map(p => lh_matrices.map(_ * p._1._2)).transpose
+      val newss2 = 
+        (newhisthead :: hist).map(p => rh_matrices.map(_ * p._2._2)).transpose
+        
       var curren: Option[Renaming] = 
         Some(lh.source.renaming comp ren1 comp rh.source.renaming.inv)
       
@@ -267,7 +271,7 @@ case class EqProofTree(
   // Why can we glue child nodes too, not only roots?
   // Because they are defined in terms of themselves and the roots.
   def performGluing(g: Hypergraph) {
-    // The fisrt thing to do is to fix renamings
+    // The first thing to do is to fix renamings
     propagateRenamings.performGluing1(g)
   }
   
@@ -316,6 +320,20 @@ case class EqProofTree(
             nodes, Some((h1, h2, newds)))
     }
   
+  def leftTree: ResidualTree =
+    if(out == None && nodes._1 == nodes._2) ResidualTreeStop(nodes._1)
+    else if(out == None) ResidualTreeFold(nodes._1)
+    else ResidualTreeNormal(nodes._1, out.get._1, out.get._3.map(_.leftTree))
+  def rightTree: ResidualTree =
+    if(out == None && nodes._1 == nodes._2) ResidualTreeStop(nodes._2)
+    else if(out == None) ResidualTreeFold(nodes._2)
+    else ResidualTreeNormal(nodes._2, out.get._2, out.get._3.map(_.rightTree))
+  
+  // Check overall correctness. Isolated folding correctness, which is checked
+  // during the graph traversal, usually is not enough.
+  def checkCorrectness: Boolean =
+    leftTree.checkCorrectness && rightTree.checkCorrectness
+  
   def toDot: String = {
     val label =
       nodes._1 + "\\l" + renaming + "\\l" + nodes._2 + "\\l\\l" +
@@ -352,3 +370,45 @@ case class EqProofTree(
   }
     
 }
+
+sealed trait ResidualTree {
+  val node: Node
+  
+  def checkCorrectness: Boolean = {
+    var curind = 0
+    val graph = collection.mutable.Set[(Int, Int, RSMatrix)]()
+    
+    def mkGraph(r: ResidualTree, hist: List[(Node, Int)]): Option[Int] = r match {
+      case ResidualTreeFold(n) => hist.find(_._1 == n).map(_._2)
+      case ResidualTreeStop(_) => None
+      case ResidualTreeNormal(n, h, chld) =>
+        var recursive = false
+        val myind = curind
+        curind += 1
+        val mats = CorrectnessChecker.hyperedgeToMatrix(h)
+        for((m, Some(j)) <- mats zip chld.map(mkGraph(_, (n, myind) :: hist))) {
+          recursive = true
+          graph += ((myind, j, m))
+        }
+        
+        if(recursive) Some(myind) else None
+    }
+    
+    mkGraph(this, Nil)
+    
+//    for((i,j,m) <- graph) {
+//      println(i + " -> " + j)
+//      for(row <- m.mat)
+//        println(row.mkString(" "))
+//    }
+//    println("")
+    
+    CorrectnessChecker.checkCallGraph(graph.toSet)
+  }
+}
+
+case class ResidualTreeNormal(node: Node, hyperedge: Hyperedge, children: List[ResidualTree]) 
+  extends ResidualTree
+case class ResidualTreeFold(node: Node) extends ResidualTree
+case class ResidualTreeStop(node: Node) extends ResidualTree
+  

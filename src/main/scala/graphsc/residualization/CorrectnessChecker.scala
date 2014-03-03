@@ -1,138 +1,156 @@
 package graphsc
 package residualization
 
-trait CorrectnessChecker[S] {
-  def apply(n: RenamedNode): S
-  def through(s: S, h: Hyperedge): List[S]
-  def safe(s: S): Boolean
-  
-  final def listThrough(list: List[S], h: Hyperedge): List[List[S]] =
-    if(list == Nil)
-      h.dests.map(_ => Nil)
-    else
-      list.map(through(_, h)).transpose
-  
-  final def histThrough[N](hist: List[(N, S)], h: Hyperedge): List[List[(N, S)]] = {
-    val safeties = listThrough(hist.map(_._2), h)
-    safeties.map((hist, _).zipped.map((p,s) => (p._1,s)))
-  } 
-}
+import scala.collection.immutable.Vector
 
 object CorrectnessChecker {
-  implicit object GuardedOrStructuralCorrectnessChecker 
-      extends CorrectnessChecker[GuardedOrStructural] {
-    type S = GuardedOrStructural
-    override def apply(n: RenamedNode): S =
-      GuardedOrStructural(
-        (0 until n.arity).map(i => if(n.used(i)) VDVar(i, Nil) else VDCtr(Nil)).toList,
-        (0 until n.arity).toList.map(VDVar(_, Nil)),
-        true, false)
-        
-    def through(s: S, h: Hyperedge): List[S] = s.through(h)
-    def safe(s: S): Boolean = s.safe
-  }
-}
-
-case class GuardedOrStructural(
-    args: List[ValueDescription],
-    origargs: List[ValueDescription],
-    preguarded: Boolean = true, 
-    guarded: Boolean = false) {
-  
-  def safe: Boolean =
-    (VDCtr(args) less VDCtr(origargs)) || guarded
-  
-  def rename(r: Renaming, as: List[ValueDescription]): List[ValueDescription] = {
-    r.vector.map {
-      i =>
-        if(i >= 0 && i < as.size)
-          as(i)
-        else
-          VDCtr(Nil)
+  def globallySafe(lst: List[RSMatrix]): Boolean = {
+    def go(lst: List[List[RelationState]]): Boolean = lst match {
+      case Nil => true
+      case hd :: _ if hd.isEmpty => true
+      case _ =>
+//        println("go:")
+//        for(l <- lst)
+//          println(l.mkString(" "))
+        lst.zipWithIndex.find(p => p._1.foldLeft[RelationState](RSEq)(_ * _) == RSLess) match {
+          case None => false
+          case Some((rss,i)) =>
+            val newlst =
+              for((l,j) <- lst.zipWithIndex if i != j) yield
+                for((RSEq,x) <- rss zip l) yield x
+            go(newlst)
+        }
     }
+    go(lst.map(_.diag).transpose)
   }
   
-  def expand(
-      v: ValueDescription, 
-      expanded: ValueDescription, 
-      where: ValueDescription): ValueDescription = v match {
-    case VDVar(i, l) =>
-      if(v == where)
-        expanded
-      else
-        where match {
-          case VDCtr(lst) => VDCtr(lst.map(expand(v, expanded, _)))
-          case _ => where
-        }
-    case _ => where
+  def renamingToMatrix(r: Renaming): RSMatrix = {
+    val ar = r.arity
+    RSMatrix(
+      (RSEq +: Vector.fill(ar)(RSUnknown)) +:
+        r.vector.map(i => 
+          RSUnknown +: 
+            (if(i == -1) Vector.fill(ar)(RSUnknown) 
+             else (0 until ar).map(j => if(i == j) RSEq else RSUnknown).toVector)).toVector)
   }
   
-  def run(n: RenamedNode, as: List[ValueDescription], h: List[Node] = Nil): ValueDescription = {
-    if(h.contains(n.node))
-      VDUnknown()
-    else
-      n.getVar match {
-        case Some(i) =>
-          if(i >= 0 && i < as.size) as(i) else VDCtr(Nil)
-        case None =>
-          (n.node.outs.find(_.label.isInstanceOf[Construct]) : @unchecked) match {
-            case Some(Hyperedge(Construct(_), src, ds)) =>
-              val as1 = rename(src.renaming.inv, as)
-              VDCtr(ds.map(d => run(d, as1, n.node :: h)))
-            case None => VDUnknown()
-          }
-      }
+  def buildMatrix(guard: RelationState, rsize: Int, asize: Int, 
+                  f: (Int, Int) => RelationState): RSMatrix = {
+    RSMatrix(
+        (guard +: Vector.fill(asize)(RSUnknown)) +:
+        (0 until rsize).map(i => RSUnknown +: (0 until asize).map(j => f(i,j)).toVector).toVector)
   }
   
-  def through(h: Hyperedge): List[GuardedOrStructural] = {
-    val args1 = rename(h.source.renaming.inv, args)
-    h.label match {
+  def idMatrix(r: RenamedNode): RSMatrix = 
+    buildMatrix(RSEq, r.arity, r.arity, (i: Int,j: Int) => if(i == j) RSEq else RSUnknown)
+  
+  def hyperedgeToMatrix(h: Hyperedge): List[RSMatrix] = {
+    val srcar = h.source.arity
+    val eqfun = (i: Int,j: Int) => if(i == j) RSEq else RSUnknown
+    val mainpart = h.label match {
       case Construct(_) =>
-        h.dests.map {
-          d =>
-            // If the position was preguarded then it is now guarded
-            GuardedOrStructural(rename(d.renaming, args1), origargs, preguarded, preguarded)
-        }
+        h.dests.map(d => buildMatrix(RSLess, d.arity, srcar, eqfun))
       case CaseOf(cases) =>
-        GuardedOrStructural(rename(h.dests(0).renaming, args1), origargs, false, false) ::
-          (h.dests(0).getVar match {
-            case Some(i) =>
-              val varvd = if(i >= 0 && i < args1.size) args1(i) else VDCtr(Nil)
-              (h.dests.tail zip cases).map {
-                case (d,(_,n)) =>
-                  val vars = (0 until n).map(varvd access _).toList
-                  val newargs = vars ++ args1.map(expand(varvd, VDCtr(vars), _))
-                  val neworigargs = origargs.map(expand(varvd, VDCtr(vars), _))
-                  GuardedOrStructural(
-                      rename(d.renaming, newargs), neworigargs, preguarded, guarded)
-              }
-            case None =>
-              (h.dests.tail zip cases).map {
-                case (d,(_,n)) =>
-                  val newargs = List.fill(n)(VDUnknown()) ++ args1
-                  GuardedOrStructural(rename(d.renaming, newargs), origargs, preguarded, guarded)
-              }
+        val varnum = h.dests(0).getVar
+        buildMatrix(RSUnknown, h.dests(0).arity, srcar, eqfun) ::
+          (for((d,(_,sh)) <- h.dests.tail zip cases) yield {
+            buildMatrix(RSEq, d.arity, srcar, { (i,j) =>
+              if(i < sh && varnum == Some(j)) RSLess
+              else if(i >= sh && j == i - sh) RSEq
+              else RSUnknown
+            })
           })
       case Let() =>
-        val newargs = h.dests.tail.map(run(_, args1))
-        GuardedOrStructural(rename(h.dests(0).renaming, newargs), origargs, preguarded, guarded) ::
-          h.dests.tail.map {
-            d =>
-              GuardedOrStructural(rename(d.renaming, args1), origargs, false, false)
-          }
+        buildMatrix(RSEq, h.dests(0).arity, srcar, { (i,j) =>
+          if(h.dests(i + 1).getVar == Some(j)) RSEq
+          else RSUnknown
+        }) ::
+        h.dests.tail.map(d => buildMatrix(RSEq, d.arity, srcar, eqfun))
       case Tick() =>
-        List(GuardedOrStructural(
-            rename(h.dests(0).renaming, args1), origargs, preguarded, preguarded))
+        h.dests.map(d => buildMatrix(RSLess, d.arity, srcar, eqfun))
       case Improvement() =>
-        List(GuardedOrStructural(
-            rename(h.dests(0).renaming, args1), origargs, preguarded, guarded))
+        h.dests.map(d => buildMatrix(RSLess, d.arity, srcar, eqfun))
       case Id() => 
-        List(GuardedOrStructural(
-            rename(h.dests(0).renaming, args1), origargs, preguarded, guarded))
+        h.dests.map(d => buildMatrix(RSEq, d.arity, srcar, eqfun))
       case Var() =>
         Nil
       case Unused() =>
         Nil
     }
+    val srcmat = renamingToMatrix(h.source.renaming.inv)
+    (mainpart, h.dests).zipped.map((m,d) => renamingToMatrix(d.renaming) * m * srcmat)
+  }
+  
+  def checkCallGraph(igraph: Set[(Int, Int, RSMatrix)]): Boolean = {
+    val graph = collection.mutable.Set[(Int, Int, RSMatrix)]() ++ igraph
+    var changed = true
+    while(changed) {
+      changed = false
+      for((i1,j1,m1) <- graph; (i2,j2,m2) <- graph; if j1 == i2) {
+        val edge = (i1, j2, m2 * m1)
+        if(!graph.contains(edge)) {
+          graph += edge
+          changed = true
+        }
+      }
+    }
+    
+//    println("after saturation:")
+//    for((i,j,m) <- graph) {
+//      println(i + " -> " + j)
+//      for(row <- m.mat)
+//        println(row.mkString(" "))
+//    }
+//    println("")
+    
+    graph.collect{ case (i,j,m) if i == j => (i, m) }.groupBy(_._1)
+      .forall(x => globallySafe(x._2.toList.map(_._2)))
   }
 }
+
+sealed trait RelationState {
+  def *(o: RelationState): RelationState = (this, o) match {
+    case (RSUnknown, _) => RSUnknown
+    case (_, RSUnknown) => RSUnknown
+    case (RSLess, x) => RSLess
+    case (x, RSLess) => RSLess
+    case (RSEq, RSEq) => RSEq
+  }
+  
+  def +(o: RelationState): RelationState = (this, o) match {
+    case (RSUnknown, x) => x
+    case (x, RSUnknown) => x
+    case (RSLess, x) => RSLess
+    case (x, RSLess) => RSLess
+    case (RSEq, RSEq) => RSEq
+  }
+  
+  override def toString: String = this match {
+    case RSUnknown => "?"
+    case RSLess => "<"
+    case RSEq => "="
+  }
+}
+
+case object RSUnknown extends RelationState
+case object RSEq extends RelationState
+case object RSLess extends RelationState
+
+case class RSMatrix(mat: Vector[Vector[RelationState]]) {
+  def *(prev: RSMatrix): RSMatrix = {
+    val tr = prev.mat.transpose
+    RSMatrix(
+      (for(i <- 0 until mat.size) yield {
+        for(j <- 0 until tr.size) yield
+          (mat(i), tr(j)).zipped.map(_ * _).foldLeft[RelationState](RSUnknown)(_ + _)
+      }.toVector).toVector)
+  }
+  
+  def diag: List[RelationState] =
+    (0 until mat.size).map(i => mat(i)(i)).toList
+    
+  def locallySafe: Boolean = diag.contains(RSLess)
+  
+  override def toString = mat.size + "x" + mat(0).size 
+}
+

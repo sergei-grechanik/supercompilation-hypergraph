@@ -1,0 +1,16 @@
+
+f x y =
+  case x of {
+    Z -> y;
+    S x1 -> f y x1;
+  };
+
+g x y =
+  case x of {
+    Z -> y;
+    S x1 -> g y x1;
+  };
+
+
+prove: f = g;
+

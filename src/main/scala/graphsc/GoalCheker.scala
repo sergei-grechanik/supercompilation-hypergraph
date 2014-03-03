@@ -6,7 +6,7 @@ trait GoalChecker extends Hypergraph {
   def checkGoal(g: GoalProp): Boolean = g match {
     case GoalPropEqModuloRen(l, r) => l ~~ r
     case GoalPropEq(l, r) => l ~=~ r
-    case GoalPropReturnsConstr(n, c) =>
+    /*case GoalPropReturnsConstr(n, c) =>
       println("Residualizing...")
       val gr = new TheHypergraph with Prettifier {}
       
@@ -34,7 +34,7 @@ trait GoalChecker extends Hypergraph {
             }
           case None => false
         }
-      res
+      res*/
     case _ => false
   }
 }

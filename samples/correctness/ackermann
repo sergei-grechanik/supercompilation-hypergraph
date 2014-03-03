@@ -1,0 +1,15 @@
+
+import: ../lib/nat (ack, add, mul, exp);
+
+ack2 x y =
+  case x of {
+    Z -> S y;
+    S x ->
+      case y of {
+        Z -> ack2 x (S Z);
+        S y -> ack2 x (ack2 (S x) y);
+      };
+  };
+
+prove: ack = ack2;
+
