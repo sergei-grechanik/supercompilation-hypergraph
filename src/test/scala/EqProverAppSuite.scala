@@ -66,6 +66,7 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check samples/rules/arith-square-of-sum")
   cmd("--prove --integrity-check --test samples/rules/nrev-nat-1")
   cmd("--prove samples/rules/even-dbl-acc-lemma-1")
+  cmd("--prove samples/rules/map-iterate")
   
   // correctness checker
   cmd("--prove --integrity-check samples/correctness/ackermann")
@@ -73,4 +74,5 @@ class EqProverAppSuite extends FunSuite with ParallelTestExecution {
   cmd("--prove --integrity-check samples/correctness/fading-pulse")
   cmdnot("--prove --integrity-check samples/correctness/eatswap")
   cmdnot("--prove --integrity-check -g5 samples/correctness/nonterminating")
+  cmdnot("--prove --integrity-check samples/correctness/chpred-bug")
 }

@@ -1,0 +1,6 @@
+
+f x = g (C (f x));
+g x = g (C (g x));
+
+prove: f x = g x;
+

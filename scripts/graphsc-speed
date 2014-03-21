@@ -14,8 +14,8 @@ cp "reformatted/speed-benchmark/$testname/Test.hs" "$MY_TEMP_DIR/CorrectTest.hs"
 "$(dirname "$0")/../graphsc" -o "$MY_TEMP_DIR/GeneratedTest.hs" "$@"
 
 # We should preserve original type definitions
-cat "reformatted/speed-benchmark/$testname/Test.hs" | sed -n '1,/-- function definitions/p' > "$MY_TEMP_DIR/Test.hs"
-cat "$MY_TEMP_DIR/GeneratedTest.hs" | sed -n '/-- function definitions/,$p' >> "$MY_TEMP_DIR/Test.hs"
+cat "reformatted/speed-benchmark/$testname/Test.hs" | sed -n '1,/-- functions/p' > "$MY_TEMP_DIR/Test.hs"
+cat "$MY_TEMP_DIR/GeneratedTest.hs" | sed -n '/-- functions/,$p' >> "$MY_TEMP_DIR/Test.hs"
 
 GHC_OPTIONS="-O" "$(dirname "$0")/run-test-with-main.sh" "$MY_TEMP_DIR/Test.hs" "$(dirname "$0")/Speed.hs" run < "$MY_TEMP_DIR/data" | tee >(grep -q "correct True"; echo $? > correctness)
 

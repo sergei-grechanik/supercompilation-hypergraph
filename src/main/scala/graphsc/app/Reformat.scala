@@ -399,7 +399,7 @@ object Reformat {
             println("    else do")
           }
           
-          if(prover == SpeedBenchmark) {
+          {
             val zero_ar = t.filter(argtypes(_).isEmpty)
             val nonzero_ar = t.filter(argtypes(_).nonEmpty) 
             
@@ -413,16 +413,6 @@ object Reformat {
                 nonzero_ar.map(c => c + " <$> " + 
                     argtypes(c).map(_ => "resize s arbitrary").mkString(" <*> "))
                   .mkString("[", ", ", "]"))
-          } else {
-            println("      x <- choose (0 :: Int, " + (t.size - 1) + ")")
-            println("      case x of")
-            for((c,i) <- t.zipWithIndex) {
-              if(argtypes(c).isEmpty)
-                println("        " + i + " -> Prelude.return " + c)
-              else
-                println("        " + i + " -> " + c + " <$> " + 
-                    argtypes(c).map(_ => "resize (s `Prelude.div` 2) arbitrary").mkString(" <*> "))
-            }
           }
           
           println()
@@ -483,7 +473,7 @@ object Reformat {
       case _ => e.mapChildren((_, e) => adjustCaseofs(e))
     }
     
-    println("-- function definitions\n")
+    println("-- functions\n")
     
     for((name,bs) <- prog.defs; body <- bs) {
       println("-- function " + name)

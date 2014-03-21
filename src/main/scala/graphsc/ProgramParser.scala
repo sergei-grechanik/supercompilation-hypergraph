@@ -699,6 +699,7 @@ object ProgramParser extends ProgramParser("", "", false) {
     val src = io.Source.fromFile(path)
     val srctext = src.mkString
     src.close()
-    (new ProgramParser((new File(path)).getParent(), path, strict_decl)).parseProg(srctext)
+    val par = (new File(path)).getParent()
+    (new ProgramParser(if(par == null) "." else par, path, strict_decl)).parseProg(srctext)
   }
 }

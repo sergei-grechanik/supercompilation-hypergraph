@@ -65,7 +65,7 @@ object CorrectnessChecker {
           if(h.dests(i + 1).getVar == Some(j)) RSEq
           else RSUnknown
         }) ::
-        h.dests.tail.map(d => buildMatrix(RSEq, d.arity, srcar, eqfun))
+        h.dests.tail.map(d => buildMatrix(RSUnknown, d.arity, srcar, eqfun))
       case Tick() =>
         h.dests.map(d => buildMatrix(RSLess, d.arity, srcar, eqfun))
       case Improvement() =>
