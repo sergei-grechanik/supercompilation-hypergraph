@@ -147,6 +147,29 @@ trait Transformations extends Hypergraph {
       }
   }
   
+  def letUnused: PartialFunction[Hyperedge, Unit] = {
+    case (h1@Hyperedge(Let(), src1, f1 :: es1)) =>
+      val newhead = f1.plain
+      val newtail = 
+        (0 until newhead.arity toList).map { i =>
+          f1.renaming(i) match {
+            case j if j < 0 || j >= es1.size => unused
+            case j => es1(j)
+          }
+        }
+      
+      lazy val vec = newtail.map(_.deref.getVarUnused.get)
+      lazy val ren = Renaming(vec).normal
+      lazy val renhead = ren comp newhead
+      if(!(newtail.forall(_.deref.getVarUnused.isDefined) && 
+         vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size &&
+         renhead.isInvertible)) {
+        trans("letUnused", h1) {
+          add(Let(), h1.source, newhead :: newtail)
+        }
+      }
+  }
+  
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
   

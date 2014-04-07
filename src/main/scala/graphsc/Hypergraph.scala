@@ -120,6 +120,7 @@ trait Hypergraph {
     canonize(simplify(h))._2
     
   def autoLetToId: Boolean = true
+  def autoLetUnused: Boolean = true
   def autoLetReduce: Boolean = true
   def autoReduce: Boolean = true
     
@@ -133,7 +134,7 @@ trait Hypergraph {
           Hyperedge(Id(), h.source, List(unused))
         else
           Hyperedge(Id(), h.source, List(h.dests.tail(i)))
-      case Let() if autoLetToId => 
+      case Let() => 
         val newhead = h.dests(0).plain
         val newtail = 
           (0 until newhead.arity toList).map { i =>
@@ -146,15 +147,18 @@ trait Hypergraph {
         lazy val vec = newtail.map(_.getVarUnused.get)
         lazy val ren = Renaming(vec).normal
         lazy val renhead = ren comp newhead
-        if(newtail.forall(_.getVarUnused.isDefined) && 
+        if(autoLetToId &&
+           newtail.forall(_.getVarUnused.isDefined) && 
            vec.filter(_ >= 0).distinct.size == vec.filter(_ >= 0).size &&
            renhead.isInvertible) { 
           // Sometimes we cannot transform let to id
           // because it glues variables or assigns bottoms to some of them
           Hyperedge(Id(), h.source, List(renhead))
         }
-        else
+        else if(autoLetUnused)
           Hyperedge(Let(), h.source, newhead :: newtail)
+        else
+          h
       case CaseOf(cases) =>
         lazy val dest1 = h.dests(1).renaming.mapVars(_ - h.shifts(1)) comp h.dests(1).node
         if(total && 

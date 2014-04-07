@@ -33,6 +33,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Drive 2*<arg> recommended (by eqprover) nodes")
   val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
   val noLetToId = opt[Boolean](noshort = true, descr = "Disable destructive let to id conversion")
+  val noLetUnused = opt[Boolean](noshort = true, descr = "Disable destructive let-unused")
   val noLetReduce = opt[Boolean](noshort = true, descr = "Disable destructive let-var reduction")
   val noAutoReduce = opt[Boolean](noshort = true, descr = "Disable destructive reduction")
   val genPair = opt[Boolean](noshort = true, 
@@ -99,6 +100,7 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val prettifyingEnabled = !conf.nopretty()
   override val weakMerging = conf.weakMerging()
   override val autoLetToId = !conf.noLetToId()
+  override val autoLetUnused = !conf.noLetUnused()
   override val autoLetReduce = !conf.noLetReduce()
   override val autoReduce = !conf.noAutoReduce()
   override val enableVisualizer = conf.gui()
@@ -154,6 +156,9 @@ object MainApp {
     if(conf.noLetToId()) 
       graph.autoTransformations ::= 
         PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letToId)))
+        
+    if(conf.noLetUnused()) 
+      graph.autoTransformations ::= graph.letUnused
       
 //    if(conf.noLetReduce()) 
 //      graph.autoTransformations ::= 
