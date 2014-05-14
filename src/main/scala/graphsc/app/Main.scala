@@ -495,6 +495,10 @@ object MainApp {
                   eprover.stats = st
                   //likenesscalc.cached.clear()
                   checktask()
+                } else {
+                  graph.log("-- Correctness check failed")
+                  eq.get.toLog(graph)
+                  graph.log("")
                 }
               } catch {
                 case _: NoSuchElementException =>

@@ -178,13 +178,17 @@ trait Transformations extends Hypergraph {
     case (h1@Hyperedge(CaseOf(cases), src1, e :: hs),
           h2@Hyperedge(Construct(name), src2, args)) if e.plain == src2 =>
       trans("caseReduce", h1, h2) {
-        val ((_,n),h) = (cases zip hs).find(_._1._1 == name).get
-        assert(n == args.size)
-        val bs = 
-          args.map(e.renaming comp _) ++ 
-          (n until h.arity).map(i => variable(i - n))
-        
-        add(Let(), src1, List(h) ++ bs)
+        (cases zip hs).find(_._1._1 == name) match {
+          case Some(((_,n),h)) =>
+            assert(n == args.size)
+            val bs = 
+              args.map(e.renaming comp _) ++ 
+              (n until h.arity).map(i => variable(i - n))
+            
+            add(Let(), src1, List(h) ++ bs)
+          case None =>
+            add(Unused(), src1, Nil)
+        }
       }
   }
   

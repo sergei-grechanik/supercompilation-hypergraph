@@ -108,6 +108,12 @@ odd x =
     Z -> F;
   };
 
+eqNat x y =
+  case x of {
+    S x -> case y of { S y -> eqNat x y; Z -> F };
+    Z -> case y of { S y -> F; Z -> T };
+  };
+
 qrevNat x = qrevNatTo x Z;
 
 qrevNatTo x y =
