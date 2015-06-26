@@ -45,6 +45,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val onlyRequested = opt[Boolean](noshort = true, 
       descr = "Merge by iso only nodes specified in props")
   val drive2 = opt[Boolean](noshort = true, descr = "Use the second set of driving rules")
+  val notrans = opt[Boolean](noshort = true, descr = "Disable ordinary transformations")
   val nobuf = opt[Boolean](noshort = true, 
       descr = "Disable bufferization of new edges, may lead to unstable behaviour")
   
@@ -386,10 +387,11 @@ object MainApp {
         System.err.println("Transforming...")  
           
       val trans =
-        (if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
-        (if(conf.drive2()) tr.transDrive2 else tr.transDrive) &
-        (if(conf.total()) tr.transTotal else tr.transUntotal) &
-        (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone)
+	if(conf.notrans()) tr.transNone else
+          ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
+          (if(conf.drive2()) tr.transDrive2 else tr.transDrive) &
+          (if(conf.total()) tr.transTotal else tr.transUntotal) &
+          (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone))
       graph.transform(trans)
       buffer.commit()
       
