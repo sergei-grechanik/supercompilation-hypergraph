@@ -657,10 +657,13 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
     ("declare:" ~> repsep(fname, ",")) ^^ (fs => Program(defs = fs.map(f => (f, Nil)).toMap))
     
   def prop: Parser[Prop] =
+    "forall" ~> rep(varname) ~> "." ~> prop |
+    // we support only universal quantification, so we basically ignore this quantifier
     propeq |
     (expr <~ "~") ~ expr ^^ { case e1~e2 => PropEqModuloRen(e1, e2) } |
     (expr <~ "^") ~ cname ^^ { case e~c => PropReturnsConstr(e, c) } |
-    fname ^^ (n => PropNamed(n))
+    fname ^^ (n => PropNamed(n)) |
+    "(" ~> prop <~ ")"
   
   def propeq: Parser[PropEq] =
     (expr <~ "=") ~ expr ^^ { case e1~e2 => PropEq(e1, e2) }

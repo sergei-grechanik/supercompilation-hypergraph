@@ -175,12 +175,14 @@ object Reformat {
         rtype
     }
       
-    val argtypesred = //argtypes.mapValues(_.map(_.deref).toSet) 
-      //argtypes.map(p => (p._1, p._2.reduce(_ | _)))
+    val argtypesred1 =
       argtypes.mapValues(_.map(_.deref)).map(p => (p._1, p._2.reduce(_ unify _).deref))
-    
-    val caseoftypesred = 
+      
+    val caseoftypesred1 =
       caseoftypes.mapValues(_.map(_.deref)).map(p => (p._1, p._2.reduce(_ unify _).deref))
+      
+    val argtypesred = argtypesred1.mapValues(_.deref)
+    val caseoftypesred = caseoftypesred1.mapValues(_.deref)
       
     (cons2type, 
      argtypesred.groupBy(_._1._1).mapValues(x => x.toList.sortBy(_._1._2).map(_._2))
