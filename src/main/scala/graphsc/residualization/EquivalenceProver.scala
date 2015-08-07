@@ -1,7 +1,8 @@
 package graphsc
 package residualization
 
-class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator) {
+class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator, 
+                              use_cache:Boolean = true) {
   import CorrectnessChecker._
   import likenesscalc._
   
@@ -109,7 +110,7 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator) {
       
       val lst = cache((l,r))
       
-      (lst.filter(x => 
+      (lst.filter(x => use_cache &&
           moreRestrictive((ren, histset), x._1) && 
           x._2.forall(t => (t.renaming | ren).isDefined)) match {
         case ress if ress.nonEmpty =>

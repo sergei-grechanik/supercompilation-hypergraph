@@ -10,6 +10,7 @@ argp = argparse.ArgumentParser(description="Transform report.xml into a human-re
 argp.add_argument('file', nargs='+')
 argp.add_argument('-f', nargs=1, default=["user"], help="fields")
 argp.add_argument('--all', '-a', action="store_true")
+argp.add_argument('--median', '-m', action="store_true", help="use median")
 
 args = argp.parse_args()
 
@@ -39,6 +40,16 @@ warnings = []
 def warn(run):
     warnings.append("Instability warning: " + run.find("full-command").text)
 
+def average(l):
+    if args.median:
+        lst = sorted(l)
+        if len(lst) % 2 == 1:
+            return lst[((len(lst)+1)/2)-1]
+        else:
+            return (lst[(len(lst)/2)-1] + lst[(len(lst)/2)]) / 2.0
+    else:
+        return sum(l)/len(l)
+
 def mkcell(runs, f):
     if runs:
         codes = list(int(r.find("exit-code").text) for r in runs)
@@ -47,12 +58,12 @@ def mkcell(runs, f):
             
         if args.all:
             l = [float(r.find(f).text) for r in runs if r.find(f) is not None]
-            return str(sum(l)/len(l)) if l else "fail"
+            return str(average(l)) if l else "fail"
         elif all(c != 0 for c in codes):
             return "fail"
         else:
             l = [float(r.find(f).text) for r in runs if int(r.find("exit-code").text) == 0]
-            return str(sum(l)/len(l))
+            return str(average(l))
     else:
         return "?"
 

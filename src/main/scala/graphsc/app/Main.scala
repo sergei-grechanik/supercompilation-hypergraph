@@ -27,7 +27,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val depth = opt[Int](default = Some(10), descr = "Depth limit")
   val codepth = opt[Int](default = Some(10), descr = "Codepth limit")
   val gen = opt[Boolean](noshort = true, descr = "Enable unordered generalization")
-  val noiso = opt[Boolean](noshort = true, descr = "Disable merging by isomorphism")
+  val noiso = opt[Boolean](noshort = true, descr = "Disable merging by bisimulation")
   val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
   val driveRecommended = opt[Int](noshort = true, default = Some(0), 
       descr = "Drive 2*<arg> recommended (by eqprover) nodes")
@@ -48,6 +48,10 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val notrans = opt[Boolean](noshort = true, descr = "Disable ordinary transformations")
   val nobuf = opt[Boolean](noshort = true, 
       descr = "Disable bufferization of new edges, may lead to unstable behaviour")
+  val sortCandidatesBackwards = opt[Boolean](noshort = true, 
+      descr = "Sort candidate pairs in reverse order")
+  val noCache = opt[Boolean](noshort = true, 
+      descr = "Don't use cache during merging by bisimulation")
   
   val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
   val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -449,12 +453,13 @@ object MainApp {
             case GoalPropEq(l, r) => (1, (1, Renaming()), l.node, r.node)
           }
         
-        var eprover = new EquivalenceProver(graph, likenesscalc)
+        var eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
         
         if(conf.verbose())
           System.err.println("Performing merging by isomorphism...")
         val candidates =
           if(conf.onlyRequested()) user
+          else if(conf.sortCandidatesBackwards()) like.toList.sortBy(p => p._2._1)
           else like.toList.sortBy(p => -p._2._1)
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
@@ -493,7 +498,7 @@ object MainApp {
                   graph.log("")
                   eq.get.performGluing(graph)
                   val st = eprover.stats
-                  eprover = new EquivalenceProver(graph, likenesscalc)
+                  eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
                   eprover.stats = st
                   //likenesscalc.cached.clear()
                   checktask()
