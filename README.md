@@ -20,8 +20,8 @@ To demonstrate this the project contains an equivalence prover.
 It is written in Scala, you can build it using Simple Build Tool 
 (see [here](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) 
 how to install it).
-You can either use the one-jar plugin or the start-script plugin to create
-an executable (you can also just build the project and run the class `graphsc.app.MainApp` by hand).
+You can use the start-script plugin to create
+an executable. You can also just build the project and run the class `graphsc.app.MainApp` by hand.
 Start-script seems to be easier, just type:
 
     sbt start-script

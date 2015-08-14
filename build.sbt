@@ -12,7 +12,7 @@ testOptions in Test += Tests.Argument("-oD")
 
 mainClass in Compile := Some("graphsc.app.MainApp")
 
-mainClass in oneJar := Some("graphsc.app.MainApp")
+//mainClass in oneJar := Some("graphsc.app.MainApp")
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.1" % "test"
 
@@ -28,7 +28,7 @@ libraryDependencies += "net.sf.jung" % "jung-visualization" % "2.0.1"
 
 libraryDependencies += "org.scala-lang" % "scala-swing" % "2.10.1"
 
-seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
+//seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 
 seq(SbtStartScript.startScriptForClassesSettings: _*)
 
