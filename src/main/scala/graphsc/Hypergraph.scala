@@ -209,8 +209,6 @@ trait Hypergraph {
   def weakMerging: Boolean = false
   
   def canonize(h: Hyperedge): (Renaming, Hyperedge) = h.label match {
-    case _ if weakMerging =>
-      (Renaming(h.used), h)
     case Let() =>
       val (r, newtail) = canonize(h.dests.tail, h.dests.tail.map(_ => 0))
       (r, Hyperedge(Let(), r.inv comp h.source, h.dests(0) :: newtail))
@@ -291,8 +289,7 @@ trait TheHypergraph extends Hypergraph {
     
     if(h.dests.nonEmpty)
       h.dests.minBy(_.node.insMut.size).node.insMut
-      .find(x => x.label == h.label && x.dests == h.dests &&
-          (!weakMerging || x.source.deref.renaming == h.source.deref.renaming)) match {
+      .find(x => x.label == h.label && x.dests == h.dests) match {
         //case Some(x) if h.source.node == x.source.node =>
         case Some(x) => glueNodes(x.source, h.source)
         case None => 
@@ -361,7 +358,7 @@ trait TheHypergraph extends Hypergraph {
     }
   }
   
-  def glueNodes(l1_underef: RenamedNode, r1_underef: RenamedNode): RenamedNode = {
+  private def glueNodes(l1_underef: RenamedNode, r1_underef: RenamedNode): RenamedNode = {
     val (l1, r1) = (l1_underef.deref, r1_underef.deref)
     
     /*for((l1,r1) <- List((l1,r1), (r1,l1)))
@@ -396,6 +393,8 @@ trait TheHypergraph extends Hypergraph {
       
       // if one of the nodes is already being glued, we should restore this fact afterwards
       val beingGluedBefore = l2.node.beingGlued || r2.node.beingGlued  
+      val beingGluedBeforeL = l2.node.beingGlued
+      val beingGluedBeforeR = r2.node.beingGlued
       
       l2.node.beingGlued = true
       r2.node.beingGlued = true
@@ -411,8 +410,13 @@ trait TheHypergraph extends Hypergraph {
       
       // The node can be a renaming of itself, 
       // so we shouldn't do anything beyond adding hyperedges
-      if(l.node == r.node)
+      // In the case of weak merging and nontrivial renamings we should also stop
+      if(l.node == r.node || 
+          (weakMerging && !(l2.renaming.inv comp r2.renaming).isId(r2.node.used))) {
+        l.node.beingGlued = beingGluedBeforeL
+        r.node.beingGlued = beingGluedBeforeR
         return l
+      }
       
       val l_renamed = r.renaming.inv comp l
       val r_node = r.node
@@ -640,8 +644,8 @@ trait TheHypergraph extends Hypergraph {
           assert(h.dests.forall(_.node.ins(h)))
         }*/
         for(h <- n.outs) {
-          // Ids can be present in the hypergraph only during gluing
-          assert(!h.label.isInstanceOf[Id] || 
+          // Ids can be present in the hypergraph only during gluing or if weak merging is enabled
+          assert(!h.label.isInstanceOf[Id] || weakMerging || 
               (h.source.node.beingGlued && h.dests(0).node.beingGlued) ||
               (h.source ~~ h.dests.head && h.source != h.dests.head))
           assert(nodes(h.source.node))

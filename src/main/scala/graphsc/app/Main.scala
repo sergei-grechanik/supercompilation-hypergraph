@@ -371,6 +371,21 @@ object MainApp {
       }
     }
     
+    def weak_merge() {
+      // Should be safe even if weak merging is off (it's commutativity then)
+      if(/*conf.weakMerging() &&*/ graph.changed) {        
+        do {
+          graph.changed = false
+          val clone_trans = tr.anyId
+          graph.transform(clone_trans, false)
+          buffer.commit()
+        } while(graph.changed)
+        
+        graph.changed = true
+      }
+    }
+    
+    weak_merge()
     stats()
     gendump()
     checktask()
@@ -391,7 +406,7 @@ object MainApp {
         System.err.println("Transforming...")  
           
       val trans =
-	if(conf.notrans()) tr.transNone else
+        if(conf.notrans()) tr.transNone else
           ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
           (if(conf.drive2()) tr.transDrive2 else tr.transDrive) &
           (if(conf.total()) tr.transTotal else tr.transUntotal) &
@@ -418,6 +433,8 @@ object MainApp {
           g.performGeneralization(graph)
         }
       }
+      
+      weak_merge()
       
       generation += 1
       
@@ -497,6 +514,7 @@ object MainApp {
                   eq.get.toLog(graph)
                   graph.log("")
                   eq.get.performGluing(graph)
+                  weak_merge()
                   val st = eprover.stats
                   eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
                   eprover.stats = st
@@ -531,6 +549,7 @@ object MainApp {
                 .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
             graph.drive(n)
           }
+          weak_merge()
         }
       }
       

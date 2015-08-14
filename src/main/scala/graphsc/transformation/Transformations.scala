@@ -61,10 +61,22 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
 
   def anyId: (Hyperedge, Hyperedge) => Boolean = {
+    case (h1@Hyperedge(Id(), src1, List(e1)),
+          h2@Hyperedge(Id(), src2, List(e2))) =>
+      trans("anyId-idid", h1, h2) {
+        add(Id(), src2.renaming comp e1.renaming.inv comp src1, List(e2))
+      }
+      true
     case (h1@Hyperedge(l1, src1, es1),
           h2@Hyperedge(Id(), src2, List(e2))) =>
       trans("anyId", h1, h2) {
         add(l1, src1, es1.map(e => if(e.plain == src2) e.renaming comp e2 else e))
+      }
+      true
+    case (h1@Hyperedge(Id(), src1, List(e1)),
+          h2@Hyperedge(l2, src2, es2)) =>
+      trans("anyId-back", h1, h2) {
+        add(l2, src2.renaming comp e1.renaming.inv comp src1, es2)
       }
       true
     case _ => false
