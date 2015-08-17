@@ -412,9 +412,13 @@ trait TheHypergraph extends Hypergraph {
       // so we shouldn't do anything beyond adding hyperedges
       // In the case of weak merging and nontrivial renamings we should also stop
       if(l.node == r.node || 
-          (weakMerging && !(l2.renaming.inv comp r2.renaming).isId(r2.node.used))) {
+          (weakMerging && !(l.renaming.inv comp r.renaming).isId(r.node.used))) {
+        // remove endohyperedges and restore being glued state
+        l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+        l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
         l.node.beingGlued = beingGluedBeforeL
         r.node.beingGlued = beingGluedBeforeR
+        checkIntegrity()
         return l
       }
       

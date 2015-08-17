@@ -375,10 +375,15 @@ object MainApp {
       // Should be safe even if weak merging is off (it's commutativity then)
       if(/*conf.weakMerging() &&*/ graph.changed) {        
         do {
+          if(conf.verbose())
+            System.err.print("Applying regluing/commutativity... ")  
           graph.changed = false
           val clone_trans = tr.anyId
-          graph.transform(clone_trans, false)
+          graph.transform(clone_trans, 
+              p => p._1.label.isInstanceOf[Id] || p._2.label.isInstanceOf[Id])
           buffer.commit()
+          if(conf.verbose())
+            System.err.println(graph.allHyperedges.size + " hyperedges")
         } while(graph.changed)
         
         graph.changed = true
