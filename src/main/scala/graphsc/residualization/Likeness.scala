@@ -133,7 +133,8 @@ class DefaultLikenessCalculator(total: Boolean = false) extends LikenessCalculat
       val rfinals = rdef.filter(h => !h.label.isInstanceOf[CaseOf])
       
       // there cannot be more than one non-caseof hyperedge even in total setting
-      assert(lfinals.length <= 1 && rfinals.length <= 1)
+      // since I'd introduced --no-*-inj, I disabled it
+      //assert(lfinals.length <= 1 && rfinals.length <= 1)
       
       val fin =
         for(lh <- lfinals; rh <- rfinals) yield 

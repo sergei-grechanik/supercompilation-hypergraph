@@ -123,6 +123,8 @@ trait Hypergraph {
   def autoLetUnused: Boolean = true
   def autoLetReduce: Boolean = true
   def autoReduce: Boolean = true
+  def autoCaseInj: Boolean = true
+  def autoConsInj: Boolean = true
     
   // Hyperedge simplifier
   def simplify(h_underef: Hyperedge): Hyperedge = {
@@ -497,6 +499,8 @@ trait TheHypergraph extends Hypergraph {
         if e != h
         if e.label == l && e.dests.size == ds.size
         if isDefining(e)
+        if (!l.isInstanceOf[CaseOf] || autoCaseInj)
+        if (!l.isInstanceOf[Construct] || autoConsInj)
         if !l.isInstanceOf[CaseOf] || 
           (src.renaming.inv comp h.dests(0)).getVar.nonEmpty &&
           ((src.renaming.inv comp h.dests(0)).getVar == 

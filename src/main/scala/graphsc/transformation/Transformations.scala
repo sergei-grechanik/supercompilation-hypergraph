@@ -42,6 +42,10 @@ trait Transformations extends Hypergraph {
     done
   }
   
+  
+  def transDriveNoCaseVar =
+    anyId & letLet & letCaseOf & letOther & caseCase & caseTick
+  
   def transDrive =
     anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
     

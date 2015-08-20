@@ -36,6 +36,9 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val noLetUnused = opt[Boolean](noshort = true, descr = "Disable destructive let-unused")
   val noLetReduce = opt[Boolean](noshort = true, descr = "Disable destructive let-var reduction")
   val noAutoReduce = opt[Boolean](noshort = true, descr = "Disable destructive reduction")
+  val noCaseInj = opt[Boolean](noshort = true, descr = "Disable case injectivity")
+  val noConsInj = opt[Boolean](noshort = true, descr = "Disable constructor injectivity")
+  val noCaseVar = opt[Boolean](noshort = true, descr = "Disable positive info propagation")
   val genPair = opt[Boolean](noshort = true, 
       descr = "Traditional pairwise generalization")
   val supercompile = opt[Boolean](name = "super", 
@@ -108,6 +111,8 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val autoLetUnused = !conf.noLetUnused()
   override val autoLetReduce = !conf.noLetReduce()
   override val autoReduce = !conf.noAutoReduce()
+  override val autoCaseInj = !conf.noCaseInj()
+  override val autoConsInj = !conf.noConsInj()
   override val enableVisualizer = conf.gui()
   
   override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
@@ -413,7 +418,8 @@ object MainApp {
       val trans =
         if(conf.notrans()) tr.transNone else
           ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
-          (if(conf.drive2()) tr.transDrive2 else tr.transDrive) &
+          (if(conf.drive2()) tr.transDrive2 else 
+            if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) &
           (if(conf.total()) tr.transTotal else tr.transUntotal) &
           (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone))
       graph.transform(trans)
