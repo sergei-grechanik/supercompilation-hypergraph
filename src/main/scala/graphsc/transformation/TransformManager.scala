@@ -10,44 +10,49 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   // TODO: Find a better name
   def updateAll() {
     for(n <- allNodes; h1 <- n.insMut; h2 <- n.outsMut)
-      updatedPairs.add((h1,h2))    
+      addPair(h1, h2)    
+  }
+  
+  private def addPair(h1: Hyperedge, h2: Hyperedge) {
+    //log("Pair:\n" + hyperedgeToString(h1) + "\n" + hyperedgeToString(h2) + "\n\n")
+    updatedPairs.add((h1, h2))
   }
   
   override def onNewHyperedge(h: Hyperedge) {
     changed = true
     for(h1 <- h.source.node.insMut)
-      updatedPairs.add((h1,h))
+      addPair(h1, h)
     for(d <- h.dests; h2 <- d.node.outsMut)
-      updatedPairs.add((h,h2))
+      addPair(h, h2)
     super.onNewHyperedge(h)
   }
   
   override def beforeGlue(r: RenamedNode, n: Node) {
     changed = true
     for(h1 <- n.insMut; h2 <- r.node.outsMut)
-      updatedPairs.add((h1,h2))
+      addPair(h1, h2)
     for(h1 <- r.node.insMut; h2 <- n.outsMut)
-      updatedPairs.add((h1,h2))
+      addPair(h1, h2)
     super.beforeGlue(r, n)
   }
   
   override def onUsedReduced(n: Node) {
     changed = true
     for(h1 <- n.insMut; h2 <- n.outsMut)
-      updatedPairs.add((h1,h2)) 
+      addPair(h1, h2) 
     super.onUsedReduced(n)
   }
   
-  def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): List[(Hyperedge, Hyperedge)] = 
-    pairs.sortBy(p => (depth(p._1.source), depth(p._2.source)))
-  
+//  def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): List[(Hyperedge, Hyperedge)] = 
+//    pairs.sortBy(p => (depth(p._1.source), depth(p._2.source)))
+
   def transform(proc: BiHProcessor, 
       pair_filter: ((Hyperedge, Hyperedge)) => Boolean = _ => true): Boolean = {
     val normalized = updatedPairs.map(p => (normalize(p._1), normalize(p._2)))
     updatedPairs.clear()
     updatedPairs ++= normalized
     //println("Pairs to transform before filtering: " + updatedPairs.size)
-    val set = filterUpdatedPairs(updatedPairs.toList.filter(pair_filter))
+    val set = updatedPairs.toList.filter(pair_filter)
     updatedPairs --= set
     //println("Pairs to transform: " + set.size)
     var count = 0

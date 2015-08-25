@@ -257,7 +257,7 @@ trait TheHypergraph extends Hypergraph {
     val rinv = h.source.renaming.inv
     val sourcenode_used = rinv comp h.used
     
-    assert(h.source.node.beingGlued || !h.label.isInstanceOf[Id] || h.source != h.dests.head)
+    //assert(h.source.node.beingGlued || !h.label.isInstanceOf[Id] || h.source != h.dests.head)
     
     val res =
       if(h.source.node.isInstanceOf[FreeNode]) {

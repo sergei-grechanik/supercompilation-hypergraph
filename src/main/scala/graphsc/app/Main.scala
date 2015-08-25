@@ -115,13 +115,13 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val autoConsInj = !conf.noConsInj()
   override val enableVisualizer = conf.gui()
   
-  override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
+  /*override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
       List[(Hyperedge, Hyperedge)] =
     pairs.filter { 
       case (h1,h2) =>
         nodesOf(h1,h2).map(depths(_)).max <= conf.depth() &&
         nodesOf(h1,h2).map(codepths(_)).max <= conf.codepth()
-    }
+    }*/
   
   var enableLoggingVar = conf.log()
   override def enableLogging = enableLoggingVar
@@ -445,6 +445,8 @@ object MainApp {
         }
       }
       
+      checktask()
+      
       weak_merge()
       
       generation += 1
@@ -525,6 +527,7 @@ object MainApp {
                   eq.get.toLog(graph)
                   graph.log("")
                   eq.get.performGluing(graph)
+                  checktask()
                   weak_merge()
                   val st = eprover.stats
                   eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
