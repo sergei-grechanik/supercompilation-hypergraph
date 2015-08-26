@@ -321,19 +321,16 @@ case class EqProofTree(
             nodes, Some((h1, h2, newds)))
     }
   
-  def leftTree: ResidualTree =
-    if(out == None && nodes._1 == nodes._2) ResidualTreeStop(nodes._1)
-    else if(out == None) ResidualTreeFold(nodes._1)
-    else ResidualTreeNormal(nodes._1, out.get._1, out.get._3.map(_.leftTree))
-  def rightTree: ResidualTree =
-    if(out == None && nodes._1 == nodes._2) ResidualTreeStop(nodes._2)
-    else if(out == None) ResidualTreeFold(nodes._2)
-    else ResidualTreeNormal(nodes._2, out.get._2, out.get._3.map(_.rightTree))
-  
+  // It's left-biased in the sense that we take hyperedges from the left side
+  def leftTree: ResidualTree[(Node, Node)] =
+    if(out == None && nodes._1 == nodes._2) ResidualTreeStop((nodes._1, nodes._2))
+    else if(out == None) ResidualTreeFold((nodes._1, nodes._2))
+    else ResidualTreeNormal((nodes._1, nodes._2), out.get._1, out.get._3.map(_.leftTree))
+    
   // Check overall correctness. Isolated folding correctness, which is checked
   // during the graph traversal, usually is not enough.
   def checkCorrectness: Boolean =
-    leftTree.checkCorrectness && rightTree.checkCorrectness
+    leftTree.checkCorrectness
   
   def toDot: String = {
     val label =
@@ -372,14 +369,14 @@ case class EqProofTree(
     
 }
 
-sealed trait ResidualTree {
-  val node: Node
+sealed trait ResidualTree[T] {
+  val node: T
   
   def checkCorrectness: Boolean = {
     var curind = 0
     val graph = collection.mutable.Set[(Int, Int, RSMatrix)]()
     
-    def mkGraph(r: ResidualTree, hist: List[(Node, Int)]): Option[Int] = r match {
+    def mkGraph(r: ResidualTree[T], hist: List[(T, Int)]): Option[Int] = r match {
       case ResidualTreeFold(n) => hist.find(_._1 == n).map(_._2)
       case ResidualTreeStop(_) => None
       case ResidualTreeNormal(n, h, chld) =>
@@ -408,8 +405,8 @@ sealed trait ResidualTree {
   }
 }
 
-case class ResidualTreeNormal(node: Node, hyperedge: Hyperedge, children: List[ResidualTree]) 
-  extends ResidualTree
-case class ResidualTreeFold(node: Node) extends ResidualTree
-case class ResidualTreeStop(node: Node) extends ResidualTree
+case class ResidualTreeNormal[T](node: T, hyperedge: Hyperedge, children: List[ResidualTree[T]]) 
+  extends ResidualTree[T]
+case class ResidualTreeFold[T](node: T) extends ResidualTree[T]
+case class ResidualTreeStop[T](node: T) extends ResidualTree[T]
   
