@@ -18,7 +18,7 @@ object TestDebug {
       }
     }
     
-    cmd("-pv --integrity-check --gen ./samples/dummy")
+    cmd("-pv --no-destr-norm  ./samples/mul-assoc")
   }
 
 }

@@ -117,7 +117,8 @@ trait Hypergraph {
   }
   
   def normalize(h: Hyperedge): Hyperedge =
-    canonize(simplify(h))._2
+    if(autoNormalize) canonize(simplify(h))._2
+    else simplify(h)
     
   def autoLetToId: Boolean = true
   def autoLetUnused: Boolean = true
@@ -125,6 +126,7 @@ trait Hypergraph {
   def autoReduce: Boolean = true
   def autoCaseInj: Boolean = true
   def autoConsInj: Boolean = true
+  def autoNormalize: Boolean = true
     
   // Hyperedge simplifier
   def simplify(h_underef: Hyperedge): Hyperedge = {
@@ -289,26 +291,55 @@ trait TheHypergraph extends Hypergraph {
   protected def addHyperedgeImpl(h: Hyperedge) {
     require(h.source.node.isInstanceOf[FreeNode] || nodes(h.source.node))
     
-    if(h.dests.nonEmpty)
-      h.dests.minBy(_.node.insMut.size).node.insMut
-      .find(x => x.label == h.label && x.dests == h.dests) match {
-        //case Some(x) if h.source.node == x.source.node =>
-        case Some(x) => glueNodes(x.source, h.source)
-        case None => 
-          val newh = addHyperedgeSimple(h)
-          checkIntegrity()
-          onNewHyperedge(newh)
-      }
-    else
-      zeroHyper2Node.get(h.label) match {
-        case Some(n) =>
-          glueNodes(n, h.source)
-        case None => 
-          val newh = addHyperedgeSimple(h)
-          zeroHyper2Node += newh.label -> newh.source 
-          checkIntegrity()
-          onNewHyperedge(newh)
-      }
+    if(autoNormalize) {
+      if(h.dests.nonEmpty)
+        h.dests.minBy(_.node.insMut.size).node.insMut
+        .find(x => x.label == h.label && x.dests == h.dests) match {
+          //case Some(x) if h.source.node == x.source.node =>
+          case Some(x) => glueNodes(x.source, h.source)
+          case None => 
+            val newh = addHyperedgeSimple(h)
+            checkIntegrity()
+            onNewHyperedge(newh)
+        }
+      else
+        zeroHyper2Node.get(h.label) match {
+          case Some(n) =>
+            glueNodes(n, h.source)
+          case None => 
+            val newh = addHyperedgeSimple(h)
+            zeroHyper2Node += newh.label -> newh.source 
+            checkIntegrity()
+            onNewHyperedge(newh)
+        }
+    } else {
+      if(h.dests.nonEmpty)
+        h.dests.minBy(_.node.insMut.size).node.insMut
+        .find(x => x.label == h.label && canonize(x)._2.dests == canonize(h)._2.dests) match {
+          //case Some(x) if h.source.node == x.source.node =>
+          case Some(x) =>
+            glueNodes(canonize(x)._2.source, canonize(h)._2.source)
+            if(!h.deref.source.node.outsMut.contains(normalize(h))) {
+              val newh = addHyperedgeSimple(normalize(h))
+              checkIntegrity()
+              onNewHyperedge(newh)
+            }
+          case None => 
+            val newh = addHyperedgeSimple(h)
+            checkIntegrity()
+            onNewHyperedge(newh)
+        }
+      else
+        zeroHyper2Node.get(h.label) match {
+          case Some(n) =>
+            glueNodes(n, h.source)
+          case None => 
+            val newh = addHyperedgeSimple(h)
+            zeroHyper2Node += newh.label -> newh.source 
+            checkIntegrity()
+            onNewHyperedge(newh)
+        }
+    }
   }
   
   override def addHyperedge(hUnnorm: Hyperedge) {
@@ -440,7 +471,9 @@ trait TheHypergraph extends Hypergraph {
       val routs = r_node.mouts.toList
       val rins = r_node.mins.toList
       for(h <- routs ++ rins) {
-        val newh = addHyperedgeSimple(canonize(h.deref)._2)
+        val newh =
+          if(autoNormalize) addHyperedgeSimple(canonize(h.deref)._2)
+          else addHyperedgeSimple(h.deref)
         afterHyperedgeChanged(h, newh)
       }
       
@@ -537,8 +570,10 @@ trait TheHypergraph extends Hypergraph {
           // Readding immediately after removing doesn't seem to break anything. 
           //todo = {() => addHyperedge(nor); ()} :: todo
           log("-- remove " + hyperedgeToString(h))
-          h.source.deref.node.outsMut -= h
-          h.dests.map(_.deref.node.insMut -= h)
+          if(autoNormalize) {
+            h.source.deref.node.outsMut -= h
+            h.dests.map(_.deref.node.insMut -= h)
+          }
           log("-- readding normalized hyperedge")
           addHyperedge(nor)
           afterHyperedgeChanged(h, nor)

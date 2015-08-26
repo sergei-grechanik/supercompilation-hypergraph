@@ -39,6 +39,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val noCaseInj = opt[Boolean](noshort = true, descr = "Disable case injectivity")
   val noConsInj = opt[Boolean](noshort = true, descr = "Disable constructor injectivity")
   val noCaseVar = opt[Boolean](noshort = true, descr = "Disable positive info propagation")
+  val noDestrNorm = opt[Boolean](noshort = true, descr = "Disable destructive normalization")
   val genPair = opt[Boolean](noshort = true, 
       descr = "Traditional pairwise generalization")
   val supercompile = opt[Boolean](name = "super", 
@@ -113,6 +114,7 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val autoReduce = !conf.noAutoReduce()
   override val autoCaseInj = !conf.noCaseInj()
   override val autoConsInj = !conf.noConsInj()
+  override val autoNormalize = !conf.noDestrNorm()
   override val enableVisualizer = conf.gui()
   
   /*override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
@@ -177,6 +179,9 @@ object MainApp {
     if(conf.noAutoReduce()) 
       graph.autoTransformations ::= 
         PartialFunction(biHProc2HProc(partFun2BiHProc(graph.caseReduce)))
+        
+//    if(conf.noDestrNorm())
+//      graph.autoTransformations ::= graph.doNormalize
      
     val output = conf.output.get.fold(System.out)(o => new java.io.PrintStream(o))
         
