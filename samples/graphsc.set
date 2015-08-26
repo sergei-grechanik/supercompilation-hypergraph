@@ -53,3 +53,4 @@
 ./ho/church-id
 ./sadd-comm
 ./ho/map-comp
+./tip/partial/benchmarks/isaplanner/prop_55.smt2

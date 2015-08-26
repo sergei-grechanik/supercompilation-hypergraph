@@ -416,8 +416,10 @@ trait TheHypergraph extends Hypergraph {
       if(l.node == r.node || 
           (weakMerging && !(l.renaming.inv comp r.renaming).isId(r.node.used))) {
         // remove endohyperedges and restore being glued state
-        l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
-        l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+        if(!weakMerging) {
+          l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+          l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+        }
         l.node.beingGlued = beingGluedBeforeL
         r.node.beingGlued = beingGluedBeforeR
         checkIntegrity()
@@ -444,8 +446,10 @@ trait TheHypergraph extends Hypergraph {
       
       // Remove id hyperedges
       // Id endohyperedges are always redundant if they have id renamings
-      l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
-      l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      if(!weakMerging) {
+        l.deref.node.outsMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+        l.deref.node.insMut -= normalize(Hyperedge(Id(), l.plain, List(l.plain)))
+      }
       
       l.node.beingGlued = beingGluedBefore
         

@@ -82,9 +82,9 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator,
           Some(EqProofTree(ren1, (l1,r1)))
         case _ => None
       }
-    } else if(lind != -1 || rind != -1) {
-      // Well, we trade precision for efficiency here
-      None
+//    } else if(lind != -1 || rind != -1) {
+//      // Well, we trade precision for efficiency here
+//      None
     //} else if(l1.used.size != r1.used.size) {
     //  None
     } else {

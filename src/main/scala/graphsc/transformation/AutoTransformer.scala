@@ -24,5 +24,8 @@ trait SelfLetAdder extends Hypergraph {
     }
     if(var0 != null)
       add(Let(), n.deref, List(var0, n.deref))
+    
+    if(weakMerging)
+      add(Id(), n.deref, List(n.deref))
   }
 }
