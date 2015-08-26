@@ -447,7 +447,8 @@ object MainApp {
       
       checktask()
       
-      weak_merge()
+      if(!stop)
+        weak_merge()
       
       generation += 1
       
@@ -528,7 +529,8 @@ object MainApp {
                   graph.log("")
                   eq.get.performGluing(graph)
                   checktask()
-                  weak_merge()
+                  if(!stop)
+                    weak_merge()
                   val st = eprover.stats
                   eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
                   eprover.stats = st
