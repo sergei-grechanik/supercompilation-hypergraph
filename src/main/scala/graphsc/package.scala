@@ -39,7 +39,8 @@ package object graphsc {
     if(noncaseofs.isEmpty)
       hypers
     else {
-      assert(noncaseofs.isEmpty || noncaseofs.tail.forall(_.label == hypers.head.label))
+      // and when destructive transformations are disabled, we can't assert anything 
+      //assert(noncaseofs.isEmpty || noncaseofs.tail.forall(_.label == hypers.head.label))
       noncaseofs
     }
   }

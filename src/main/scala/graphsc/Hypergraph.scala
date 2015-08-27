@@ -358,6 +358,8 @@ trait TheHypergraph extends Hypergraph {
           val newh = addHyperedgeSimple(h)
           checkIntegrity()
           onNewHyperedge(newh)
+        } else if(weakMerging) {
+          addHyperedgeImpl(h)
         }
       case _ =>
         // If S e1 == S e2 then e1 == e2
