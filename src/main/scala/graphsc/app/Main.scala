@@ -474,7 +474,7 @@ object MainApp {
               if conf.mergeUseless() || 
                     LikenessCalculator.notCompletelyUseless(l, r) ||
                     (graph.depths(l) == 0 && graph.depths(r) == 0);
-              lkl <- likenesscalc.likenessN(l, r); if lkl._1 > 0) yield {
+              lkl <- likenesscalc.likenessN(l, r); if lkl._1 >= 0) yield {
             val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
             (rl,lkl,l,r)
           }) ++
