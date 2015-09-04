@@ -40,6 +40,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val noConsInj = opt[Boolean](noshort = true, descr = "Disable constructor injectivity")
   val noCaseVar = opt[Boolean](noshort = true, descr = "Disable positive info propagation")
   val noDestrNorm = opt[Boolean](noshort = true, descr = "Disable destructive normalization")
+  val autoPositivePropagation = 
+    opt[Boolean](noshort = true, descr = "Positive info propagation until saturation")
   val genPair = opt[Boolean](noshort = true, 
       descr = "Traditional pairwise generalization")
   val supercompile = opt[Boolean](name = "super", 
@@ -391,6 +393,9 @@ object MainApp {
           val clone_trans = tr.anyId
           graph.transform(clone_trans, 
               p => p._1.label.isInstanceOf[Id] || p._2.label.isInstanceOf[Id])
+          if(conf.autoPositivePropagation())
+            graph.transform(tr.caseVar, 
+              p => p._1.label.isInstanceOf[CaseOf] || p._2.label.isInstanceOf[CaseOf], false)
           buffer.commit()
           if(conf.verbose())
             System.err.println(graph.allHyperedges.size + " hyperedges")
@@ -421,12 +426,12 @@ object MainApp {
         System.err.println("Transforming...")  
           
       val trans =
-        if(conf.notrans()) tr.transNone else
           ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
+        (if(conf.notrans()) tr.transNone else (
           (if(conf.drive2()) tr.transDrive2 else 
             if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) &
           (if(conf.total()) tr.transTotal else tr.transUntotal) &
-          (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone))
+          (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone))))
       graph.transform(trans)
       buffer.commit()
       

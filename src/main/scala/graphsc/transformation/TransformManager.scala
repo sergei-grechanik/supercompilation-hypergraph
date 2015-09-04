@@ -47,13 +47,15 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
 //    pairs.sortBy(p => (depth(p._1.source), depth(p._2.source)))
 
   def transform(proc: BiHProcessor, 
-      pair_filter: ((Hyperedge, Hyperedge)) => Boolean = _ => true): Boolean = {
+      pair_filter: ((Hyperedge, Hyperedge)) => Boolean = _ => true,
+      destructive: Boolean = true): Boolean = {
     val normalized = updatedPairs.map(p => (normalize(p._1), normalize(p._2)))
     updatedPairs.clear()
     updatedPairs ++= normalized
     //println("Pairs to transform before filtering: " + updatedPairs.size)
     val set = updatedPairs.toList.filter(pair_filter)
-    updatedPairs --= set
+    if(destructive)
+      updatedPairs --= set
     //println("Pairs to transform: " + set.size)
     var count = 0
     val processed = collection.mutable.Set[(Hyperedge, Hyperedge)]()
