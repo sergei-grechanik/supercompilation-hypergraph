@@ -157,6 +157,7 @@ object MainApp {
   
   def mainBool(args: Array[String]): Option[Boolean] = {
     val conf = new Conf(args)
+    conf.verify()
     val graph = new MainHypergraphImplementation(conf)
     
     if(conf.gui()) {

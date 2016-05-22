@@ -1,12 +1,12 @@
 import com.typesafe.sbt.SbtStartScript
 
-scalaVersion := "2.10.1"
+scalaVersion := "2.11.8"
 
 name := "graphsc"
 
 scalacOptions += "-deprecation"
 
-testOptions in Test += Tests.Argument("-P")
+//testOptions in Test += Tests.Argument("-P")
 
 testOptions in Test += Tests.Argument("-oD")
 
@@ -14,11 +14,13 @@ mainClass in Compile := Some("graphsc.app.MainApp")
 
 //mainClass in oneJar := Some("graphsc.app.MainApp")
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.1" % "test"
+libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+
+libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.6" % "test"
 
 libraryDependencies += "junit" % "junit" % "4.8.1" % "test"
 
-libraryDependencies += "org.rogach" %% "scallop" % "0.9.2"
+libraryDependencies += "org.rogach" %% "scallop" % "1.0.1"
 
 //libraryDependencies += "org.tinyjee.jgraphx" % "jgraphx" % "2.0.0.1"
 
