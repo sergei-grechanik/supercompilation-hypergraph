@@ -1,7 +1,7 @@
 package graphsc
 package transformation
 
-class Supercompilation(graph: Transformations, maxdepth: Int = 10) {
+class Supercompilation(graph: Transformations, protect: Set[Node], maxdepth: Int = 10) {
   def supercompile(n: Node) {
     val visited = collection.mutable.Set[Node]()
     
@@ -9,16 +9,40 @@ class Supercompilation(graph: Transformations, maxdepth: Int = 10) {
       if(!visited.exists(_ ~~ n)) {
         visited += n
         val steps = makeSteps(n, hist, visited.toSet).map(graph.normalize(_)).distinct
+        //System.err.println("hyperedges after steps: " + graph.allHyperedges.size)
         graph.log("-- Supercompilation steps: " + steps.length)
         graph.log("-- from node: " + graph.nodeToString(n.deref))
         graph.log("")
+        for(h <- steps; d <- h.dests)
+          goReduceCalls(d.node, 0)
         for(h <- steps; d <- h.dests) {
           graph.log("-- from node: " + graph.nodeToString(n.deref) + " = " + n.prettyDebug)
           graph.log("-- Supercompilation hyper: " + graph.hyperedgeToString(h))
           graph.log("-- Supercompilation dest: " + graph.nodeToString(d) + "\n")
           go(d.node, n :: hist)
         }
-      } 
+      }
+    }
+
+    def goReduceCalls(n: Node, depth: Int) {
+      if(depth <= maxdepth && !protect.exists(_ ~~ n)) {
+        var reduced = false
+        for(h1@Hyperedge(Let(), _, f :: _) <- n.deref.node.outs;
+            if protect.exists(_ ~~ f.deref.node);
+            d <- h1.dests) {
+          reduced = true
+        }
+        for(h1@Hyperedge(l, _, f :: _) <- n.deref.node.outs;
+            if l != Let(); 
+            d <- h1.dests) {
+          reduced = true
+        }
+        if(!reduced)
+          for(h1@Hyperedge(Let(), _, d :: _) <- n.deref.node.outs; h2 <- d.node.outs) {
+            //System.err.println("hyperedges: " + graph.allHyperedges.size)
+            partFun2BiHProc(graph.letIfNotProtected(protect))(h1, h2)
+          }
+      }
     }
     
     go(n, Nil)

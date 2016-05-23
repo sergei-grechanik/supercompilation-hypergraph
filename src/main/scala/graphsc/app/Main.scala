@@ -44,8 +44,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     opt[Boolean](noshort = true, descr = "Positive info propagation until saturation")
   val genPair = opt[Boolean](noshort = true, 
       descr = "Traditional pairwise generalization")
-  val supercompile = opt[Boolean](name = "super", 
-      descr = "Traditional multiresult supercompilation")
+  val supercompile = opt[Int](name = "super", default = None,
+      descr = "Traditional multiresult supercompilation with this depth")
   val mergeUseless = opt[Boolean](noshort = true, 
       descr = "Merge nodes by iso even if that won't lead to more node merging")
   val onlyRequested = opt[Boolean](noshort = true, 
@@ -286,7 +286,7 @@ object MainApp {
     }
     
     // Perform traditional multiresult supercompilation (sort of)
-    if(conf.supercompile())
+    if(conf.supercompile.isDefined)
       performTraditionalSupercompilation(graph, conf, goals, resid)
       
     // Perform graph transformation
@@ -323,8 +323,8 @@ object MainApp {
     if(conf.verbose())
       System.err.println("Supercompiling...")
       
-    val s = new Supercompilation(graph, 30)
-    val ns = graph.namedNodes.values.toList
+    val ns = graph.namedNodes.values.map(_.deref.node).toSet
+    val s = new Supercompilation(graph, ns, conf.supercompile())
     val fromgoals =
       for(g <- goals) yield g match {
         case GoalPropEqModuloRen(l, r) => List(l, r)
@@ -423,21 +423,26 @@ object MainApp {
         list.foreach(_(graph))
       }
       
-      if(conf.verbose())
-        System.err.println("Transforming...")  
-          
-      val trans =
-          ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
-        (if(conf.notrans()) tr.transNone else (
-          (if(conf.drive2()) tr.transDrive2 else 
-            if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) &
-          (if(conf.total()) tr.transTotal else tr.transUntotal) &
-          (if(conf.noLetReduce()) bFun2BiHProc(tr.letVar) else tr.transNone))))
-      graph.transform(trans)
-      buffer.commit()
-      
-      if(conf.verbose())
-        System.err.println("Pairs processed: " + graph.lastPairsProcessed)
+      if(!conf.supercompile.isDefined || generation > 0) {
+        if(conf.verbose())
+          System.err.println("Transforming...")  
+            
+        val trans =
+            ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
+          (if(conf.notrans()) tr.transNone else (
+            (if(conf.drive2()) tr.transDrive2 else 
+              if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) &
+            (if(conf.total()) tr.transTotal else tr.transUntotal) &
+            (if(conf.noLetReduce()) partFun2BiHProc(tr.letVar) else tr.transNone))))
+        graph.transform(trans)
+        buffer.commit()
+        
+        if(conf.verbose())
+          System.err.println("Pairs processed: " + graph.lastPairsProcessed)
+      } else {
+        graph.changed = true
+        System.err.println("Skipped transformations after supercompilation")  
+      } 
       
       // Pairwise generalization
       if(conf.genPair()) {

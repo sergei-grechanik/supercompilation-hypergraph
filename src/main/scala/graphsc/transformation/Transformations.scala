@@ -87,15 +87,13 @@ trait Transformations extends Hypergraph {
   }
   
   // let x = e in x  ->  e
-  def letVar: (Hyperedge, Hyperedge) => Boolean = {
+  def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           h2@Hyperedge(Var(), src2, List())) if f1.plain == src2 =>
       trans("letVar", h1, h2) {
         val varnum = f1.renaming(0)
         add(Id(), src1, List(es1 at varnum))
       }
-      true
-    case _ => false
   }
   
   def letLet: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
@@ -135,6 +133,16 @@ trait Transformations extends Hypergraph {
           h2@Hyperedge(l, src2, gs)) if f.plain == src2 && l.isSimple && gs.nonEmpty =>
       trans("letOther", h1, h2) {
         add(l, src1, gs.map(g => add(Let(), (f.renaming comp g) :: es)))
+      }
+  }
+
+  // push Let down if the called node is not in the protected set
+  def letIfNotProtected(protect: Set[Node]): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+    case (h1@Hyperedge(Let(), src1, f :: es),
+          h2@Hyperedge(l, src2, gs)) if f.plain == src2 && !protect.exists(_ ~~ f.node) =>
+      trans("letIfNotProtected", h1, h2) {
+        //removeHyperedge(h1)
+        List(letOther, letCaseOf, letLet, letVar).reduce((a,b) => a.orElse(b))(h1, h2)
       }
   }
   
@@ -671,11 +679,15 @@ trait Transformations extends Hypergraph {
                 else if(childdef.label.isInstanceOf[Tick])
                   applyTransformation(caseTick, c, childdef)
                 changed = true
+                node.deref.node.definingHyperedge match {
+                  case Some(h) => return Some(h)
+                  case None => // next iteration
+                }
               case None =>
             }
           
           if(changed)
-            drive(n, n :: hist)
+            drive(n, hist)
           else
             None
         }
@@ -694,6 +706,9 @@ trait Transformations extends Hypergraph {
                 else
                   applyTransformation(letOther, l, childdef)
                 changed = true
+
+                if(node.deref.node.outs.exists(_.label.isInstanceOf[CaseOf]))
+                  return drive(node, hist)
               case None =>
             }
           }

@@ -38,6 +38,14 @@ trait Hypergraph {
   
   // Create a node without any connections
   def newNode(used: Set[Int]): RenamedNode
+
+  def removeHyperedge(h: Hyperedge) {
+    val h1 = this.normalize(h)
+    h1.source.node.outsMut.remove(h1)
+    for(d <- h1.dests) {
+      d.node.insMut.remove(h1)
+    }
+  }
   
   // Nodes shouldn't be glued manually, they should be marked equal with 
   // an Id() hyperedge. Then the hypergraph should glue these nodes automatically.
