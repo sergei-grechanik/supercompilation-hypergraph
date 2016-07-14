@@ -31,6 +31,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
   val driveRecommended = opt[Int](noshort = true, default = Some(0), 
       descr = "Drive 2*<arg> recommended (by eqprover) nodes")
+  val naiveMrsc = opt[Boolean](noshort = true, descr = "Perform naive multi-result sc")
   val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
   val noLetToId = opt[Boolean](noshort = true, descr = "Disable destructive let to id conversion")
   val noLetUnused = opt[Boolean](noshort = true, descr = "Disable destructive let-unused")
@@ -118,6 +119,7 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val autoConsInj = !conf.noConsInj()
   override val autoNormalize = !conf.noDestrNorm()
   override val enableVisualizer = conf.gui()
+  override val naiveMrsc = conf.naiveMrsc()
   
   /*override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
       List[(Hyperedge, Hyperedge)] =
@@ -485,6 +487,7 @@ object MainApp {
               if conf.mergeUseless() || 
                     LikenessCalculator.notCompletelyUseless(l, r) ||
                     (graph.depths(l) == 0 && graph.depths(r) == 0);
+              if !conf.naiveMrsc() || graph.existsPath(l.deref, r.deref);
               lkl <- likenesscalc.likenessN(l, r); if lkl._1 >= 0) yield {
             val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
             (rl,lkl,l,r)
@@ -506,8 +509,10 @@ object MainApp {
           System.err.println("Performing merging by isomorphism...")
         val candidates =
           if(conf.onlyRequested()) user
-          else if(conf.sortCandidatesBackwards()) like.toList.sortBy(p => p._2._1)
-          else like.toList.sortBy(p => -p._2._1)
+          else 
+            (if(conf.naiveMrsc()) user else List()) ++
+            (if(conf.sortCandidatesBackwards()) like.toList.sortBy(p => p._2._1)
+             else like.toList.sortBy(p => -p._2._1))
         if(conf.verbose())
           System.err.println("Number of candidate pairs: " + candidates.size)
           
@@ -538,6 +543,11 @@ object MainApp {
                   System.err.println(rpretty)
                   System.err.println("=======================\n")
                 }
+
+                // if(conf.naiveMrsc() && !graph.existsPath(l.deref, r.deref)) {
+                //   System.err.println("FOLDING FORBIDDEN!\n") 
+                //   correct = false
+                // }
                 
                 if(correct) {
                   graph.log("-- Proved by isomorphism")

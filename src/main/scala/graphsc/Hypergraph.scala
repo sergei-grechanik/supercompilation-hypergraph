@@ -219,6 +219,7 @@ trait Hypergraph {
   }
   
   def weakMerging: Boolean = false
+  def naiveMrsc: Boolean = false
   
   def canonize(h: Hyperedge): (Renaming, Hyperedge) = h.label match {
     case Let() =>
@@ -302,7 +303,8 @@ trait TheHypergraph extends Hypergraph {
     if(autoNormalize) {
       if(h.dests.nonEmpty)
         h.dests.minBy(_.node.insMut.size).node.insMut
-        .find(x => x.label == h.label && x.dests == h.dests) match {
+        .find(x => x.label == h.label && x.dests == h.dests &&
+              (!naiveMrsc || existsPath(h.source, x.source))) match {
           //case Some(x) if h.source.node == x.source.node =>
           case Some(x) => glueNodes(x.source, h.source)
           case None => 
@@ -622,6 +624,33 @@ trait TheHypergraph extends Hypergraph {
     }
     for(n <- nodes if !reachable(n))
       removeNode(n)
+  }
+
+  def existsPath(n1: RenamedNode, n2: RenamedNode): Boolean = {
+    val nn1 = n1.deref.node
+    val nn2 = n2.deref.node
+    if(!nodes(nn1) || !nodes(nn2))
+      false
+    else
+      existsPathImpl(nn1, nn2) || existsPathImpl(nn2, nn1)
+  }
+
+  private def existsPathImpl(n1: Node, n2: Node): Boolean = {
+    val reachable = collection.mutable.Set[Node]()
+    
+    def go(n: Node):Boolean = {
+      if(n == n2)
+        return true
+      if(!reachable(n)) {
+        reachable += n
+        for(h <- n.outs; d <- h.dests)
+          if(go(d.node))
+            return true
+      }
+      return false
+    }
+
+    return go(n1)
   }
   
   def nodeDotLabel(n: Node): String =
