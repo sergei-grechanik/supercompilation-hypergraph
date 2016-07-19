@@ -70,6 +70,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val verbose = opt[Boolean](descr = "Be more verbose")
   val log = opt[Boolean](descr = "Log transformations to stdout")
   val stat = opt[Boolean](descr = "Print some statistics like number of nodes at the end")
+  val showBigNumbers = opt[Boolean](descr = "Print the number of residual programs before merging")
   val reformat = opt[String](noshort = true, 
       descr = "Transform the test to the specified format (hosc, hipspec, hipspec-total)")
   
@@ -506,7 +507,7 @@ object MainApp {
         var eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
         
         if(conf.verbose())
-          System.err.println("Performing merging by isomorphism...")
+          System.err.println("Performing merging by bisimilarity...")
         val candidates =
           if(conf.onlyRequested()) user
           else 
@@ -553,6 +554,24 @@ object MainApp {
                   graph.log("-- Proved by isomorphism")
                   eq.get.toLog(graph)
                   graph.log("")
+
+                  if(conf.showBigNumbers()) {
+                    val residualizer = new SimpleResidualizer(graph)
+                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness)
+                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness)
+                    val llen = lresids.take(1000).length
+                    val rlen = rresids.take(1000).length
+                    System.err.println("Left residual programs: " + llen)
+                    System.err.println("Right residual programs: " + rlen)
+                    System.err.println()
+
+                    if(conf.stat()) {
+                      println("#maxresid " + (llen max rlen))
+                      println("#minresid " + (llen min rlen))
+                      println("#mulresid " + (llen * rlen))
+                    }
+                  }
+
                   eq.get.performGluing(graph)
                   checktask()
                   if(!stop)

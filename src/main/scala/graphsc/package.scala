@@ -4,6 +4,11 @@ package object graphsc {
     case (h :: t) => for(x <- h; y <- sequence(t)) yield x :: y
     case Nil => List(Nil)
   }
+
+  def sequenceS[T](l: List[Stream[T]]): Stream[List[T]] = l match {
+    case (h :: t) => for(x <- h; y <- sequenceS(t)) yield x :: y
+    case Nil => Stream(Nil)
+  }
   
   implicit def injectOrIntoOptRenaming(r: Option[Renaming]) = new {
     def |(l: Renaming): Option[Renaming] = r.flatMap(_ | l)
