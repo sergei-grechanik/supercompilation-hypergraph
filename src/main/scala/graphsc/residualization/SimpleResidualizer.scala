@@ -8,8 +8,7 @@ class SimpleResidualizer(scc: SCC, use_cache: Boolean = true) {
   type Hist = List[(Node, S)]
   type HistSet = Set[(Node, S)]
   
-  val cache = collection.mutable.Map[Node, 
-                 List[(HistSet, Stream[ResidualTree[Node]])]]().withDefaultValue(Nil)
+  val cache = collection.mutable.Map[(Node, HistSet), Stream[ResidualTree[Node]]]()
   
   def moreRestrictive(more: HistSet, less: HistSet): Boolean =
     less.subsetOf(more)
@@ -30,26 +29,25 @@ class SimpleResidualizer(scc: SCC, use_cache: Boolean = true) {
       case Some(_) => Stream.empty
       case None =>
         val histset = hist.toSet
-        val lst = cache(node)
-      
-        lst.filter(x => use_cache && moreRestrictive(histset, x._1)) match {
-          case ress if ress.nonEmpty =>
-            ress.find(x => x._2.nonEmpty).map(_._2).getOrElse(Stream.empty)
-          case Nil =>
+        cache.get((node, histset)) match {
+          case Some(s) => s
+          case None =>
             val res = residualizeUncached(node, hist)
-            
-            cache(node) = 
-              (histset, res) ::
-                lst.filterNot(x => moreRestrictive(x._1, histset))
-            
+            cache += ((node, histset) -> res)
             res
         }
     }
   }
     
   def residualizeUncached(node: Node, history: Hist = Nil): Stream[ResidualTree[Node]] = {
-    val list_of_streams =
-      for(h <- node.outs) yield {
+    val outs = 
+      node.outs.toList.sortBy(h => h.label match {
+        case _ if isDefining(h) => 0
+        case _ => 1 + h.dests.length
+      })
+
+    val stream_of_streams =
+      for(h <- outs.toStream) yield {
         val smatrices = hyperedgeToMatrix(h)
         val newhisthead = (node, idMatrix(node.deref))
         val dest_residuals =
@@ -59,7 +57,7 @@ class SimpleResidualizer(scc: SCC, use_cache: Boolean = true) {
           }
         sequenceS(dest_residuals).map(l => ResidualTreeNormal(node, h, l))
       }
-    return (Stream.empty[ResidualTree[Node]] /: list_of_streams)(_ ++ _)
+    return stream_of_streams.flatten
   }
 }
 

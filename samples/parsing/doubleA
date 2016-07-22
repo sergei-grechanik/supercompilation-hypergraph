@@ -1,0 +1,8 @@
+
+import: parsing (justA, alt, seq, eps);
+
+doubleAslow = alt (seq justA (seq doubleAslow justA)) eps;
+doubleAfast = alt (seq justA (seq justA doubleAfast)) eps;
+
+prove: doubleAslow = doubleAfast;
+

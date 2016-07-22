@@ -557,18 +557,30 @@ object MainApp {
 
                   if(conf.showBigNumbers()) {
                     val residualizer = new SimpleResidualizer(graph)
-                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness)
-                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness)
-                    val llen = lresids.take(1000).length
-                    val rlen = rresids.take(1000).length
+                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness).take(1000)
+                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness).take(1000)
+                    val llen = lresids.length
+                    val rlen = rresids.length
+                    val lhypers = lresids.map(_.size).sum
+                    val rhypers = rresids.map(_.size).sum
                     System.err.println("Left residual programs: " + llen)
                     System.err.println("Right residual programs: " + rlen)
                     System.err.println()
+
+                    // val toprog = new ToProgram()
+                    // for(pro <- lresids) {
+                    //   val hypers = pro.hyperedges
+                    //   println(toprog(graph, List(("main", lderef)), (h => hypers(h))).toString)
+                    //   println()
+                    // }
 
                     if(conf.stat()) {
                       println("#maxresid " + (llen max rlen))
                       println("#minresid " + (llen min rlen))
                       println("#mulresid " + (llen * rlen))
+                      println("#maxresidh " + (lhypers max rhypers))
+                      println("#minresidh " + (lhypers min rhypers))
+                      println("#sumresidh " + (lhypers + rhypers))
                     }
                   }
 

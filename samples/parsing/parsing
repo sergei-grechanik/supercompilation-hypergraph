@@ -1,0 +1,29 @@
+
+eps cont s = cont s;
+
+justA cont s = case s of {
+  A s1 -> cont s1;
+  B s1 -> None;
+  Z -> None;
+};
+
+justB cont s = case s of {
+  B s1 -> cont s1;
+  A s1 -> None;
+  Z -> None;
+};
+
+end cont s = case s of {
+  B s1 -> None;
+  A s1 -> None;
+  Z -> cont Z;
+};
+
+alt f g cont s = case f cont s of {
+  Just s1 -> Just s1;
+  None -> g cont s;
+};
+
+seq f g cont s = f (g cont) s;
+
+

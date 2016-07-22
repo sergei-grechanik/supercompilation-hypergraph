@@ -371,6 +371,18 @@ case class EqProofTree(
 
 sealed trait ResidualTree[T] {
   val node: T
+
+  lazy val size: Int = this match {
+    case ResidualTreeNormal(_, _, children) =>
+      children.map(_.size).sum + 1
+    case _ => 0
+  }
+
+  lazy val hyperedges: Set[Hyperedge] = this match {
+    case ResidualTreeNormal(_, h, children) => 
+      (Set(h) /: children.map(_.hyperedges))(_ ++ _)
+    case _ => Set.empty
+  }
   
   def checkCorrectness: Boolean = {
     var curind = 0
