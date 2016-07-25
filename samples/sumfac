@@ -1,0 +1,28 @@
+
+import: lib/nat (add, mul);
+
+fac x = case x of {
+    Z -> S Z;
+    S x -> mul (S x) (fac x);
+};
+
+sumfac x = case x of {
+    Z -> S Z;
+    S x -> add (fac (S x)) (sumfac x);
+};
+
+sumfacFast x = case sumfac2 x of {
+    P s t -> s
+};
+
+sumfac2 x = case x of {
+    Z -> P (S Z) (S Z);
+    S x -> case sumfac2 x of {
+        P s t -> fun s (mul (S x) t)
+    };
+};
+
+fun s t = P (add t s) t;
+
+prove: sumfac x = sumfacFast x;
+

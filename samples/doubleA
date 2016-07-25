@@ -1,0 +1,25 @@
+
+
+eq x y = case x of {
+  A x -> case y of { A y -> eq x y; Z -> No };
+  Z -> case y of {A y -> No; Z -> Yes}
+};
+
+g x = h x Z;
+h x y = case x of {
+  A x -> orelse (h x (A y)) (eq (A x) y);
+  Z -> eq Z y;
+};
+
+orelse x y = case x of {Yes -> Yes; No -> y};
+
+
+f x = case x of {
+    A y -> case y of {
+        A z -> f z;
+        Z -> No;
+    };
+    Z -> Yes;
+};
+
+prove: g w = f w; 

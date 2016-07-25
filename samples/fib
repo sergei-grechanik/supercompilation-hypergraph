@@ -1,0 +1,22 @@
+
+import: lib/nat (add);
+
+nfib x = case x of {
+    Z -> Z;
+    S x -> case x of {
+        Z -> (S Z);
+        S x -> add (nfib (S x)) (nfib x);  
+    };
+};
+
+fib2 x = case x of {
+    Z -> P Z (S Z);
+    S x -> case fib2 x of {
+        P s t -> P (add s t) s;
+    };
+};
+
+fib x = case fib2 x of { P s t -> s };
+
+prove: nfib x = fib x;
+

@@ -1,0 +1,15 @@
+-- Glück-Klimov-Nepeivoda example
+
+f x y = case x of {
+  Z -> y;
+  S x -> f (f x x) (f x x);
+};
+
+g x = case x of {
+  Z -> Z;
+  S x -> g (g x);
+};
+
+
+prove: f x x = g x;
+

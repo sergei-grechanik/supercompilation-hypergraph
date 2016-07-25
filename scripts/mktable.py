@@ -62,8 +62,11 @@ def mkcell(runs, f):
         elif all(c != 0 for c in codes):
             return "fail"
         else:
-            l = [float(r.find(f).text) for r in runs if int(r.find("exit-code").text) == 0]
-            return str(average(l))
+            l = [float(r.find(f).text) for r in runs if int(r.find("exit-code").text) == 0 and r.find(f) is not None]
+            if l:
+                return str(average(l))
+            else:
+                return "?"
     else:
         return "?"
 
