@@ -59,6 +59,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Sort candidate pairs in reverse order")
   val noCache = opt[Boolean](noshort = true, 
       descr = "Don't use cache during merging by bisimulation")
+  val cse = opt[Boolean](noshort = true, 
+      descr = "Perform common subexpression elimination")
   
   val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
   val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -463,6 +465,11 @@ object MainApp {
           g.performGeneralization(graph)
         }
       }
+
+      if(conf.cse()) {
+        val cse = new CSE(graph)
+        cse.printCandidates()
+      }
       
       checktask()
       
@@ -557,8 +564,8 @@ object MainApp {
 
                   if(conf.showBigNumbers()) {
                     val residualizer = new SimpleResidualizer(graph)
-                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness).take(1000)
-                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness).take(1000)
+                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness).take(100000)
+                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness).take(100000)
                     val llen = lresids.length
                     val rlen = rresids.length
                     val lhypers = lresids.map(_.size).sum

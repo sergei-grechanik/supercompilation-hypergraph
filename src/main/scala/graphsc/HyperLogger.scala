@@ -12,16 +12,16 @@ trait HyperLogger extends Prettifier {
   }
   
   override def nodeToString(n: RenamedNode): String =
-    if(enableLogging)
+    // if(enableLogging)
       nodeShortProg(n)
-    else
-      "<node>"
+    // else
+    //   "<node>"
   
   override def hyperedgeToString(h: Hyperedge): String =
-    if(enableLogging)
+    // if(enableLogging)
       nodeToString(h.source) + " = " + prettyHyperedge(h, nodeToString, true).replace("\n", " ")
-    else
-      "<hyperedge>"
+    // else
+    //   "<hyperedge>"
   
   override def logShift() { logshift += 1 }
   override def logUnshift() { logshift -= 1 }

@@ -112,6 +112,9 @@ case class Renaming(vector: List[Int]) {
   // intersect two renamings
   def &(r: Renaming): Renaming =
     Renaming((vector zip r.vector).map{ case (i,j) => if(i == j) i else -1 }).normal
+
+  def +(pair: (Int, Int)): Renaming =
+    Renaming((this.toMap + pair).toSeq:_*)
 }
 
 object Renaming {
@@ -123,6 +126,8 @@ object Renaming {
       require(map.size == pairs.size)
       Renaming((0 to map.keys.max toList).map(map.getOrElse(_, -1))).normal
     }
+  def apply(map: Map[Int, Int]): Renaming =
+    apply(map.toSeq:_*)
   def apply(used: Set[Int]): Renaming =
     apply(used.toList.map(x => (x,x)):_*)
 }

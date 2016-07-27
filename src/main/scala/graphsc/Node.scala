@@ -29,6 +29,11 @@ class Node(initial_used: Set[Int]) {
     if(gluedTo == null) mouts.toList else error()
   def ins: List[Hyperedge] = 
     if(gluedTo == null) mins.toList else error()
+
+  def outsUnderef: List[Hyperedge] = 
+    if(gluedTo == null) mouts.toList 
+    else gluedTo.node.outsUnderef.map(h => 
+      Hyperedge(h.label, RenamedNode(h.source.renaming comp gluedTo.renaming.inv, this), h.dests))
   
   def outsMut: collection.mutable.Set[Hyperedge] = 
     if(gluedTo == null) mouts else error()
