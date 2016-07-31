@@ -16,9 +16,9 @@ package object interpretation {
         if(subs.contains(ErrorBottom))
           ErrorBottom
         else
-          Ctr(name, subs)
+          Ctr(name, subs).optimize
       case CaseOf(cases) =>
-        nodeRunner(dests(0), args) match {
+        nodeRunner(dests(0), args).peel match {
           case Ctr(cname, cargs) =>
             val Some(((_, n), expr)) = (cases zip dests.tail).find(_._1._1 == cname)
             assert(cargs.size == n)
@@ -63,7 +63,7 @@ package object interpretation {
           ValueAndStuff(Ctr(name, subs.map(_.value)), subs.map(_.cost).sum + 1, List(h))
       case CaseOf(cases) =>
         val what = nodeRunner(dests(0), args)
-        what.value match {
+        what.value.peel match {
           case Ctr(cname, cargs) =>
             val Some(((_, n), expr)) = (cases zip dests.tail).find(_._1._1 == cname)
             assert(cargs.size == n)

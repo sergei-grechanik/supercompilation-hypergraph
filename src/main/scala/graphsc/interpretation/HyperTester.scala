@@ -44,13 +44,20 @@ trait HyperTester extends TheHypergraph {
     }
       
     val almost = runCache(n).get(args) match {
-      case Some(v) =>
+      case Some(v) if v.cost <= ctx.limit =>
         if(hyperTesterLogging) { 
           log("-- cached: " + v.value)
           log("-- cost: " + v.cost)
           log("")
         }
         v
+      case Some(v) if v.cost > ctx.limit =>
+        if(hyperTesterLogging) { 
+          log("-- cached with higher cost: " + v.value)
+          log("-- cost: " + v.cost + " > " + ctx.limit)
+          log("")
+        }
+        ValueAndStuff(ErrorBottom, 0, Nil)
       case None => 
         if(hyperTesterLogging) {
           log("-- uncached, running")
@@ -138,26 +145,28 @@ trait HyperTester extends TheHypergraph {
     if(lub.value != ErrorBottom) {
       runCache(n) += args -> lub
       
-      for((v,o) <- values zip outs if v != lub) {
-        if(hyperTesterLogging)
-          log("-- Checking one of the failed hyperedges")
-        val test = runHyperedgeUncached(RunningContext(newctx.limit), o, args)
-        // Sometimes it is just too difficult to compute the true value
-        if(test.value != ErrorBottom)
-          assert(test.value == lub.value)
-        else {
-          if(hyperTesterLogging)
-            log("-- Check failed (which is not the end of the world)")
-          // If we have a hyperedge like this:
-          //   f x y = f x (S y)
-          // we will get an infinite branch and hence this error message.
-          // Scince there is an example showing this problem (samples/dummy),
-          // I've disabled this error message.
-          //println("Warning: there was an error computing\n\t" + o + " " + args)
-          //println("Prettified source:")
-          //println(n.prettyDebug)
-        }
-      }
+      // // This loop checks the failed hyperedges which might be useful during on the fly testing
+      // // but is redundant during residualization, so it's currently disabled
+      // for((v,o) <- values zip outs if v != lub) {
+      //   if(hyperTesterLogging)
+      //     log("-- Checking one of the failed hyperedges")
+      //   val test = runHyperedgeUncached(RunningContext(newctx.limit), o, args)
+      //   // Sometimes it is just too difficult to compute the true value
+      //   if(test.value != ErrorBottom)
+      //     assert(test.value == lub.value)
+      //   else {
+      //     if(hyperTesterLogging)
+      //       log("-- Check failed (which is not the end of the world)")
+      //     // If we have a hyperedge like this:
+      //     //   f x y = f x (S y)
+      //     // we will get an infinite branch and hence this error message.
+      //     // Scince there is an example showing this problem (samples/dummy),
+      //     // I've disabled this error message.
+      //     //println("Warning: there was an error computing\n\t" + o + " " + args)
+      //     //println("Prettified source:")
+      //     //println(n.prettyDebug)
+      //   }
+      // }
     }
     
     if(hyperTesterLogging)
@@ -238,7 +247,7 @@ trait HyperTester extends TheHypergraph {
   
   // If we are residualizing, this should be MaxValue 
   // because otherwise the result may be non-deterministic
-  def limitFromMinCost(c: Double): Double = c*2 + 30
+  def limitFromMinCost(c: Double): Double = c + 1
   
   def retestHyperedge(h: Hyperedge) {
     for((as, r) <- runCache(h.source.node)) {

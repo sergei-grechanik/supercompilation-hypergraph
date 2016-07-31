@@ -20,6 +20,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     "Run <arg> smallest automatically generated tests for each node on the defining boundary")
   val residAutoTestOnly = opt[Boolean](noshort = true, descr =
     "Don't use user-specified tests for residualization")
+  val residTestResults = opt[Boolean](noshort = true, 
+    descr = "Show test results for the residual program")
     
   val only = opt[Boolean](noshort = true, descr = "Don't load unreferenced functions into graph")
   
@@ -61,6 +63,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Don't use cache during merging by bisimulation")
   val cse = opt[Boolean](noshort = true, 
       descr = "Perform common subexpression elimination")
+  val fusion = opt[Boolean](noshort = true, 
+      descr = "Perform loop fusion (tupling)")
   
   val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
   val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
@@ -138,12 +142,12 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   
   
   var residualizing = false
-  override def limitFromMinCost(c: Double): Double =
-    if(residualizing) Double.MaxValue
-    else super.limitFromMinCost(c)
+  // override def limitFromMinCost(c: Double): Double =
+  //   if(residualizing) Double.MaxValue
+  //   else super.limitFromMinCost(c)
     
-  override def hyperedgeCost(h: Hyperedge): Double = 
-    super.hyperedgeCost(h) * (1 + (depth(h.source) + codepth(h.source))*0.2)
+  // override def hyperedgeCost(h: Hyperedge): Double = 
+  //   super.hyperedgeCost(h) * (1 + (depth(h.source) + codepth(h.source))*0.2)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -301,6 +305,12 @@ object MainApp {
     if(conf.resid()) {
       // Even if there are cached results, they are of no use to us
       graph.clearRunCache()
+
+      if(conf.testLog())
+        graph.enableLoggingVar = true
+
+      if(conf.verbose())
+        System.err.println("Loading user-defined tests into graph...")
       
       // Load (again) user-defined tests
       if(!conf.residAutoTestOnly())
@@ -464,6 +474,11 @@ object MainApp {
           graph.log("")
           g.performGeneralization(graph)
         }
+      }
+
+      if(conf.fusion()) {
+        val tupler = new Tupler(graph)
+        tupler.printCandidates()
       }
 
       if(conf.cse()) {
@@ -671,6 +686,16 @@ object MainApp {
         System.err.println("Autogenerating and running tests...")
       for(n <- residlist)
         residualizer.autoTest(n.node)
+      if(conf.residTestResults()) {
+        for(rn <- residlist) {
+          val n = rn.deref.node
+          System.err.println("\nTest results for node\n" + n.prettyDebug + "\n")
+          for((args, v) <- graph.runCache(n).toList.sortBy(_._2.cost)) {
+            System.err.println("[" + v.cost + "] " + args + " -> " + v.value)
+          }
+          System.err.println()
+        }
+      }
     }
     
     if(conf.verbose())

@@ -56,7 +56,7 @@ sealed trait Trie {
   
   def toValue: Value = this match {
     case TrieVar(_) => Bottom
-    case TrieConstr(cn, as) => Ctr(cn, as.map(_.toValue))
+    case TrieConstr(cn, as) => Ctr(cn, as.map(_.toValue)).optimize
     case TrieBottom => Bottom
     case t:TrieThunk => t.unrolled.toValue
     case TrieCaseOf(_, _) => throw new Exception("Cannot convert a caseof to value")

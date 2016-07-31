@@ -203,9 +203,9 @@ sealed trait Expr {
   }
   
   def mkConst: Value = this match {
-    case ExprConstr(c) => Ctr(c, Nil)
+    case ExprConstr(c) => Ctr(c, Nil).optimize
     case ExprCall(ExprConstr(c), as) =>
-      Ctr(c, as.map(_.mkConst))
+      Ctr(c, as.map(_.mkConst)).optimize
     case _ => throw new Exception("mkConst from a non-const")
   }
   
@@ -678,6 +678,7 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
     fname ^^ (n => ExprVar(n)) |
     "_" ^^ (n => ExprUnused()) |
     cname ^^ (n => ExprConstr(n)) |
+    "[0-9]+".r ^^ (n => intToExpr(n.toInt)) |
     "(" ~> expr <~ ")"
   
   def caseof: Parser[ExprCaseOf] =
@@ -695,6 +696,11 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
   def lambda: Parser[ExprLambda] =
     ("\\" ~> rep(varname) <~ "->") ~ expr ^^
       { case vs~e => ExprLambda(vs, e) }
+
+  private def intToExpr(int: Int): Expr = {
+    if(int == 0) ExprConstr("Z")
+    else ExprCall(ExprConstr("S"), List(intToExpr(int - 1)))
+  }
 }
 
 object ProgramParser extends ProgramParser("", "", false) {

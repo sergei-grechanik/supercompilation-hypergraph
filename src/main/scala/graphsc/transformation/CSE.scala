@@ -28,12 +28,15 @@ class CSE(graph: Hypergraph) {
   def subexpressions1(node: Node): Set[RenamedNode] =
     subexpressions.get(node).flatten.getOrElse(Set[RenamedNode]())
 
+  def subexpressions_hyperedge(h: Hyperedge): Traversable[RenamedNode] =
+    CSEFramework.destSubexpressions(h, 
+                    h.dests.map(d => subexpressions.get(d.node).flatten))
+
   def printCandidates() {
     for(n <- graph.allNodes; if !subexpressions(n).isEmpty; h <- n.outsUnderef;
-        if !h.label.isInstanceOf[CaseOf] || true) {
+        if !h.label.isInstanceOf[CaseOf]) {
       val map = collection.mutable.Map[RenamedNode, Int]().withDefault(_ => 0)
-      for(sub <- CSEFramework.destSubexpressions(h, 
-                    h.dests.map(d => subexpressions.get(d.node).flatten))) {
+      for(sub <- subexpressions_hyperedge(h)) {
         map(sub) += 1
       }
       for((sub, k) <- map; if k > 1; if sub.used.nonEmpty;
@@ -55,8 +58,9 @@ class CSE(graph: Hypergraph) {
     val holed = makeHole(where, what, Set[Node]())
     val maxi = (where.source.node.used + (-1)).max
     for(n <- holed) {
-      graph.add(Let(), where.source.node.deref, 
-          List(n) ++ (0 to maxi).map(graph.variable(_)).toList ++ List(what))
+      val (r, h) = graph.addH(Let(), where.source.node.deref, 
+                List(n) ++ (0 to maxi).map(graph.variable(_)).toList ++ List(what))
+      System.err.println(graph.hyperedgeToString(h))
     }
   }
 
@@ -64,12 +68,19 @@ class CSE(graph: Hypergraph) {
                history: Set[Node]): List[RenamedNode] = {
     val holei = (where.used + (-1)).max + 1
     val res =
-      if(!subexpressions(where).getOrElse(Set())(what) || history(where))
+      if(!subexpressions1(where)(what) || history(where) || where.used.size < what.used.size)
         List(where.deref)
       else if(where.deref == what.deref)
         List(graph.variable(holei))
-      else
-        (for(h <- where.outsUnderef; n <- makeHole(h, what, history + where)) yield n).distinct
+      else {
+        val hypers = where.outsUnderef
+                      .filter(h => subexpressions_hyperedge(h).toSet(what))
+                      .sortBy(h => h.dests.map(_.used.size).sum).take(1)
+        if(hypers.isEmpty)
+          List(where.deref)
+        else
+          (for(h <- hypers; n <- makeHole(h, what, history + where)) yield n).distinct
+      }
 
     // System.err.println("hole for node: ")
     // System.err.println(where.prettyDebug)
@@ -112,4 +123,19 @@ class CSE(graph: Hypergraph) {
     }
   }
 
+}
+
+class Tupler(graph: Hypergraph) {
+  def printCandidates() {
+    val candidates = 
+      for(n <- graph.allNodes; h <- n.definingHyperedge; if h.label.isInstanceOf[CaseOf]) 
+        yield h
+    for((lbl, group) <- candidates.groupBy(_.label)) {
+      System.err.println("Group " + lbl.toString)
+      for(h <- group) {
+        System.err.println(h.source.node.prettyDebug)  
+      }
+      System.err.println()
+    }
+  }
 }

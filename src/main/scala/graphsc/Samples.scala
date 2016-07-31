@@ -37,11 +37,7 @@ object Samples {
   
   def apply(n: String*): (String, String) = (n(0), get(n:_*))
   
-  implicit def peano(i: Int): Value =
-    if(i == 0)
-      Ctr("Z", List())
-    else
-      Ctr("S", List(peano(i-1)))
+  implicit def peano(i: Int): Value = Nat(i)
       
   def list(vs: Value*): Value = 
     (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))

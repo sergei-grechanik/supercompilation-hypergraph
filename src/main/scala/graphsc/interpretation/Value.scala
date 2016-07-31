@@ -3,70 +3,76 @@ package interpretation
 
 sealed trait Value {
   def size: Int
-  def |(v: Value): Value
-  def &(v: Value): Value
   def isBottomless: Boolean
+  def peel: Value = this
+  def optimize: Value = this
+
+  def |(x: Value): Value = (this, x) match {
+    case (ErrorBottom, v) => v
+    case (v, ErrorBottom) => v
+    case (Bottom, v) => v
+    case (v, Bottom) => v
+    case (Nat(i), Nat(j)) if i == j => this
+    case (Nat(i), v@Ctr(_,_)) => Nat(i).peel | v
+    case (v@Ctr(_,_), Nat(i)) => Nat(i).peel | v
+    case (Ctr(c1, a1), Ctr(c2, a2)) if c1 == c2 && a1.size == a2.size =>
+      Ctr(c1, a1 zip a2 map { case (l,r) => l | r })
+    case _ => throw new Exception("Values are incompatible")
+  }
+
+  def &(x: Value): Value = (this, x) match {
+    case (ErrorBottom, v) => ErrorBottom
+    case (v, ErrorBottom) => ErrorBottom
+    case (Bottom, v) => Bottom
+    case (v, Bottom) => Bottom
+    case (Nat(i), Nat(j)) if i == j => this
+    case (Nat(i), v) => Nat(i).peel & v
+    case (v, Nat(i)) => Nat(i).peel & v
+    case (Ctr(c1, a1), Ctr(c2, a2)) if c1 == c2 && a1.size == a2.size =>
+      Ctr(c1, a1 zip a2 map { case (l,r) => l & r })
+    case _ => Bottom
+  }
+}
+
+case class Nat(int: Int) extends Value {
+  require(int >= 0)
+
+  override def peel: Value = 
+    if(int == 0) Ctr("Z", List())
+    else Ctr("S", List(Nat(int - 1)))
+
+  override def toString = int.toString
+  override def size = int + 1
+  override def isBottomless = true
 }
 
 case class Ctr(constructor: String, args: List[Value]) extends Value {
-  override def toString = constructor match {
+  override def optimize: Value = constructor match {
     case "S" if args.size == 1 =>
-      val child = args(0).toString
-      if(child.forall(_.isDigit))
-        (child.toInt + 1).toString
-      else
-        "S (" + child + ")"
-    case "Z" if args.isEmpty => "0"
-    case _ => constructor + " " + args.map("(" + _ + ")").mkString(" ")
+      args(0).optimize match {
+        case Nat(i) => Nat(i + 1)
+        case _ => this
+      }
+    case "Z" if args.size == 0 => Nat(0)
+    case _ => this
   }
+
+  override def toString = 
+    constructor + " " + args.map("(" + _ + ")").mkString(" ")
   
   override def size = 1 + args.map(_.size).sum
-  
-  def |(v: Value): Value = v match {
-    case Ctr(c1, a1) if c1 == constructor && a1.length == args.length =>
-      Ctr(c1, args zip a1 map { case (l,r) => l | r })
-    case Bottom =>
-      this
-    case ErrorBottom =>
-      this
-    case _ =>
-      throw new Exception("Values are incompatible")
-  }
-  
-  def &(v: Value): Value = v match {
-    case Ctr(c1, a1) if c1 == constructor && a1.length == args.length =>
-      Ctr(c1, args zip a1 map { case (l,r) => l & r })
-    case Ctr(c1, a1) =>
-      Bottom
-    case Bottom =>
-      Bottom
-    case ErrorBottom =>
-      ErrorBottom
-  }
-  
   override def isBottomless = args.forall(_.isBottomless)
 }
 
 case object Bottom extends Value {
   override def toString = "_|_"
   override def size = 1
-  def |(v: Value): Value = v match {
-    case ErrorBottom => Bottom
-    case v => v
-  }
-  def &(v: Value): Value = v match {
-    case ErrorBottom => ErrorBottom
-    case v => Bottom
-  }
   override def isBottomless = false
 }
 
 case object ErrorBottom extends Value {
   override def toString = "_[fail]_"
   override def size = 1
-  def |(v: Value): Value = v
-  def &(v: Value): Value = ErrorBottom
-  
   override def isBottomless = false
 }
 
