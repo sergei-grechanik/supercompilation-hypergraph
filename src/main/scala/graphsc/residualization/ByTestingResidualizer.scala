@@ -89,28 +89,37 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
       }
     }
   }
+
+  def generateTests(node: RenamedNode, count: Int): List[List[Value]] = {
+    val trie = Trie.mkTrie(node.deref)
+    for(mintest <- findMinTest(trie, count)) yield {
+      (0 to node.arity).map(i => TrieVar(List(i)).subst(mintest).toValue).toList
+    }
+  }
   
-  def findMinTest(t: Trie, count: Int): List[TrieSubst] = {
-    val queue = collection.mutable.Queue[(TrieSubst, List[Trie])]((Map(), List(t)))
+  def findMinTest(t: Trie, count: Int, case_cost: Int = 100): List[TrieSubst] = {
+    val queue = 
+      collection.mutable.PriorityQueue[(Int, TrieSubst, List[Trie])](
+        (0, Map(), List(t)))(Ordering.by(-_._1))
     var res: List[TrieSubst] = Nil
     while(res.size < count && queue.nonEmpty) {
-      val (s, t :: ts) = queue.dequeue()
+      val (i, s, t :: ts): (Int, TrieSubst, List[Trie]) = queue.dequeue()
       t match {
         case t:TrieThunk =>
-          queue.enqueue((s, t.unrollMore(200) :: ts))
+          queue.enqueue((i + 1, s, t.unrollMore(200) :: ts))
         case TrieBottom =>
           if(ts.isEmpty) res = s :: res
-          else queue.enqueue((s, ts))
+          else queue.enqueue((i, s, ts))
         case TrieVar(p) => 
           if(ts.isEmpty) res = s :: res
-          else queue.enqueue((s, ts))
+          else queue.enqueue((i, s, ts))
         case TrieConstr(_, as) =>
           if(as.isEmpty && ts.isEmpty) res = s :: res
-          else queue.enqueue((s, as ++ ts))
+          else queue.enqueue((i + 1, s, as ++ ts))
         case TrieCaseOf(v, cs) =>
           for((n, k, t) <- cs) {
             val c = Map(v -> v.split(n, k))
-            queue.enqueue((s.mapValues(_.subst(c)) ++ c, t :: ts.map(_.subst(c))))
+            queue.enqueue((i + case_cost, s.mapValues(_.subst(c)) ++ c, t :: ts.map(_.subst(c))))
           }
       }
     }

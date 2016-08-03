@@ -32,7 +32,7 @@ class CSE(graph: Hypergraph) {
     CSEFramework.destSubexpressions(h, 
                     h.dests.map(d => subexpressions.get(d.node).flatten))
 
-  def printCandidates() {
+  def performCSE() {
     for(n <- graph.allNodes; if !subexpressions(n).isEmpty; h <- n.outsUnderef;
         if !h.label.isInstanceOf[CaseOf]) {
       val map = collection.mutable.Map[RenamedNode, Int]().withDefault(_ => 0)
