@@ -1,0 +1,5 @@
+import: ../lib/list (transpose);
+
+tt x = transpose (transpose x);
+
+residualize: tt;

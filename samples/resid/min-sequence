@@ -1,0 +1,6 @@
+import: ../lib/list (sequence, fold1);
+import: ../lib/nat (min);
+
+minsequence x = fold1 (\a b -> min a b) (concat (sequence x));
+
+residualize: minsequence;

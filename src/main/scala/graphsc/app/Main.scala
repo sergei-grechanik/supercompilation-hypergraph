@@ -77,6 +77,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val log = opt[Boolean](descr = "Log transformations to stdout")
   val stat = opt[Boolean](descr = "Print some statistics like number of nodes at the end")
   val showBigNumbers = opt[Boolean](descr = "Print the number of residual programs before merging")
+  val showInterestingMergings = opt[Boolean](descr = "Print nodes merged by congruence or bisim")
   val reformat = opt[String](noshort = true, 
       descr = "Transform the test to the specified format (hosc, hipspec, hipspec-total)")
   
@@ -139,6 +140,16 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   var enableLoggingVar = conf.log()
   override def enableLogging = enableLoggingVar
   override val hyperTesterLogging = conf.testLog()
+
+  override def beforeGlue(l: RenamedNode, r: Node) {
+    if(conf.showInterestingMergings() && l.node.mouts.size > 1 && r.mouts.size > 1) {
+      System.err.println("Interesting equivalence:")
+      System.err.println(l.node.prettyDebug)
+      System.err.println(r.prettyDebug)
+      System.err.println()
+    }
+    super.beforeGlue(l, r)
+  }
   
   
   var residualizing = false

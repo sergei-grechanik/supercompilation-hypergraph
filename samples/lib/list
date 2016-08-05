@@ -107,4 +107,28 @@ foldList f a x =
     N -> a;
   };
 
+fold1 f x =
+  case x of {
+    N -> _|_;
+    C a x -> foldList f a x;
+  };
+
+sequence xs = case xs of {
+  N -> C N N;
+  C ys xs -> concat (map (\x -> map (\y -> C y x) ys) (sequence xs))
+};
+
+transpose xs = case xs of {
+  N -> N;
+  C ys xs -> myzip ys (transpose xs)
+};
+
+myzip ys xs = case ys of {
+  N -> xs;
+  C y ys -> case xs of {
+	N -> C (C y N) (myzip ys N);
+	C x xs -> C (C y x) (myzip ys xs);
+  };
+};
+
 

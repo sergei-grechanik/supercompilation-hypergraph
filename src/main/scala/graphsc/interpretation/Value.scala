@@ -15,6 +15,10 @@ sealed trait Value {
     case (Nat(i), Nat(j)) if i == j => this
     case (Nat(i), v@Ctr(_,_)) => Nat(i).peel | v
     case (v@Ctr(_,_), Nat(i)) => Nat(i).peel | v
+    case (VList(l1), VList(l2)) if l1.size == l2.size => 
+      VList((l1, l2).zipped.map{ case (l,r) => l | r })
+    case (l@VList(_), v@Ctr(_,_)) => l.peel | v 
+    case (v@Ctr(_,_), l@VList(_)) => l.peel | v
     case (Ctr(c1, a1), Ctr(c2, a2)) if c1 == c2 && a1.size == a2.size =>
       Ctr(c1, a1 zip a2 map { case (l,r) => l | r })
     case _ => throw new Exception("Values are incompatible")
@@ -28,6 +32,10 @@ sealed trait Value {
     case (Nat(i), Nat(j)) if i == j => this
     case (Nat(i), v) => Nat(i).peel & v
     case (v, Nat(i)) => Nat(i).peel & v
+    case (VList(l1), VList(l2)) if l1.size == l2.size =>
+      VList((l1, l2).zipped.map{ case (l,r) => l & r })
+    case (l@VList(_), v) => (l.peel & v).optimize
+    case (v, l@VList(_)) => (l.peel & v).optimize
     case (Ctr(c1, a1), Ctr(c2, a2)) if c1 == c2 && a1.size == a2.size =>
       Ctr(c1, a1 zip a2 map { case (l,r) => l & r })
     case _ => Bottom
@@ -46,6 +54,18 @@ case class Nat(int: Int) extends Value {
   override def isBottomless = true
 }
 
+case class VList(list: List[Value]) extends Value {
+
+  override def peel: Value = list match {
+    case Nil => Ctr("N", List())
+    case h :: t => Ctr("C", List(h, VList(t)))
+  }
+
+  override def toString = list.mkString("[", ", ", "]")
+  override def size = list.map(_.size + 1).sum + 1
+  override def isBottomless = list.forall(_.isBottomless)
+}
+
 case class Ctr(constructor: String, args: List[Value]) extends Value {
   override def optimize: Value = constructor match {
     case "S" if args.size == 1 =>
@@ -54,6 +74,12 @@ case class Ctr(constructor: String, args: List[Value]) extends Value {
         case _ => this
       }
     case "Z" if args.size == 0 => Nat(0)
+    case "C" if args.size == 2 =>
+      args(1).optimize match {
+        case VList(l) => VList(args(0) :: l)
+        case _ => this
+      }
+    case "N" if args.size == 0 => VList(Nil)
     case _ => this
   }
 

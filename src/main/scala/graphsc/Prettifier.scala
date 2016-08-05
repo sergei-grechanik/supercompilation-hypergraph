@@ -41,9 +41,9 @@ trait Prettifier extends TheHypergraph with NamedNodes {
     prettyRename(r, pretty(n))
   }
   
-  def prettyUpdate(n: Node, s: String) {
+  def prettyUpdate(n: Node, s: String, force: Boolean = false) {
     val old = prettyMap.get(n)
-    if(old.isEmpty || old.get.size > s.size) {
+    if(old.isEmpty || (old.get.size > s.size && force)) {
       val oldname = nodeToString(n.deref)
       prettyMap(n) = s
       n.prettyDebug = s
@@ -94,7 +94,7 @@ trait Prettifier extends TheHypergraph with NamedNodes {
       val lp = prettyMap.get(l.node)
       val rp = prettyMap.get(r).map(prettyRename(l.renaming.inv, _))
       if(rp != None) {
-        prettyUpdate(l.node, rp.get)
+        prettyUpdate(l.node, rp.get, true)
       }
     }
     super.beforeGlue(l, r)

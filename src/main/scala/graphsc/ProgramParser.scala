@@ -676,6 +676,7 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
     
   def argexpr: Parser[Expr] =
     fname ^^ (n => ExprVar(n)) |
+    "_|_" ^^ (n => ExprUnused()) |
     "_" ^^ (n => ExprUnused()) |
     cname ^^ (n => ExprConstr(n)) |
     "[0-9]+".r ^^ (n => intToExpr(n.toInt)) |

@@ -1,0 +1,6 @@
+import: ../lib/list (transpose, fold1, concat);
+import: ../lib/nat (min);
+
+mintranspose x = fold1 (\a b -> min a b) (concat (transpose x));
+
+residualize: mintranspose;

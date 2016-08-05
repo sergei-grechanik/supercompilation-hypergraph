@@ -23,6 +23,17 @@ pred x =
     Z -> Z;
   };
 
+min x y = case x of {
+  Z -> case y of {Z -> Z; S y -> Z; };
+  S x -> case y of {Z -> Z; S y -> S (min x y)};
+};
+
+max x y = case x of {
+  Z -> case y of {Z -> Z; S t -> y; };
+  S t -> case y of {Z -> x; S u -> S (max t u)};
+};
+
+
 ack x y =
   case x of {
     Z -> S y;

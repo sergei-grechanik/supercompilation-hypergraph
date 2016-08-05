@@ -1,0 +1,13 @@
+
+import: ../lib/nat (add);
+
+nfib x = case x of {
+    Z -> Z;
+    S x -> case x of {
+        Z -> (S Z);
+        S x -> add (nfib (S x)) (nfib x);  
+    };
+};
+
+residualize: nfib;
+

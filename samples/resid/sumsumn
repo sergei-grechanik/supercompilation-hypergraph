@@ -1,0 +1,8 @@
+import: ../lib/nat (sumN);
+
+sumsumn n = case n of {
+  Z -> Z;
+  S n -> add (sumN (S n)) (sumsumn n);
+};
+
+residualize: sumN;

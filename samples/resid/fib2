@@ -1,0 +1,14 @@
+
+import: ../lib/nat (add);
+
+fib2 x = case x of {
+    Z -> P Z (S Z);
+    S x -> case fib2 x of {
+        P s t -> P (add s t) s;
+    };
+};
+
+fib x = case fib2 x of { P s t -> s };
+
+residualize: fib;
+
