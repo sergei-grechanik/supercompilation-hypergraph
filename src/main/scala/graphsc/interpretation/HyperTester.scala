@@ -14,6 +14,13 @@ case class RunningContext(limit: Double = Double.MaxValue,
 trait HyperTester extends TheHypergraph {
   def onTheFlyTesting = false
   def hyperTesterLogging = false
+
+  val hyperedgeScore = 
+    collection.mutable.Map[Hyperedge, Int]().withDefault(h => h.label match {
+        case Id() => 1
+        case _ if isDefining(h) => 1
+        case _ => 0
+      })
   
   val runCacheImpl = 
     collection.mutable.Map[Node, collection.mutable.Map[List[Value], ValueAndStuff]]()
@@ -96,13 +103,8 @@ trait HyperTester extends TheHypergraph {
     var newctx = ctx.add(n,args)
     var curlub = ValueAndStuff(ErrorBottom, 0, Nil)
 
-    // Try id hyperedges first
     val outs = 
-      n.outs.toList.sortBy(h => h.label match {
-        case _: Id => 0
-        case _ if isDefining(h) => 1
-        case _ => 2
-      })
+      n.outs.toList.sortBy(h => -hyperedgeScore(h))
       
     val values = 
       for(o <- outs) yield {
@@ -144,6 +146,10 @@ trait HyperTester extends TheHypergraph {
     
     if(lub.value != ErrorBottom) {
       runCache(n) += args -> lub
+
+      for(h <- lub.preferred) {
+        hyperedgeScore(h) += 1
+      }
       
       // // This loop checks the failed hyperedges which might be useful during on the fly testing
       // // but is redundant during residualization, so it's currently disabled

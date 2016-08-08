@@ -1,0 +1,6 @@
+import: ../lib/list (transpose, foldList, map);
+import: ../lib/nat (add);
+
+sumtranspose x = map (foldList add Z) (transpose x);
+
+residualize: sumtranspose;

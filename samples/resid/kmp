@@ -2,27 +2,27 @@ eq x y =
   case x of {
     A -> eqA y;
     B -> eqB y;
-    C -> eqC y;
+    D -> eqD y;
   };
 
 eqA y = 
   case y of {
     A -> T;
     B -> F;
-    C -> F;
+    D -> F;
   };
 eqB y = 
   case y of {
     A -> F;
     B -> T;
-    C -> F;
+    D -> F;
   };
 
-eqC y = 
+eqD y = 
   case y of {
     A -> F;
     B -> F;
-    C -> T;
+    D -> T;
   };
 
 myif c x y =
@@ -36,21 +36,21 @@ match p s = m p s p s;
 
 m pp ss op os =
   case pp of {
-    Nil -> T;
-    Cons p pp ->
+    N -> T;
+    C p pp ->
       case ss of {
-        Nil -> F;
-        Cons s ss ->
+        N -> F;
+        C s ss ->
           myif (eq p s) (m pp ss op os) (n os op);
       };
   };
 
 n os op =
   case os of {
-    Nil -> F;
-    Cons s ss -> m op ss op ss;
+    N -> F;
+    C s ss -> m op ss op ss;
   };
 
-matchAAB str = match (Cons A (Cons A (Cons B Nil))) str;
+matchAAB str = match (C A (C A (C B N))) str;
 
 residualize: matchAAB;

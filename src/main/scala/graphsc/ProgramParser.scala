@@ -433,7 +433,7 @@ case class Program(
       ).withDefaultValue(0)
     
     def makeapps(f: Expr, as: List[Expr]) =
-        (f /: as)((l,r) => ExprCall(ExprFun("@"), List(l, r)))
+        (f /: as)((l,r) => ExprCall(ExprFun("_apply"), List(l, r)))
       
     def go(e: Expr): Expr = e match {
       case ExprFun(f) =>
@@ -451,7 +451,7 @@ case class Program(
           makeapps(newf, newas.drop(arity))
         } else {
           minargs(f) = minargs.getOrElse(f, newas.size) min newas.size
-          ExprCall(ExprConstr("#Ptr_" + f + "_" + newas.size), newas)
+          ExprCall(ExprConstr("Ptr__" + f + "_" + newas.size), newas)
         }
       case ExprCall(f, as) =>
         needApp = true
@@ -464,20 +464,20 @@ case class Program(
     val newprog = mapExprs(go)
     val appcases = 
       (for((f,m) <- minargs.toList; ar = arities(f); k <- m until ar) yield
-        ("#Ptr_" + f + "_" + k, (0 until k).map("$" + _).toList, 
+        ("Ptr__" + f + "_" + k, (0 until k).map("$" + _).toList, 
             if(k < ar - 1)
-              ExprCall(ExprConstr("#Ptr_" + f + "_" + (k+1)), 
+              ExprCall(ExprConstr("Ptr__" + f + "_" + (k+1)), 
                   (0 until k).map(i => ExprVar("$" + i)).toList ++ List(ExprVar("$arg"))) : Expr
             else
               ExprCall(ExprFun(f),
                   (0 until k).map(i => ExprVar("$" + i)).toList ++ List(ExprVar("$arg"))))
-      ) ++ List(("#Ptr_", List("$ext"), 
-            ExprCall(ExprFun("@ext"), List(ExprVar("$ext"), ExprVar("$arg")))))
+      ) //++ List(("#Ptr_", List("$ext"), 
+        //    ExprCall(ExprFun("@ext"), List(ExprVar("$ext"), ExprVar("$arg")))))
             
     if(needApp)
       newprog ++ 
         Program(defs = 
-          Map("@" -> List(ExprLambda(List("$fun", "$arg"), 
+          Map("_apply" -> List(ExprLambda(List("$fun", "$arg"), 
                             ExprCaseOf(ExprVar("$fun"), appcases)))))
     else
       newprog
@@ -562,16 +562,16 @@ case class Program(
       a.loadInto(g)
   }
   
-  def loadTestsInto(g: NamedNodes with HyperTester) {
-    for(t <- tests) t match {
+  def loadTestsInto(g: NamedNodes with HyperTester): List[(RenamedNode, List[Value])] = {
+    for(t <- tests) yield t match {
       case ExprLambda(vs, _) if vs.nonEmpty =>
         throw new Exception("Top-level lambdas in tests are not allowed: " + t)
       case _ if t.freeVars.nonEmpty =>
         throw new Exception("Free variables in tests are not allowed: " + t)
       case ExprCall(e, as) if as.forall(_.isConst) =>
-        g.runNode(e.loadInto(g), as.map(_.mkConst))
+        (e.loadInto(g), as.map(_.mkConst))
       case _ =>
-        g.runNode(t.loadInto(g), Nil)
+        (t.loadInto(g), Nil)
     }
   }
 }
@@ -582,7 +582,7 @@ class ProgramParser(path: String, filename: String = "", strict_decl: Boolean = 
         extends RegexParsers {
   override val whiteSpace = """(\s|--.*\n|\{-(\s|.)*?-\})+""".r
   def fname = not("of\\b".r) ~> "[a-z$][a-zA-Z0-9$.@_]*".r
-  def cname = "[A-Z#][a-zA-Z0-9$.@_]*".r
+  def cname = "[A-Z][a-zA-Z0-9$.@_]*".r
   def varname = fname | "_"
   
   def apply(g: NamedNodes, s: String): Program = {
