@@ -39,6 +39,5 @@ object Samples {
   
   implicit def peano(i: Int): Value = Nat(i)
       
-  def list(vs: Value*): Value = 
-    (vs :\ Ctr("N", List()))((x, y) => Ctr("C", List(x, y)))
+  def list(vs: Value*): Value = VList(vs.toList)
 }

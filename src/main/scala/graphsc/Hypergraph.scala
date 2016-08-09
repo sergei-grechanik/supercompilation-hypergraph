@@ -626,6 +626,14 @@ trait TheHypergraph extends Hypergraph {
       removeNode(n)
   }
 
+  // shift variables to the left
+  def removeHoles() {
+    for(n <- nodes; if n.arity > n.used.size) {
+      val rn = newNode((0 until n.used.size).toSet)
+      glueNodes(n.deref, Renaming(n.used.toList) comp rn)
+    }
+  }
+
   def existsPath(n1: RenamedNode, n2: RenamedNode): Boolean = {
     val nn1 = n1.deref.node
     val nn2 = n2.deref.node

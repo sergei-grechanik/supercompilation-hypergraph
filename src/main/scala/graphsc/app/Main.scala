@@ -495,7 +495,11 @@ object MainApp {
       } else {
         graph.changed = true
         System.err.println("Skipped transformations after supercompilation")  
-      } 
+      }
+
+      if(conf.verbose())
+          System.err.println("Removing holes...")
+      graph.removeHoles()
       
       // Pairwise generalization
       if(conf.genPair()) {
