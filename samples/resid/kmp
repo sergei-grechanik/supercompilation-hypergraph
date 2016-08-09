@@ -25,13 +25,6 @@ eqD y =
     D -> T;
   };
 
-myif c x y =
-  case c of {
-    T -> x;
-    F -> y;
-  };
-
-
 match p s = m p s p s;
 
 m pp ss op os =
@@ -41,7 +34,7 @@ m pp ss op os =
       case ss of {
         N -> F;
         C s ss ->
-          myif (eq p s) (m pp ss op os) (n os op);
+          case (eq p s) of { T -> (m pp ss op os); F -> (n os op); }
       };
   };
 

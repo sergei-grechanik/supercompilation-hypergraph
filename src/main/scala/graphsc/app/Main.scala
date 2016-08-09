@@ -735,6 +735,12 @@ object MainApp {
         System.err.println()
       }
     }
+
+    val hardest_test = resid_tests.maxBy(_._4)
+
+    val hardest_newres = graph.runNode(hardest_test._1, hardest_test._2)
+    System.err.println("\nPredicted hardest speedup: " +
+      (hardest_test._4 / hardest_newres.cost) + "\n")
     
     if(conf.verbose())
       System.err.println("Done running tests...")
@@ -743,7 +749,42 @@ object MainApp {
     if(conf.verbose())
       System.err.println("Residual graphs count: " + subgraphs.size)
     if(subgraphs.nonEmpty) {
-      val res = subgraphs.minBy(_.nodes.size)
+      val subgraph_evaluations =
+        for(subgraph <- subgraphs.sortBy(_.nodes.size).take(300)) yield {
+          // copying stuff from the original graph to a new graph for easier benchmarking
+          val resid_graph = new TheHypergraph with HyperTester
+          val nodesmap = collection.mutable.Map[Node, RenamedNode]()
+          for(n <- subgraph.nodes)
+            nodesmap += (n -> resid_graph.newNode(n.used))
+          for(h <- subgraph.hyperedges.values) {
+            val newh = 
+              Hyperedge(h.label, 
+                        h.source.renaming comp nodesmap(h.source.node),
+                        h.dests.map(d => d.renaming comp nodesmap(d.node)))
+            resid_graph.addHyperedge(newh)
+          }
+
+          val bench_results =
+            for((n, vs, orig_res, base_cost) <- List(hardest_test)) yield {
+              val d = n.deref
+              val res = resid_graph.runNode(d.renaming comp nodesmap(d.node), vs)
+              assert(orig_res == res.value)
+              val new_cost = res.cost
+              (n, vs, base_cost, new_cost, base_cost/new_cost)
+            }
+
+          (bench_results.head._5, subgraph, resid_graph, nodesmap)
+        }
+
+      val top = subgraph_evaluations.sortBy(x => (-x._1, x._2.nodes.size)).take(30)
+
+      for(x <- top)
+        println("hardest-speedup " + x._1 + " nodes " + x._2.nodes.size)
+
+      val best = top.head
+      val res = best._2
+      val resid_graph = best._3
+      val nodesmap = best._4
       
       if(conf.stat()) {
         println("#residual-nodes " + res.nodes.size)
@@ -754,21 +795,12 @@ object MainApp {
         graph.namedNodes.filter(x => res.nodes(x._2.deref.node)) ++ 
         resid.zipWithIndex.map { case (r,i) => ("residual_" + i, r) }
         
-      Console.withOut(output)(
-        Reformat(ToProgram(graph, to_resid, res), "speed-benchmark"))
+      // Console.withOut(output)(
+      //   Reformat(ToProgram(graph, to_resid, res), "speed-benchmark"))
 
-      // copying stuff from the original graph to a new graph for easier benchmarking
-      val resid_graph = new TheHypergraph with HyperTester
-      val nodesmap = collection.mutable.Map[Node, RenamedNode]()
-      for(n <- res.nodes)
-        nodesmap += (n -> resid_graph.newNode(n.used))
-      for(h <- res.hyperedges.values) {
-        val newh = 
-          Hyperedge(h.label, 
-                    h.source.renaming comp nodesmap(h.source.node),
-                    h.dests.map(d => d.renaming comp nodesmap(d.node)))
-        resid_graph.addHyperedge(newh)
-      }
+      System.err.println("\nResidual program:")
+      System.err.println(ToProgram(graph, to_resid, res).toString)
+      System.err.println("")
 
       val bench_results =
         for((n, vs, orig_res, base_cost) <- resid_tests) yield {
@@ -797,6 +829,7 @@ object MainApp {
         println("#median-speedup " + speedups(speedups.length/2))
         println("#best-speedup " + speedups.last)
         println("#maxsize-speedup " + bench_results.sortBy(-_._2.map(_.size).sum).head._5)
+        println("#hardest-speedup " + best._1)
       }
 
       if(conf.residSpeedupGraph()) {

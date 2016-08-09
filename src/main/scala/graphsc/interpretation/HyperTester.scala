@@ -224,7 +224,7 @@ trait HyperTester extends TheHypergraph {
   def hyperedgeCost(h: Hyperedge): Double = h.label match {
     case Construct(name) => 1
     case CaseOf(cases) => 1
-    case Let() => 1
+    case Let() => 0
     case Tick() => 1
     case Improvement() => 1
     case Id() => 1

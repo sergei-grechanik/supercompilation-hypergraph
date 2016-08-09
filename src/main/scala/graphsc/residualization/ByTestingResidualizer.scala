@@ -20,12 +20,14 @@ case class ByTestingResidualizer(graph: Hypergraph with HyperTester, autotestcou
     else {
       // We start with 
       val hss =
-        graph.runCache(n).values.toList.sortBy(-_.cost).map(_.preferred) ++ 
+        graph.runCache(n).toList.sortBy(-_._1.map(_.size).sum).map(_._2.preferred) ++ 
           n.definingHyperedge.toList.map(List(_))
       //val prefhs = graph.runCache(n).values.flatMap(_.preferred).toList
       // TODO: Sometimes there may be a dead code that hasn't been tested
       //val hs = if(prefhs.isEmpty) n.definingHyperedge.toList else prefhs
-      val hs = if(hss.isEmpty) List() /*List(n.outs.minBy(_.dests.size))*/ else hss.head
+      val hs = 
+        if(hss.isEmpty) List(n.outs.minBy(h => h.dests.size*10 + h.dests.map(_.used.size).sum)) 
+        else hss.head
       hs.map(graph.normalize(_)).distinct.flatMap(h =>
         golist(h.dests, ProgramSubgraph(already.nodes + n, already.hyperedges + (n -> h))))  
     }
