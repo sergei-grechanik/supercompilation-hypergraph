@@ -24,11 +24,11 @@ libraryDependencies += "org.rogach" %% "scallop" % "1.0.1"
 
 //libraryDependencies += "org.tinyjee.jgraphx" % "jgraphx" % "2.0.0.1"
 
-libraryDependencies += "net.sf.jung" % "jung-graph-impl" % "2.0.1"
+// libraryDependencies += "net.sf.jung" % "jung-graph-impl" % "2.0.1"
 
-libraryDependencies += "net.sf.jung" % "jung-visualization" % "2.0.1"
+// libraryDependencies += "net.sf.jung" % "jung-visualization" % "2.0.1"
 
-libraryDependencies += "org.scala-lang" % "scala-swing" % "2.10.1"
+// libraryDependencies += "org.scala-lang" % "scala-swing" % "2.10.1"
 
 //seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 

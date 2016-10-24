@@ -70,7 +70,6 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val fusion = opt[Boolean](noshort = true, 
       descr = "Perform loop fusion (tupling)")
   
-  val gui = opt[Boolean](noshort = true, descr = "Launch GUI")
   val dumpDot = opt[Boolean](noshort = true, descr = "Dump the graph to stdout")
   val dumpDot2 = opt[Boolean](noshort = true, descr = "Dump the graph to stdout (lightweight)")
   val dumpCode = opt[Boolean](noshort = true, 
@@ -115,8 +114,7 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
         with AutoTransformer
         with Triggers 
         with Prettifier
-        with HyperLogger
-        with Visualizer {
+        with HyperLogger {
   
   override val total = conf.total()
   override val integrityCheckEnabled = conf.integrityCheck()
@@ -130,7 +128,6 @@ class MainHypergraphImplementation(conf: Conf) extends TheHypergraph
   override val autoCaseInj = !conf.noCaseInj()
   override val autoConsInj = !conf.noConsInj()
   override val autoNormalize = !conf.noDestrNorm()
-  override val enableVisualizer = conf.gui()
   override val naiveMrsc = conf.naiveMrsc()
   
   /*override def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): 
@@ -183,11 +180,6 @@ object MainApp {
     val conf = new Conf(args)
     conf.verify()
     val graph = new MainHypergraphImplementation(conf)
-    
-    if(conf.gui()) {
-      graph.pausable = true
-      graph.launchGUI()
-    }
     
     if(conf.gen())
       graph.autoTransformations ::= graph.unshare(conf.arity())
