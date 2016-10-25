@@ -1,83 +1,60 @@
 package graphsc
 
 package transformation {
-  trait HProcessor extends Function1[Hyperedge, Unit]
-  
-  trait BiHProcessor extends Function2[Hyperedge, Hyperedge, Unit] {
-    def &(other: BiHProcessor): BiHProcessor = {
-      val self = this
-      new BiHProcessor {
-        override def apply(h1: Hyperedge, h2: Hyperedge) {
-          self(h1, h2)
-          other(h1, h2)
-        }
-        
-        override def onSuccess(f: () => Unit): BiHProcessor =
-          self.onSuccess(f) & other.onSuccess(f)
-      }
-    }
-    
-    def cond(c: BiHFilter): BiHProcessor = {
-      val self = this
-      new BiHProcessor {
-        override def apply(h1: Hyperedge, h2: Hyperedge) {
-          if(c(h1, h2))
-            self(h1, h2)
-        }
-        
-        override def onSuccess(f: () => Unit): BiHProcessor =
-          self.onSuccess(f).cond(c)
-      }
-    }
-    
-    def onSuccess(f: () => Unit): BiHProcessor
+
+  case class MonoTransformation(run: Hyperedge => Unit)
+
+  object MonoTransformation {
+    def fromPartial(fun: PartialFunction[Hyperedge, Unit]): MonoTransformation =
+      MonoTransformation(h => fun.lift(h))
   }
-  
-  case class BiHProc2HProc(proc: BiHProcessor) extends HProcessor {
-    override def apply(h: Hyperedge) {
-        // TODO: Should we normalize? or dereference?
-        // Note that we used to perform deref here, but not anymore
-        // because deref is not enough, we must do either full normalization or nothing at all 
-        for(d <- h.dests; h1 <- d.deref.node.outs)
-          proc(h.deref, h1.deref)
-        for(h1 <- h.deref.source.node.ins)
-          proc(h1.deref, h.deref)
+
+  case class BiTransformation(
+            run: (Hyperedge, Hyperedge) => Unit, 
+            priority_function: (Hyperedge, Hyperedge) => Double = (h1, h2) => 0,
+            prefilter: (Hyperedge, Hyperedge) => Boolean = (h1, h2) => true) {
+    def modifyPriority(f: (Hyperedge, Hyperedge, Double) => Double): BiTransformation = 
+      BiTransformation(run, (h1, h2) => f(h1, h2, priority_function(h1, h2)))
+
+    def runMono(h: Hyperedge) {
+      // TODO: Should we normalize? or dereference?
+      // Note that we used to perform deref here, but not anymore
+      // because deref is not enough, we must do either full normalization or nothing at all
+      for(d <- h.dests; h1 <- d.deref.node.outs)
+        run(h.deref, h1.deref)
+      for(h1 <- h.deref.source.node.ins)
+        run(h1.deref, h.deref)
     }
   }
-  
-  case class BFun2BiHProc(funs: List[(Hyperedge, Hyperedge) => Boolean]) 
-      extends BiHProcessor {
-    override def apply(h1o: Hyperedge, h2o: Hyperedge) {
-      for(f <- funs)
-        for((h1,h2) <- transformablePairs(h1o.deref, h2o.deref))
-          f(h1,h2)
-          //funs.foreach(_(h1,h2))
-    }
-    
-    def &(other: BFun2BiHProc): BFun2BiHProc =
-      BFun2BiHProc(funs ++ other.funs)
-      
-    override def onSuccess(f: () => Unit): BFun2BiHProc =
-      BFun2BiHProc(funs.map(g => 
-        (h1: Hyperedge,h2: Hyperedge) => 
-          if(g(h1,h2)) { 
-            f(); 
-            true 
-          } else false))
+
+  object BiTransformation {
+    def fromPartial(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation =
+      BiTransformation{ (h1o,h2o) => 
+        val lifted = fun.lift
+        for((h1, h2) <- transformablePairs(h1o, h2o)) 
+          lifted((h1,h2))
+      }
+
+    def apply(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation =
+      BiTransformation.fromPartial(fun)
+  }
+
+  case class PotentialTransformation(
+              h1: Hyperedge, h2: Hyperedge, 
+              trans: BiTransformation) {
+    def priority: Double = trans.priority_function(h1, h2)
   }
 }
 
 package object transformation {
-  type BiHFilter = (Hyperedge, Hyperedge) => Boolean
- 
-  implicit def biHProc2HProc(p: BiHProcessor): HProcessor =
-    BiHProc2HProc(p)
     
-  implicit def bFun2BiHProc(fun: (Hyperedge, Hyperedge) => Boolean): BFun2BiHProc =
-    BFun2BiHProc(List(fun))
-    
-  implicit def partFun2BiHProc(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BFun2BiHProc =
-    BFun2BiHProc(List((h1,h2) => fun.lift((h1,h2)).fold(false)(_ => true)))
+  // implicit def partFun2BiTransformation(
+  //     fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation =
+  //   BiTransformation((h1,h2) => fun((h1,h2)), prefilter = fun.isDefinedAt)
+
+  // implicit def runMono(
+  //     fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): Hyperedge => Unit =
+  //   partFun2BiTransformation(fun).runMono
     
   def transformablePairs(h1: Hyperedge, h2: Hyperedge): List[(Hyperedge, Hyperedge)] = {
     val Hyperedge(l1, src1, ds1) = h1

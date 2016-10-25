@@ -40,7 +40,7 @@ class Supercompilation(graph: Transformations, protect: Set[Node], maxdepth: Int
         if(!reduced)
           for(h1@Hyperedge(Let(), _, d :: _) <- n.deref.node.outs; h2 <- d.node.outs) {
             //System.err.println("hyperedges: " + graph.allHyperedges.size)
-            partFun2BiHProc(graph.letIfNotProtected(protect))(h1, h2)
+            graph.letIfNotProtected(protect).run(h1, h2)
           }
       }
     }

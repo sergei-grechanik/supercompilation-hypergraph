@@ -29,6 +29,8 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     
   val only = opt[Boolean](noshort = true, descr = "Don't load unreferenced functions into graph")
   
+  val maxtrans = opt[Int](default = Some(Int.MaxValue), 
+      descr = "Maximal number of transformations per generation")
   val arity = opt[Int](default = Some(10), descr = "Maximal arity of nodes")
   val depth = opt[Int](default = Some(10), descr = "Depth limit")
   val codepth = opt[Int](default = Some(10), descr = "Codepth limit")
@@ -182,22 +184,20 @@ object MainApp {
     val graph = new MainHypergraphImplementation(conf)
     
     if(conf.gen())
-      graph.autoTransformations ::= graph.unshare(conf.arity())
+      graph.autoTransformations ::= graph.unshare(conf.arity()).run
       
     if(conf.noLetToId()) 
-      graph.autoTransformations ::= 
-        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letToId)))
+      graph.autoTransformations ::= graph.letToId.runMono
         
     if(conf.noLetUnused()) 
-      graph.autoTransformations ::= graph.letUnused
+      graph.autoTransformations ::= graph.letUnused.run
       
 //    if(conf.noLetReduce()) 
 //      graph.autoTransformations ::= 
 //        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.letVar)))
    
     if(conf.noAutoReduce()) 
-      graph.autoTransformations ::= 
-        PartialFunction(biHProc2HProc(partFun2BiHProc(graph.caseReduce)))
+      graph.autoTransformations ::= graph.caseReduce.runMono
         
 //    if(conf.noDestrNorm())
 //      graph.autoTransformations ::= graph.doNormalize
@@ -436,11 +436,11 @@ object MainApp {
           if(conf.verbose())
             System.err.print("Applying regluing/commutativity... ")  
           graph.changed = false
-          val clone_trans = tr.anyId
+          val clone_trans = List(tr.anyId)
           graph.transform(clone_trans, 
               p => p._1.label.isInstanceOf[Id] || p._2.label.isInstanceOf[Id])
           if(conf.autoPositivePropagation())
-            graph.transform(tr.caseVar, 
+            graph.transform(List(tr.caseVar), 
               p => p._1.label.isInstanceOf[CaseOf] || p._2.label.isInstanceOf[CaseOf], false)
           buffer.commit()
           if(conf.verbose())
@@ -455,6 +455,15 @@ object MainApp {
     stats()
     gendump()
     checktask()
+
+    val trans =
+        ((if(conf.gen()) List(tr.letUp(maxarity)) else Nil) ++
+         (if(conf.notrans()) Nil else (
+            (if(conf.drive2()) tr.transDrive2 else 
+             if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) ++
+            (if(conf.total()) tr.transTotal else tr.transUntotal) ++
+            (if(conf.noLetReduce()) List(tr.letVar) else Nil))))
+        .map(_.modifyPriority((h1: Hyperedge, h2: Hyperedge, p: Double) => p))
     
     // main loop
     while(!stop && generation < conf.generations()) {
@@ -472,14 +481,8 @@ object MainApp {
         if(conf.verbose())
           System.err.println("Transforming...")  
             
-        val trans =
-            ((if(conf.gen()) partFun2BiHProc(tr.letUp(maxarity)) else tr.transNone) &
-          (if(conf.notrans()) tr.transNone else (
-            (if(conf.drive2()) tr.transDrive2 else 
-              if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) &
-            (if(conf.total()) tr.transTotal else tr.transUntotal) &
-            (if(conf.noLetReduce()) partFun2BiHProc(tr.letVar) else tr.transNone))))
-        graph.transform(trans)
+        graph.enqueueTransformations(trans)
+        graph.runPotentialTransformations(conf.maxtrans())
         buffer.commit()
         
         if(conf.verbose())

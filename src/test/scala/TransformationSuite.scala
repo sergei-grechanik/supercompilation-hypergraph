@@ -8,23 +8,23 @@ import org.scalatest.FunSuite
 import org.scalatest.ParallelTestExecution
 
 @RunWith(classOf[JUnitRunner])
-class TransformationSuite extends FunSuite with ParallelTestExecution {
+class BiTransformationSuite extends FunSuite with ParallelTestExecution {
   import Samples._
   
   def transform(
-      g: TransformManager with DepthTracker with Transformations,
+      g: BiTransformManager with DepthTracker with Transformations,
       maxdepth: Int = Int.MaxValue) {
     
-    val transAll: BiHProcessor = {
+    val transAll: List[BiTransformation] = {
       import graphsc.transformation._
-      import g._
-        (letVar &
-        letLet &
-        letCaseOf &
-        letOther &
-        caseVar &
-        caseCase &
-        caseTick).cond(g.limitDepth(maxdepth))
+      List(g.letVar, g.letLet, g.letCaseOf, g.letOther,
+           g.caseVar, g.caseCase, g.caseTick)
+        .map {
+          case BiTransformation(run, pri, pre) =>
+            val newrun: (Hyperedge, Hyperedge) => Unit =
+              (h1, h2) => if(g.limitDepth(maxdepth)(h1, h2)) run(h1, h2)
+            BiTransformation(newrun, pri, pre)
+        }
     }
     
     g.updateAll()
@@ -43,7 +43,7 @@ class TransformationSuite extends FunSuite with ParallelTestExecution {
       new TheHypergraph 
         with HyperTester
         with NamedNodes
-        with TransformManager
+        with BiTransformManager
         with Transformations
         with DepthTracker
         with IntegrityCheckEnabled

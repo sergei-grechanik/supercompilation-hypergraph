@@ -3,11 +3,11 @@ package graphsc.transformation
 import graphsc._
 
 trait AutoTransformer extends Hypergraph {
-  var autoTransformations : List[PartialFunction[Hyperedge, Unit]] = List()
+  var autoTransformations : List[Hyperedge => Unit] = List()
   override def onNewHyperedge(h: Hyperedge) {
     super.onNewHyperedge(h)
     for(t <- autoTransformations)
-      t.lift(h)
+      t(h)
   }
 }
 

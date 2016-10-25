@@ -5,6 +5,7 @@ import scala.util.Random
 trait BiTransformManager extends Hypergraph with DepthTracker {
   var changed = true
   var lastPairsProcessed = 0
+  val potentialTransformations = collection.mutable.Set[PotentialTransformation]()
   val updatedPairs = collection.mutable.Set[(Hyperedge, Hyperedge)]()
   
   // TODO: Find a better name
@@ -42,11 +43,52 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
       addPair(h1, h2) 
     super.onUsedReduced(n)
   }
-  
-//  def filterUpdatedPairs(pairs: List[(Hyperedge, Hyperedge)]): List[(Hyperedge, Hyperedge)] = 
-//    pairs.sortBy(p => (depth(p._1.source), depth(p._2.source)))
 
-  def transform(proc: BiHProcessor, 
+  def enqueueTransformations(
+          trans: Traversable[BiTransformation], 
+          pair_filter: ((Hyperedge, Hyperedge)) => Boolean = _ => true,
+          destructive: Boolean = true) {
+    val normalized = updatedPairs.map(p => (normalize(p._1), normalize(p._2)))
+    updatedPairs.clear()
+    updatedPairs ++= normalized
+    val set = updatedPairs.toList.filter(pair_filter)
+    if(destructive)
+      updatedPairs --= set
+    val processed = collection.mutable.Set[(Hyperedge, Hyperedge)]()
+    for((h1, h2) <- set) {
+      potentialTransformations ++= 
+          trans.collect { case t if t.prefilter(h1, h2) => PotentialTransformation(h1, h2, t) }
+    }
+  }
+
+  def simplifyPotentialTransformations() {
+    val new_pt: List[PotentialTransformation] =
+      (for(PotentialTransformation(h1o, h2o, tr) <- potentialTransformations.toTraversable;
+          h1 = normalize(h1o);
+          h2 = normalize(h2o);
+          if h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2);
+          if tr.prefilter(h1, h2))
+        yield PotentialTransformation(h1, h2, tr)).toList
+    potentialTransformations.clear()
+    potentialTransformations ++= new_pt
+  }
+
+  def runPotentialTransformations(maxtrans: Int) {
+    println("Potential transformations before running: " + potentialTransformations.size)
+    for((_, pt) <- potentialTransformations.toList
+                    .map(p => (p.trans.priority_function(normalize(p.h1), normalize(p.h2)), p))
+                    .sortBy(_._1).take(maxtrans)) {
+      potentialTransformations -= pt
+      val h1 = normalize(pt.h1);
+      val h2 = normalize(pt.h2);
+      if(h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2))
+        pt.trans.run(h1, h2)
+    }
+    println("Potential transformations after running: " + potentialTransformations.size)
+  }
+
+  // obsolete
+  def transform(trans: Traversable[BiTransformation], 
       pair_filter: ((Hyperedge, Hyperedge)) => Boolean = _ => true,
       destructive: Boolean = true): Boolean = {
     val normalized = updatedPairs.map(p => (normalize(p._1), normalize(p._2)))
@@ -65,7 +107,8 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
       if(!processed((h1,h2)) && !processed((h1o,h2o)) 
           && h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2)) {
         processed.add((h1, h2))
-        proc(h1, h2)
+        for(p <- trans)
+          p.run(h1, h2)
         count += 1
       }
     }
@@ -76,53 +119,3 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
 
 }
 
-
-// This transformmanager is obsolete and should be replaced with 
-// BiTransformManager wherever possible
-trait TransformManager extends Hypergraph with DepthTracker {
-  val updatedHyperedges = collection.mutable.Set[Hyperedge]()
-  
-  // TODO: Find a better name
-  def updateAll() {
-    updatedHyperedges ++= allHyperedges
-  }
-  
-  override def onNewHyperedge(h: Hyperedge) {
-    updatedHyperedges += h
-    super.onNewHyperedge(h)
-  }
-  
-  override def afterGlue(n: Node, r: Node) {
-    updatedHyperedges ++= n.outs
-    updatedHyperedges ++= n.ins
-    super.afterGlue(n, r)
-  }
-  
-  override def onUsedReduced(n: Node) {
-    updatedHyperedges ++= n.outs
-    updatedHyperedges ++= n.ins
-    super.onUsedReduced(n)
-  }
-  
-  def transforming(hs: Hyperedge*) {
-    println("Nodes: " + allNodes.size)
-    for(h <- hs)
-      println("    " + h)
-  }
-  
-  def transform(procHyperedge: HProcessor): Boolean = {
-    // TODO: Shuffling may be good for testing but...
-    //Random.shuffle(updatedHyperedges.map(_.deref).toList)//.sortBy(h => depth(h.source))
-    val set = updatedHyperedges.map(normalize(_)).toList.sortBy(h => depth(h.source))
-    updatedHyperedges.clear()
-    val processed = collection.mutable.Set[Hyperedge]()
-    for(ho <- set) {
-      val h = normalize(ho)
-      if(!processed(h) && !processed(ho) && h.source.node.outsMut(h)) {
-        processed += h
-        procHyperedge(h)
-      }
-    }
-    updatedHyperedges.nonEmpty
-  }
-}

@@ -23,71 +23,49 @@ trait Transformations extends Hypergraph {
   }
   
   def applyTransformation(
-        trans: PartialFunction[(Hyperedge, Hyperedge), Unit], 
-        h1o: Hyperedge, h2o: Hyperedge): Boolean = {
-    var done = false
-    val tlifted = trans.lift
-    for((h1,h2) <- transformablePairs(normalize(h1o), normalize(h2o)))
-      if(tlifted((h1,h2)).isDefined)
-        done |= true
-    done
+        trans: BiTransformation, 
+        h1o: Hyperedge, h2o: Hyperedge) {
+    trans.run(normalize(h1o), normalize(h2o))
   }
   
-  def applyTransformation(
-        trans: (Hyperedge, Hyperedge) => Boolean, 
-        h1o: Hyperedge, h2o: Hyperedge): Boolean = {
-    var done = false
-    for((h1,h2) <- transformablePairs(normalize(h1o), normalize(h2o)))
-      done |= trans(h1,h2)
-    done
-  }
+  def transDriveNoCaseVar: List[BiTransformation] =
+    List(anyId, letLet, letCaseOf, letOther, caseCase, caseTick)
   
-  
-  def transDriveNoCaseVar =
-    anyId & letLet & letCaseOf & letOther & caseCase & caseTick
-  
-  def transDrive =
-    anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick
+  def transDrive: List[BiTransformation] =
+    List(anyId, letLet, letCaseOf, letOther, caseVar, caseCase, caseTick)
     
-  def transDrive2 =
+  def transDrive2: List[BiTransformation] =
     //anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick & letCaseOf2All
-    anyId & letLet & caseGen & letOther & caseVar & caseTick &
-    letCaseOf2All & /*letCaseOfLetCaseOf2 &*/ letCaseOfBranches
-    
-  
-  def transNone = BFun2BiHProc(Nil)
+    List(anyId, letLet, caseGen, letOther, caseVar, caseTick,
+    letCaseOf2All, /*letCaseOfLetCaseOf2 &*/ letCaseOfBranches)
   
   
-  def transTotal = caseConstrTotal & caseCaseSwap(true)
-  def transUntotal = partFun2BiHProc(caseCaseSwap(false))
+  def transTotal: List[BiTransformation] = List(caseConstrTotal, caseCaseSwap(true))
+  def transUntotal: List[BiTransformation] = List(caseCaseSwap(false))
   
   /////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
 
-  def anyId: (Hyperedge, Hyperedge) => Boolean = {
+  def anyId: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Id(), src1, List(e1)),
           h2@Hyperedge(Id(), src2, List(e2))) =>
       trans("anyId-idid", h1, h2) {
         add(Id(), src2.renaming comp e1.renaming.inv comp src1, List(e2))
       }
-      true
     case (h1@Hyperedge(l1, src1, es1),
           h2@Hyperedge(Id(), src2, List(e2))) =>
       trans("anyId", h1, h2) {
         add(l1, src1, es1.map(e => if(e.plain == src2) e.renaming comp e2 else e))
       }
-      true
     case (h1@Hyperedge(Id(), src1, List(e1)),
           h2@Hyperedge(l2, src2, es2)) =>
       trans("anyId-back", h1, h2) {
         add(l2, src2.renaming comp e1.renaming.inv comp src1, es2)
       }
-      true
-    case _ => false
   }
   
   // let x = e in x  ->  e
-  def letVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letVar: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           h2@Hyperedge(Var(), src2, List())) if f1.plain == src2 =>
       trans("letVar", h1, h2) {
@@ -96,7 +74,7 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  def letLet: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letLet: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           h2@Hyperedge(Let(), src2, f2 :: es2)) if f1.plain == src2 =>
       trans("letLet", h1, h2) {
@@ -105,30 +83,33 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  def letCaseOf: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
-    case (h1@Hyperedge(Let(), src1, f :: es),
-          h2@Hyperedge(CaseOf(cases), src2, g :: hs)) if f.plain == src2 =>
-      if(!f.isPlain)
-        letCaseOf((
-          Hyperedge(Let(), src1, f.plain :: es),
-          Hyperedge(h2.label, src2, f.renaming compDests h2)))
-      else {
-        trans("letCaseOf", h1, h2) {
-          val newg = add(Let(), g :: es)
-          val newhs = (cases zip hs).map { case ((_,n),h) =>
-              val newes = es.map { e => 
-                Renaming((0 until e.arity).map(_ + n).toList) comp e 
+  def letCaseOf: BiTransformation = {
+    def helper: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+      case (h1@Hyperedge(Let(), src1, f :: es),
+            h2@Hyperedge(CaseOf(cases), src2, g :: hs)) if f.plain == src2 =>
+        if(!f.isPlain)
+          helper((
+            Hyperedge(Let(), src1, f.plain :: es),
+            Hyperedge(h2.label, src2, f.renaming compDests h2)))
+        else {
+          trans("letCaseOf", h1, h2) {
+            val newg = add(Let(), g :: es)
+            val newhs = (cases zip hs).map { case ((_,n),h) =>
+                val newes = es.map { e => 
+                  Renaming((0 until e.arity).map(_ + n).toList) comp e 
+                }
+                val ys = (0 until n).map(i => variable(i)).toList
+                add(Let(), h :: ys ++ newes)
               }
-              val ys = (0 until n).map(i => variable(i)).toList
-              add(Let(), h :: ys ++ newes)
-            }
-          add(CaseOf(cases), src1, newg :: newhs)
+            add(CaseOf(cases), src1, newg :: newhs)
+          }
         }
-      }
+    }
+    BiTransformation.fromPartial(helper)
   }
   
   // Construct, Id, Tick, Improvement...
-  def letOther: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letOther: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f :: es),
           h2@Hyperedge(l, src2, gs)) if f.plain == src2 && l.isSimple && gs.nonEmpty =>
       trans("letOther", h1, h2) {
@@ -137,16 +118,17 @@ trait Transformations extends Hypergraph {
   }
 
   // push Let down if the called node is not in the protected set
-  def letIfNotProtected(protect: Set[Node]): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letIfNotProtected(protect: Set[Node]): BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f :: es),
           h2@Hyperedge(l, src2, gs)) if f.plain == src2 && !protect.exists(_ ~~ f.node) =>
       trans("letIfNotProtected", h1, h2) {
         //removeHyperedge(h1)
-        List(letOther, letCaseOf, letLet, letVar).reduce((a,b) => a.orElse(b))(h1, h2)
+        for(t <- List(letOther, letCaseOf, letLet, letVar))
+          t.run(h1, h2)
       }
   }
   
-  def letToId: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letToId: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f1 :: es1),
           h2@Hyperedge(Var(), src2, List())) if 
             f1.plain != src2 && es1.forall(_.deref.getVar.isDefined) =>
@@ -171,7 +153,7 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  def letUnused: PartialFunction[Hyperedge, Unit] = {
+  def letUnused: MonoTransformation = MonoTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f1 :: es1)) =>
       val newhead = f1.plain
       val newtail = 
@@ -194,7 +176,7 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  def doNormalize: PartialFunction[Hyperedge, Unit] = {
+  def doNormalize: MonoTransformation = MonoTransformation.fromPartial{
     case h =>
       addHyperedge(canonize(simplify(h))._2)
   }
@@ -203,7 +185,7 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
   
   // This transformation is performed automatically during normalization, don't use it
-  def caseReduce: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseReduce: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases), src1, e :: hs),
           h2@Hyperedge(Construct(name), src2, args)) if e.plain == src2 =>
       trans("caseReduce", h1, h2) {
@@ -222,7 +204,7 @@ trait Transformations extends Hypergraph {
   }
   
   // propagate positive information
-  def caseVar: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseVar: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases), src1, e :: hs),
           h2@Hyperedge(Var(), src2, Nil)) if e.plain == src2 =>
       trans("caseVar", h1, h2) {
@@ -244,33 +226,36 @@ trait Transformations extends Hypergraph {
       }
   }
   
-  def caseCase: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
-    case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
-          h2@Hyperedge(CaseOf(cases2), src2, e2 :: fs2)) if e1.plain == src2 =>
-      if(!e1.isPlain)
-        caseCase((
-          Hyperedge(CaseOf(cases1), src1, e1.plain :: fs1),
-          Hyperedge(h2.label, src2, e1.renaming compDests h2)))
-      else {
-        trans("caseCase", h1, h2) {
-          val newfs2 =
-            (cases2 zip fs2).map { case ((_,n),f) =>
-                val newfs1 = (cases1 zip fs1).map { case ((_,m),g) =>
-                    val vec = (0 until g.arity).map(i => 
-                      if(i < m) i else i + n).toList
-                    Renaming(vec) comp g
-                  }
-                add(CaseOf(cases1), f :: newfs1)
-              }
-          add(CaseOf(cases2), src1, e2 :: newfs2)
+  def caseCase: BiTransformation = {
+    def helper: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+      case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
+            h2@Hyperedge(CaseOf(cases2), src2, e2 :: fs2)) if e1.plain == src2 =>
+        if(!e1.isPlain)
+          helper((
+            Hyperedge(CaseOf(cases1), src1, e1.plain :: fs1),
+            Hyperedge(h2.label, src2, e1.renaming compDests h2)))
+        else {
+          trans("caseCase", h1, h2) {
+            val newfs2 =
+              (cases2 zip fs2).map { case ((_,n),f) =>
+                  val newfs1 = (cases1 zip fs1).map { case ((_,m),g) =>
+                      val vec = (0 until g.arity).map(i => 
+                        if(i < m) i else i + n).toList
+                      Renaming(vec) comp g
+                    }
+                  add(CaseOf(cases1), f :: newfs1)
+                }
+            add(CaseOf(cases2), src1, e2 :: newfs2)
+          }
         }
-      }
+    }
+    BiTransformation.fromPartial(helper)
   }
   
   // You might think that there will be a problem if src2 is a dest node of h1 several times
   // but TransformManager replaces the node between the hyperedges with a dummy node, so 
   // there is no problem
-  def caseTick: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseTick: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(Tick(), src2, List(e2))) if e1.plain == src2 =>
       trans("caseTick", h1, h2) {
@@ -302,31 +287,28 @@ trait Transformations extends Hypergraph {
   
   // Specialized versions of letCaseOf combined with some caseOf transformations
   
-  def letCaseOf2(pat: PartialFunction[Label, Unit])
-                (h1: Hyperedge, h2: Hyperedge): Boolean = (h1,h2) match {
-    case (Hyperedge(Let(), src1, e1 :: fs1),
-          Hyperedge(CaseOf(cases), src2, e2 :: fs2)) if e1.plain == src2 && e2.node.isVar =>
+  def letCaseOf2(pat: PartialFunction[Label, Unit]): 
+                BiTransformation = BiTransformation.fromPartial{
+    case (h1@Hyperedge(Let(), src1, e1 :: fs1),
+          h2@Hyperedge(CaseOf(cases), src2, e2 :: fs2)) if e1.plain == src2 && e2.node.isVar =>
       val Some(v) = (e1.renaming comp e2).getVar
       var res = false
       for(h3@Hyperedge(l, _, _) <- fs1(v).node.outs if pat.isDefinedAt(l))
         res ||= letCaseOfDoStuff(h1, h2, h3, v)
-      res
-    case (Hyperedge(Let(), src1, e1 :: fs1),
-          Hyperedge(l, src2, _)) if pat.isDefinedAt(l) && e1.plain != src2 =>
+    case (h1@Hyperedge(Let(), src1, e1 :: fs1),
+          h2@Hyperedge(l, src2, _)) if pat.isDefinedAt(l) && e1.plain != src2 =>
       val v = fs1.indexWhere(_.plain == src2)
       var res = false
       for(h3@Hyperedge(CaseOf(_), src2, e2 :: _) <- e1.node.outs 
           if (e1.renaming comp src2.renaming.inv comp e2).getVar == Some(v))
         res ||= letCaseOfDoStuff(h1, h3, h2, v)
-      res
-    case _ => false
   }
   
-  def letCaseOf2All = letCaseOf2{ case _ => } _
-  def letCaseOf2Reduce = letCaseOf2{ case Construct(_) => } _
-  def letCaseOf2Unused = letCaseOf2{ case Unused() => } _
-  def letCaseOf2CaseOf = letCaseOf2{ case CaseOf(_) => } _
-  def letCaseOf2Var = letCaseOf2{ case Var() => } _
+  def letCaseOf2All = letCaseOf2{ case _ => }
+  def letCaseOf2Reduce = letCaseOf2{ case Construct(_) => }
+  def letCaseOf2Unused = letCaseOf2{ case Unused() => }
+  def letCaseOf2CaseOf = letCaseOf2{ case CaseOf(_) => }
+  def letCaseOf2Var = letCaseOf2{ case Var() => }
   
   private final def letCaseOfDoStuff(
       hlet: Hyperedge, hcase: Hyperedge, hstuff: Hyperedge, v: Int): Boolean = hstuff.label match {
@@ -347,7 +329,7 @@ trait Transformations extends Hypergraph {
       }
       true
     case Var() =>
-      letCaseOf(hlet, hcase.source.renaming.inv comp hcase)
+      letCaseOf.run(hlet, hcase.source.renaming.inv comp hcase)
       true
     case CaseOf(cases2) if hstuff.dests(0).node.isVar =>
       trans("letCaseOfCaseOf", hlet, hcase, hstuff) {
@@ -370,9 +352,9 @@ trait Transformations extends Hypergraph {
   // caseCase for two let-caseof combinations
   // let ... x = let in case y of {} ... in case x of {}  ->
   //    let ... let ... in case x of {} ... in case y of ...
-  def letCaseOfLetCaseOf2: (Hyperedge, Hyperedge) => Boolean = (h1,h2) =>
-    (h1.label,h2.label) match {
-      case (Let(), Let()) if h1.dests(0).plain != h2.source =>
+  def letCaseOfLetCaseOf2: BiTransformation = BiTransformation.fromPartial{
+      case (h1@Hyperedge(Let(), _, _), h2@Hyperedge(Let(), _, _)) 
+           if h1.dests(0).plain != h2.source =>
         val e1 = h1.dests(0)
         var res = false
         for(hc1@Hyperedge(CaseOf(_), src3, e3 :: _) <- e1.node.outs;
@@ -381,8 +363,8 @@ trait Transformations extends Hypergraph {
             hc2@Hyperedge(CaseOf(_), _, e4 :: _) <- h2.dests(0).node.outs; 
             if e4.node.isVar)
           res ||= letCaseOfLetCaseOf2DoStuff(h1, hc1, v, h2, hc2)
-        res
-      case (Let(), CaseOf(_)) if h1.dests(0).plain == h2.source =>
+      case (h1@Hyperedge(Let(), _, _), h2@Hyperedge(CaseOf(_), _, _)) 
+           if h1.dests(0).plain == h2.source =>
         val Some(v) = (h1.dests(0).renaming comp h2.dests(0)).getVar
         var res = false
         for(hl2@Hyperedge(Let(), _, e3 :: _) <- h1.dests(v + 1).node.outs;
@@ -394,8 +376,6 @@ trait Transformations extends Hypergraph {
             v <- (e3.renaming comp src.renaming.inv comp e4).getVar;
             if es(v) ~~ h1.source)
           res ||= letCaseOfLetCaseOf2DoStuff(hl1, hc1, v, h1, h2)
-        res
-      case _ => false
     }
   
   private final def letCaseOfLetCaseOf2DoStuff(
@@ -432,11 +412,11 @@ trait Transformations extends Hypergraph {
   // Push let into branches partially
   // let ... x = stuff ... in case x of { C -> f }  ->
   //    let x = stuff in case x of { C -> let ... in f }
-  def letCaseOfBranches: (Hyperedge, Hyperedge) => Boolean = {
+  def letCaseOfBranches: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, f :: es),
           h2@Hyperedge(CaseOf(cases), src2, g :: hs)) if f.plain == src2 && g.node.isVar =>
       val Some(v) = (f.renaming comp g).getVar
-        if(es(v).getVarUnused != Some(-1)) {
+      if(es(v).getVarUnused != Some(-1)) {
         trans("letCaseOfBranches", h1, h2) {
           val newhs = (cases zip hs).map { case ((_,n),h) =>
               val newes = es.map(e => e.renaming.mapVars(_ + n + 1) comp e.node)
@@ -447,10 +427,7 @@ trait Transformations extends Hypergraph {
           val newcaseof = add(CaseOf(cases), variable(0) :: newhs)
           add(Let(), src1, newcaseof :: es(v) :: origvars)
         }
-      true
-      } else
-        false
-    case _ => false
+      }
   }
   
   /////////////////////////////////////////////////////////////////////////////
@@ -460,7 +437,7 @@ trait Transformations extends Hypergraph {
   
   // factoring out caseofs from branches (in any setting)
   // case e of { A -> case x of {..}; B -> case x of {...} }  ->  case x of {...}
-  def caseCaseSwap(total: Boolean = false): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseCaseSwap(total: Boolean = false): BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(l1@CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(l2@CaseOf(cases2), src2, e2 :: fs2)) if 
             fs1.exists(_.plain == src2) &&
@@ -548,7 +525,7 @@ trait Transformations extends Hypergraph {
   
   // factoring out constructors from branches (in total setting)
   // case e of { A -> S e1; B -> S e2 }  ->  S (case e of { A -> e1; B -> e2 })
-  def caseConstrTotal: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseConstrTotal: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
           h2@Hyperedge(l2@Construct(name), src2, es2)) if 
             fs1.exists(_.plain == src2) && 
@@ -576,15 +553,15 @@ trait Transformations extends Hypergraph {
   /////////////////////////////////////////////////////////////////////////////
 
   // Move the let up through let, a special case of letUp
-  def letLetUp(maxarity: Int = Int.MaxValue): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letLetUp(maxarity: Int = Int.MaxValue): BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(Let(), src1, es1),
           h2@Hyperedge(Let(), src2, f2 :: es2)) if 
             es1.tail.exists(_.plain == src2) =>
-      letUp(maxarity)((h1,h2))
+      letUp(maxarity).run(h1,h2)
   }
   
   // Move the let up, i.e. generalize
-  def letUp(maxarity: Int = Int.MaxValue): PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def letUp(maxarity: Int = Int.MaxValue): BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(l1, src1, es1),
           h2@Hyperedge(Let(), src2, f2 :: es2)) if 
             (if(l1 == Let()) es1.tail else es1).exists(_.plain == src2) =>
@@ -624,7 +601,7 @@ trait Transformations extends Hypergraph {
   }
   
   // case e of {...}  ->  let x = e in case x of {...}
-  def caseGen: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
+  def caseGen: BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases), src1, es1), h2) if 
             es1(0).deref.getVar.isEmpty =>
       trans("caseGen", h1, h2) {
@@ -636,7 +613,7 @@ trait Transformations extends Hypergraph {
   }
   
   // f(x,x)  ->  let y = x, z = x in f(y,z)
-  def unshare(maxarity: Int = Int.MaxValue): PartialFunction[Hyperedge, Unit] = {
+  def unshare(maxarity: Int = Int.MaxValue): MonoTransformation = MonoTransformation.fromPartial{
     case h if(h.used.size + 1 <= maxarity) =>
       trans("unshare", h) {
         for((m, shift) <- (0 until h.dests.length) zip h.shifts if shift != -1) {
