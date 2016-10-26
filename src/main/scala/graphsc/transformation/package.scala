@@ -11,10 +11,11 @@ package transformation {
 
   case class BiTransformation(
             run: (Hyperedge, Hyperedge) => Unit, 
-            priority_function: (Hyperedge, Hyperedge) => Double = (h1, h2) => 0,
-            prefilter: (Hyperedge, Hyperedge) => Boolean = (h1, h2) => true) {
+            priority_function: (Hyperedge, Hyperedge) => Double,
+            prefilter: (Hyperedge, Hyperedge) => Boolean) {
+
     def modifyPriority(f: (Hyperedge, Hyperedge, Double) => Double): BiTransformation = 
-      BiTransformation(run, (h1, h2) => f(h1, h2, priority_function(h1, h2)))
+      BiTransformation(run, (h1, h2) => f(h1, h2, priority_function(h1, h2)), prefilter)
 
     def runMono(h: Hyperedge) {
       // TODO: Should we normalize? or dereference?
@@ -28,12 +29,28 @@ package transformation {
   }
 
   object BiTransformation {
-    def fromPartial(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation =
-      BiTransformation{ (h1o,h2o) => 
-        val lifted = fun.lift
-        for((h1, h2) <- transformablePairs(h1o, h2o)) 
-          lifted((h1,h2))
+    def fromPartial(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation = {
+      def prefilt(h1o: Hyperedge, h2o: Hyperedge): Boolean = {
+        var result: Boolean = false
+        for((h1, h2) <- transformablePairs(h1o, h2o))
+          result ||= fun.isDefinedAt((h1, h2))
+        result
       }
+
+      def run(h1o: Hyperedge, h2o: Hyperedge) {
+        val lifted = fun.lift
+        var applications: Int = 0
+        for((h1, h2) <- transformablePairs(h1o, h2o))
+          lifted((h1,h2)) match {
+            case Some(_) => applications += 1
+            case None =>
+          }
+        // if(applications == 0)
+        //   println("Unapplicable " + prefilt(h1o, h2o))
+      }
+
+      BiTransformation(run = run, prefilter = prefilt, priority_function = (_, _) => 0)
+    }
 
     def apply(fun: PartialFunction[(Hyperedge, Hyperedge), Unit]): BiTransformation =
       BiTransformation.fromPartial(fun)

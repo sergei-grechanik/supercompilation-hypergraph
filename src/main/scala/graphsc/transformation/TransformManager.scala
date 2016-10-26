@@ -2,7 +2,8 @@ package graphsc
 package transformation
 import scala.util.Random
 
-trait BiTransformManager extends Hypergraph with DepthTracker {
+trait BiTransformManager extends TheHypergraph with DepthTracker {
+  var totalChanges: Int = 0
   var changed = true
   var lastPairsProcessed = 0
   val potentialTransformations = collection.mutable.Set[PotentialTransformation]()
@@ -20,6 +21,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def onNewHyperedge(h: Hyperedge) {
+    totalChanges += 1
     changed = true
     for(h1 <- h.source.node.insMut)
       addPair(h1, h)
@@ -29,6 +31,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def beforeGlue(r: RenamedNode, n: Node) {
+    totalChanges += 1
     changed = true
     for(h1 <- n.insMut; h2 <- r.node.outsMut)
       addPair(h1, h2)
@@ -38,6 +41,7 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
   }
   
   override def onUsedReduced(n: Node) {
+    totalChanges += 1
     changed = true
     for(h1 <- n.insMut; h2 <- n.outsMut)
       addPair(h1, h2) 
@@ -69,22 +73,38 @@ trait BiTransformManager extends Hypergraph with DepthTracker {
           if h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2);
           if tr.prefilter(h1, h2))
         yield PotentialTransformation(h1, h2, tr)).toList
+    println("Potential transformations before simplification: " + potentialTransformations.size)
     potentialTransformations.clear()
     potentialTransformations ++= new_pt
+    println("Potential transformations after simplification: " + potentialTransformations.size)
   }
 
-  def runPotentialTransformations(maxtrans: Int) {
+  def runPotentialTransformations(maxtrans: Int, ignore_nonchanging: Boolean = true) {
     println("Potential transformations before running: " + potentialTransformations.size)
-    for((_, pt) <- potentialTransformations.toList
+    println("Nodes before: " + this.nodes.size)
+    var count = 0
+    var ignored = 0
+    var lastprio: Double = 0
+    for((pr, pt) <- potentialTransformations.toList
                     .map(p => (p.trans.priority_function(normalize(p.h1), normalize(p.h2)), p))
-                    .sortBy(_._1).take(maxtrans)) {
+                    .sortBy(_._1) if count < maxtrans) {
       potentialTransformations -= pt
       val h1 = normalize(pt.h1);
       val h2 = normalize(pt.h2);
-      if(h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2))
+      if(h1.source.node.outsMut(h1) && h2.source.node.outsMut(h2)) {
+        val changes_before = totalChanges
         pt.trans.run(h1, h2)
+        if(!ignore_nonchanging || changes_before != totalChanges) {
+          count += 1
+          lastprio = pr
+        }
+        else
+          ignored += 1
+      }
     }
     println("Potential transformations after running: " + potentialTransformations.size)
+    println("Ignored transformations: " + ignored + " last priority: " + lastprio)
+    println("Nodes after: " + this.nodes.size)
   }
 
   // obsolete

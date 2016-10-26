@@ -28,6 +28,9 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     descr = "Print (input size, speedup) graph")
     
   val only = opt[Boolean](noshort = true, descr = "Don't load unreferenced functions into graph")
+
+  val params = opt[String](noshort = true, 
+      descr = "File with additional parameters")
   
   val maxtrans = opt[Int](default = Some(Int.MaxValue), 
       descr = "Maximal number of transformations per generation")
@@ -463,7 +466,8 @@ object MainApp {
              if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) ++
             (if(conf.total()) tr.transTotal else tr.transUntotal) ++
             (if(conf.noLetReduce()) List(tr.letVar) else Nil))))
-        .map(_.modifyPriority((h1: Hyperedge, h2: Hyperedge, p: Double) => p))
+        .map(_.modifyPriority((h1: Hyperedge, h2: Hyperedge, p: Double) => 
+                                p + graph.depth(h1.source) + graph.codepth(h2.source)))
     
     // main loop
     while(!stop && generation < conf.generations()) {
@@ -481,8 +485,9 @@ object MainApp {
         if(conf.verbose())
           System.err.println("Transforming...")  
             
-        graph.enqueueTransformations(trans)
+        graph.enqueueTransformations(trans.map(_.modifyPriority((_, _, p) => p + generation)))
         graph.runPotentialTransformations(conf.maxtrans())
+        graph.simplifyPotentialTransformations()
         buffer.commit()
         
         if(conf.verbose())
@@ -669,6 +674,17 @@ object MainApp {
             }
           }
         }
+
+        // {
+        //   val stats = eprover.stats
+        //   for(((l,r), n) <- stats.toList.sortBy(-_._2).take(10)) {
+        //     println("----- recommended " + n)
+        //     println(l.prettyDebug)
+        //     println("--------------")
+        //     println(r.prettyDebug)
+        //     println("--------------")
+        //   }
+        // }
         
         if(!stop && conf.driveRecommended() > 0) {
           if(conf.verbose())
@@ -689,7 +705,7 @@ object MainApp {
       gendump()
       checktask()
       
-      if(!graph.changed)
+      if(!graph.changed && graph.potentialTransformations.size == 0)
         stop = true
     }
     
