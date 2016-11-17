@@ -147,9 +147,11 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator,
     
     val pairs = 
       for((llab,lset) <- louts.iterator; (rlab,rset) <- routs.iterator; if llab == rlab; 
-          lh <- lset; rh1 <- rset; 
+          lh <- lset; rh1 <- rset;
           if lh.dests.size == rh1.dests.size;
-          rh <- varySecond(lh, rh1)) yield
+          rh = rh1
+//          rh <- varySecond(lh, rh1)
+      ) yield
         likenessH(lh, rh, ren).map{ case (like, rn) => (like, lh, rh, rn) }
     
     val sorted_pairs = 
@@ -260,6 +262,16 @@ class EquivalenceProver[S, L](scc: SCC, likenesscalc: LikenessCalculator,
   }
 }
 
+object EquivalenceProver {
+  def pushRenamingThroughHyperedges(r: Renaming, h1: Hyperedge, h2: Hyperedge): List[Renaming] = {
+    assert(h1.label == h2.label && h1.dests.size == h2.dests.size)
+    val aftersource = h1.source.renaming comp r comp h2.source.renaming.inv
+    for((d1, d2, sh) <- (h1.dests, h2.dests, h1.shifts).zipped.toList) yield
+      if(sh == -1) d1.renaming.inv comp d2.renaming
+      else d1.renaming.inv comp (aftersource.shift(sh) |! Renaming(0 until sh toSet)) comp d2.renaming
+  }
+}
+
 case class EqProofTree(
     renaming: Renaming, 
     nodes: (Node, Node), 
@@ -273,7 +285,7 @@ case class EqProofTree(
   // Because they are defined in terms of themselves and the roots.
   def performGluing(g: Hypergraph) {
     // The first thing to do is to fix renamings
-    propagateRenamings.performGluing1(g)
+    performGluing1(g)
   }
   
   private def performGluing1(g: Hypergraph) {
@@ -286,39 +298,46 @@ case class EqProofTree(
   // so we should essentially perform a data-flow analysis. 
   def propagateRenamings: EqProofTree = {
     var prev = this
-    var cur = propagateRenamings1()
+    var cur = propagateRenamings1()._1
     while(cur != prev) {
       prev = cur
-      cur = cur.propagateRenamings1()
+      cur = cur.propagateRenamings1()._1
     }
     cur
   }
   
-  // One iteration of propagating renamings up
-  private def propagateRenamings1(hist: List[EqProofTree] = Nil): EqProofTree = 
+  // One iteration of propagating renamings up and down
+  // Returns new
+  def propagateRenamings1(hist: List[EqProofTree] = Nil): (EqProofTree, Map[(Node, Node), Renaming]) =
     out match {
       case None =>
         hist.find(t => t.nodes == nodes) match {
           case None =>
-            // this node is refl in agda terms, we don't have to modify it since
-            // equivalence prover use the set of used variables without questioning it
-            this
+            // this node is refl
+            (EqProofTree(Renaming(nodes._2.used) |! renaming, nodes, None), Map.empty)
           case Some(t) =>
             // it is a folding node, we should combine both renamings
-            EqProofTree((t.renaming | renaming).get, nodes, None)
+            val newren = t.renaming |! renaming
+            (EqProofTree(newren, nodes, None), Map(nodes -> newren))
         }
       case Some((h1, h2, ds)) =>
         // recursively perform renaming propagation below
-        val newds = ds.map(_.propagateRenamings1(this :: hist))
+        // TODO: Propagate renaming down
+        val pushed_rens = EquivalenceProver.pushRenamingThroughHyperedges(renaming, h1, h2)
+        val newds =
+          for((EqProofTree(dren, dnodes, dout), ren) <- (ds, pushed_rens).zipped.toList)
+            yield EqProofTree(dren |! ren, dnodes, dout).propagateRenamings1(this :: hist)
         // now lift through hyperedges and combine all the renamings
         var ren = Renaming()
-        for((((d1, d2), s), t) <- h1.dests zip h2.dests zip h1.shifts zip newds if s != -1) {
+        val destrenmap = collection.mutable.Map[(Node, Node), Renaming]()
+        for((((d1, d2), s), (t, renmap)) <- h1.dests zip h2.dests zip h1.shifts zip newds if s != -1) {
           // if the renamings are uncombinable then something has gone wrong
-          ren = (ren | (d1.renaming comp t.renaming comp d2.renaming.inv).unshift(s)).get
+          ren = ren |! (d1.renaming comp t.renaming comp d2.renaming.inv).unshift(s)
+          destrenmap ++= renmap
         }
-        EqProofTree(
-            h1.source.renaming.inv comp ren comp h2.source.renaming, 
-            nodes, Some((h1, h2, newds)))
+        ren = h1.source.renaming.inv comp ren comp h2.source.renaming
+        destrenmap.get(nodes).foreach(r => ren = ren |! r)
+        (EqProofTree(ren, nodes, Some((h1, h2, newds.map(_._1)))), destrenmap.toMap)
     }
   
   // It's left-biased in the sense that we take hyperedges from the left side
@@ -326,7 +345,7 @@ case class EqProofTree(
     if(out == None && nodes._1 == nodes._2) ResidualTreeStop((nodes._1, nodes._2))
     else if(out == None) ResidualTreeFold((nodes._1, nodes._2))
     else ResidualTreeNormal((nodes._1, nodes._2), out.get._1, out.get._3.map(_.leftTree))
-    
+
   // Check overall correctness. Isolated folding correctness, which is checked
   // during the graph traversal, usually is not enough.
   def checkCorrectness: Boolean =

@@ -108,6 +108,11 @@ case class Renaming(vector: List[Int]) {
     else
       None
   }
+
+  def |!(r: Renaming): Renaming = this | r match {
+    case Some(res) => res
+    case None => throw UncombinableRenamingsException
+  }
   
   // intersect two renamings
   def &(r: Renaming): Renaming =
@@ -116,6 +121,8 @@ case class Renaming(vector: List[Int]) {
   def +(pair: (Int, Int)): Renaming =
     Renaming((this.toMap + pair).toSeq:_*)
 }
+
+case object UncombinableRenamingsException extends Exception
 
 object Renaming {
   def apply(pairs: (Int, Int)*): Renaming = 

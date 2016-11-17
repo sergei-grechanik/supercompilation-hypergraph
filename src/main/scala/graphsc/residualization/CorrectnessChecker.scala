@@ -62,7 +62,7 @@ object CorrectnessChecker {
           })
       case Let() =>
         buildMatrix(RSEq, h.dests(0).arity, srcar, { (i,j) =>
-          if(h.dests(i + 1).getVar == Some(j)) RSEq
+          if(h.dests(i + 1).deref.getVar == Some(j)) RSEq
           else RSUnknown
         }) ::
         h.dests.tail.map(d => buildMatrix(RSUnknown, d.arity, srcar, eqfun))

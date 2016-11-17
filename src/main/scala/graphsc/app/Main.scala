@@ -40,8 +40,6 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val gen = opt[Boolean](noshort = true, descr = "Enable unordered generalization")
   val noiso = opt[Boolean](noshort = true, descr = "Disable merging by bisimulation")
   val generations = opt[Int](default = Some(1000), descr = "Maximal number of generations")
-  val driveRecommended = opt[Int](noshort = true, default = Some(0), 
-      descr = "Drive 2*<arg> recommended (by eqprover) nodes")
   val naiveMrsc = opt[Boolean](noshort = true, descr = "Perform naive multi-result sc")
   val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
   val noLetToId = opt[Boolean](noshort = true, descr = "Disable destructive let to id conversion")
@@ -84,7 +82,6 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val verbose = opt[Boolean](descr = "Be more verbose")
   val log = opt[Boolean](descr = "Log transformations to stdout")
   val stat = opt[Boolean](descr = "Print some statistics like number of nodes at the end")
-  val showBigNumbers = opt[Boolean](descr = "Print the number of residual programs before merging")
   val showInterestingMergings = opt[Boolean](descr = "Print nodes merged by congruence or bisim")
   val reformat = opt[String](noshort = true, 
       descr = "Transform the test to the specified format (hosc, hipspec, hipspec-total)")
@@ -434,6 +431,8 @@ object MainApp {
     
     def weak_merge() {
       // Should be safe even if weak merging is off (it's commutativity then)
+      System.err.println("Ignoring regluing/commutativity in this version... ")
+      return
       if(/*conf.weakMerging() &&*/ graph.changed) {        
         do {
           if(conf.verbose())
@@ -538,166 +537,32 @@ object MainApp {
       checktask()
           
       if(!stop && !conf.noiso()) {
-        if(conf.verbose())
-          System.err.println("Computing likeness...")
-        val nodes = graph.allNodes.toList
-        //val likenesscalc = new ByTestingLikenessCalculator(graph)
         val likenesscalc = new DefaultLikenessCalculator(conf.total())
-        //val likenesscalc = 
-        //  new CachingLikenessCalculator(new DefaultLikenessCalculator(conf.total()))
-        //val likenesscalc = new OldLikenessCalculator(true)//conf.total())
-        lazy val like =
-          (for(l <- nodes; r <- nodes; 
-              if l.hashCode < r.hashCode;
-              if conf.mergeUseless() || 
-                    LikenessCalculator.notCompletelyUseless(l, r) ||
-                    (graph.depths(l) == 0 && graph.depths(r) == 0);
-              if !conf.naiveMrsc() || graph.existsPath(l.deref, r.deref);
-              lkl <- likenesscalc.likenessN(l, r); if lkl._1 >= 0) yield {
-            val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
-            (rl,lkl,l,r)
-          }) ++
-          (for(l <- nodes; lkl <- likenesscalc.likenessN(l, l)) yield {
-            val rl = 2 //LikenessCalculator.reverseLikeness(l, r)
-            (rl,lkl,l,l)
-          })
           
         lazy val user =
           goals.collect {
             case GoalPropEqModuloRen(l, r) => (1, (1, Renaming()), l.node, r.node)
             case GoalPropEq(l, r) => (1, (1, Renaming()), l.node, r.node)
           }
-        
-        var eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
-        
+
         if(conf.verbose())
           System.err.println("Performing merging by bisimilarity...")
-        val candidates =
-          if(conf.onlyRequested()) user
-          else 
-            (if(conf.naiveMrsc()) user else List()) ++
-            (if(conf.sortCandidatesBackwards()) like.toList.sortBy(p => p._2._1)
-             else like.toList.sortBy(p => -p._2._1))
-        if(conf.verbose())
-          System.err.println("Number of candidate pairs: " + candidates.size)
-          
-        for(((rl, (i,ren2),l1,r1), j) <- candidates.zipWithIndex; if !stop) {
-          val lderef = l1.deref;
-          val rderef = r1.deref;
-          val l = lderef.node;
-          val r = rderef.node;
-          val ren1 = lderef.renaming.inv comp ren2 comp rderef.renaming;
-          
-          for(ren <- if(!(l ~~ r)) List(ren1) else likenesscalc.viablePermutations(l)) {
-            val lpretty = l.prettyDebug
-            val rpretty = r.prettyDebug
 
-            val eq = eprover.prove(l.deref.node, r.deref.node, ren)
-            if(eq != None) {
-              try {
-                val proof = eq.get.propagateRenamings
-                val correct = proof.checkCorrectness
-                
-                if(conf.verbose()) {
-                  if(correct)
-                    System.err.println("==These two are equal== likeness: " + i + " idx: " + j)
-                  else
-                    System.err.println("==Correctness check failed== likeness: " + i + " idx: " + j)
-                  System.err.println(lpretty)
-                  System.err.println("=======================" + eq.get.renaming)
-                  System.err.println(rpretty)
-                  System.err.println("=======================\n")
-                }
+        var changes_before = -1
 
-                // if(conf.naiveMrsc() && !graph.existsPath(l.deref, r.deref)) {
-                //   System.err.println("FOLDING FORBIDDEN!\n") 
-                //   correct = false
-                // }
-                
-                if(correct) {
-                  graph.log("-- Proved by isomorphism")
-                  eq.get.toLog(graph)
-                  graph.log("")
+        while(changes_before != graph.totalChanges) {
+          changes_before = graph.totalChanges
+          val aeqprover = new EquivalenceProverAdvanced(graph, likenesscalc)
 
-                  if(conf.showBigNumbers()) {
-                    val residualizer = new SimpleResidualizer(graph)
-                    val lresids = residualizer.residualize(l).filter(_.checkCorrectness).take(100000)
-                    val rresids = residualizer.residualize(r).filter(_.checkCorrectness).take(100000)
-                    val llen = lresids.length
-                    val rlen = rresids.length
-                    val lhypers = lresids.map(_.size).sum
-                    val rhypers = rresids.map(_.size).sum
-                    System.err.println("Left residual programs: " + llen)
-                    System.err.println("Right residual programs: " + rlen)
-                    System.err.println()
+          if (conf.onlyRequested())
+            for (u <- user)
+              aeqprover.tryMerging(u._3, u._4)
+          else
+            aeqprover.mergeAll()
 
-                    // val toprog = new ToProgram()
-                    // for(pro <- lresids) {
-                    //   val hypers = pro.hyperedges
-                    //   println(toprog(graph, List(("main", lderef)), (h => hypers(h))).toString)
-                    //   println()
-                    // }
-
-                    if(conf.stat()) {
-                      println("#maxresid " + (llen max rlen))
-                      println("#minresid " + (llen min rlen))
-                      println("#mulresid " + (llen * rlen))
-                      println("#maxresidh " + (lhypers max rhypers))
-                      println("#minresidh " + (lhypers min rhypers))
-                      println("#sumresidh " + (lhypers + rhypers))
-                    }
-                  }
-
-                  eq.get.performGluing(graph)
-                  checktask()
-                  if(!stop)
-                    weak_merge()
-                  val st = eprover.stats
-                  eprover = new EquivalenceProver(graph, likenesscalc, !conf.noCache())
-                  eprover.stats = st
-                  //likenesscalc.cached.clear()
-                  checktask()
-                } else {
-                  graph.log("-- Correctness check failed")
-                  eq.get.toLog(graph)
-                  graph.log("")
-                }
-              } catch {
-                case _: NoSuchElementException =>
-                  // Sometimes renaming propagation fails. Actually this is a bug somewhere
-                  // in the eqprover, but I don't have time for this, so just ignore
-                  // TODO: fix this, can be observed on exp-idle
-                  graph.log("-- Renaming propagation failed:")
-                  eq.get.toLog(graph)
-                  graph.log("")
-              }
-            }
-          }
-        }
-
-        // {
-        //   val stats = eprover.stats
-        //   for(((l,r), n) <- stats.toList.sortBy(-_._2).take(10)) {
-        //     println("----- recommended " + n)
-        //     println(l.prettyDebug)
-        //     println("--------------")
-        //     println(r.prettyDebug)
-        //     println("--------------")
-        //   }
-        // }
-        
-        if(!stop && conf.driveRecommended() > 0) {
-          if(conf.verbose())
-              System.err.println("Driving recommended nodes")
-          val stats = eprover.stats 
-          for(n <- stats.toList.filter 
-                { case ((l,r),_) => 
-                    likenesscalc.likeness(l.deref, r.deref).map(_._1) == Some(0) }
-                .sortBy(-_._2).take(conf.driveRecommended())
-                .flatMap(p => List(p._1._1, p._1._2)).map(_.deref.node).distinct) {
-            graph.drive(n)
-          }
-          weak_merge()
+          checktask()
+          if (!stop)
+            weak_merge()
         }
       }
       
@@ -705,7 +570,7 @@ object MainApp {
       gendump()
       checktask()
       
-      if(!graph.changed && graph.potentialTransformations.size == 0)
+      if(!graph.changed && graph.potentialTransformations.isEmpty)
         stop = true
     }
     
