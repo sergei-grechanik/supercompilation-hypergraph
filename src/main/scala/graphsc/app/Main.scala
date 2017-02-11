@@ -44,6 +44,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       descr = "Drive 2*<arg> recommended (by eqprover) nodes")
   val naiveMrsc = opt[Boolean](noshort = true, descr = "Perform naive multi-result sc")
   val weakMerging = opt[Boolean](noshort = true, descr = "Disable merging up to renaming")
+  val noHoleRemoval = opt[Boolean](noshort = true, descr = "Disable removal of unused variables")
   val noLetToId = opt[Boolean](noshort = true, descr = "Disable destructive let to id conversion")
   val noLetUnused = opt[Boolean](noshort = true, descr = "Disable destructive let-unused")
   val noLetReduce = opt[Boolean](noshort = true, descr = "Disable destructive let-var reduction")
@@ -497,9 +498,11 @@ object MainApp {
         System.err.println("Skipped transformations after supercompilation")  
       }
 
-      if(conf.verbose())
+      if(!conf.noHoleRemoval()) {
+        if(conf.verbose())
           System.err.println("Removing holes...")
-      graph.removeHoles()
+        graph.removeHoles()
+      }
       
       // Pairwise generalization
       if(conf.genPair()) {

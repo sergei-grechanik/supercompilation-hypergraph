@@ -25,7 +25,7 @@ echo -e "\n$1\n" >> /dev/stderr
 
 export MY_TEMP_DIR="$2"
 
-ulimit -Sv $MEM_LIMIT
+#ulimit -Sv $MEM_LIMIT
 
 /usr/bin/time --quiet -f "$TIMEFORMAT" -o "$2/stat" \
 timeout --kill-after=2 "$TIMEOUT" \

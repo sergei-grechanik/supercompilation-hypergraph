@@ -471,8 +471,8 @@ case class Program(
             else
               ExprCall(ExprFun(f),
                   (0 until k).map(i => ExprVar("$" + i)).toList ++ List(ExprVar("$arg"))))
-      ) //++ List(("#Ptr_", List("$ext"), 
-        //    ExprCall(ExprFun("@ext"), List(ExprVar("$ext"), ExprVar("$arg")))))
+      ) ++ List(("Ptr__", List("$ext"), 
+                 ExprCall(ExprFun("@ext"), List(ExprVar("$ext"), ExprVar("$arg")))))
             
     if(needApp)
       newprog ++ 
