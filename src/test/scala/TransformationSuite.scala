@@ -18,7 +18,7 @@ class BiTransformationSuite extends FunSuite with ParallelTestExecution {
     val transAll: List[BiTransformation] = {
       import graphsc.transformation._
       List(g.letVar, g.letLet, g.letCaseOf, g.letOther,
-           g.caseVar, g.caseCase, g.caseTick)
+           g.caseVar, g.caseCase(), g.caseTick)
         .map {
           case BiTransformation(run, pri, pre) =>
             val newrun: (Hyperedge, Hyperedge) => Unit =

@@ -52,8 +52,11 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val noCaseInj = opt[Boolean](noshort = true, descr = "Disable case injectivity")
   val noConsInj = opt[Boolean](noshort = true, descr = "Disable constructor injectivity")
   val noCaseVar = opt[Boolean](noshort = true, descr = "Disable positive info propagation")
+  val restrictedCaseCase = opt[Boolean](noshort = true,
+      descr = "Do the case-case transformation only when the inner case scrutinizes a variable")
   val noDestrNorm = opt[Boolean](noshort = true, descr = "Disable destructive normalization")
-  val autoPositivePropagation = 
+  val destrPip = opt[Boolean](noshort = true, descr = "Destructive positive information propagation")
+  val autoPip = 
     opt[Boolean](noshort = true, descr = "Positive info propagation until saturation")
   val genPair = opt[Boolean](noshort = true, 
       descr = "Traditional pairwise generalization")
@@ -443,9 +446,10 @@ object MainApp {
           val clone_trans = List(tr.anyId)
           graph.transform(clone_trans, 
               p => p._1.label.isInstanceOf[Id] || p._2.label.isInstanceOf[Id])
-          if(conf.autoPositivePropagation())
-            graph.transform(List(tr.caseVar), 
-              p => p._1.label.isInstanceOf[CaseOf] || p._2.label.isInstanceOf[CaseOf], false)
+          if(conf.autoPip())
+            graph.transform(List(tr.caseVarDestr(conf.destrPip())),
+              p => (p._1.label.isInstanceOf[CaseOf] && !isDefining(p._1)) ||
+                (p._2.label.isInstanceOf[CaseOf] && !isDefining(p._1)), false)
           buffer.commit()
           if(conf.verbose())
             System.err.println(graph.allHyperedges.size + " hyperedges")
@@ -464,7 +468,8 @@ object MainApp {
         ((if(conf.gen()) List(tr.letUp(maxarity)) else Nil) ++
          (if(conf.notrans()) Nil else (
             (if(conf.drive2()) tr.transDrive2 else 
-             if(conf.noCaseVar()) tr.transDriveNoCaseVar else tr.transDrive) ++
+             tr.transDrive(case_var = !conf.noCaseVar(),
+                           restricted_case_case = conf.restrictedCaseCase())) ++
             (if(conf.total()) tr.transTotal else tr.transUntotal) ++
             (if(conf.noLetReduce()) List(tr.letVar) else Nil))))
         .map(_.modifyPriority((h1: Hyperedge, h2: Hyperedge, p: Double) => 

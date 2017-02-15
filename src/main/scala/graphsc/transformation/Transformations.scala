@@ -28,11 +28,10 @@ trait Transformations extends Hypergraph {
     trans.run(normalize(h1o), normalize(h2o))
   }
   
-  def transDriveNoCaseVar: List[BiTransformation] =
-    List(anyId, letLet, letCaseOf, letOther, caseCase, caseTick)
-  
-  def transDrive: List[BiTransformation] =
-    List(anyId, letLet, letCaseOf, letOther, caseVar, caseCase, caseTick)
+  def transDrive(case_var: Boolean = true,
+                 restricted_case_case: Boolean = false): List[BiTransformation] =
+    List(anyId, letLet, letCaseOf, letOther, caseCase(restricted_case_case), caseTick) ++
+      List(caseVar).filter(_ =>case_var)
     
   def transDrive2: List[BiTransformation] =
     //anyId & letLet & letCaseOf & letOther & caseVar & caseCase & caseTick & letCaseOf2All
@@ -204,7 +203,10 @@ trait Transformations extends Hypergraph {
   }
   
   // propagate positive information
-  def caseVar: BiTransformation = BiTransformation.fromPartial{
+  def caseVar: BiTransformation = caseVarDestr(false)
+
+  // propagate positive information
+  def caseVarDestr(destr: Boolean): BiTransformation = BiTransformation.fromPartial{
     case (h1@Hyperedge(CaseOf(cases), src1, e :: hs),
           h2@Hyperedge(Var(), src2, Nil)) if e.plain == src2 =>
       trans("caseVar", h1, h2) {
@@ -215,21 +217,25 @@ trait Transformations extends Hypergraph {
             lazy val value =
               add(Construct(c), (0 until n).map(i => variable(i)).toList)
             val bs = (0 until (h.arity + n)).map { i =>
-                if(i == varnum + n)
-                  value
-                else
-                  variable(i)
-              }
+              if(i == varnum + n)
+                value
+              else
+                variable(i)
+            }
             add(Let(), List(h) ++ bs)
           }
         add(CaseOf(cases), src1, e :: newhs)
+        if(destr)
+          removeHyperedge(h1)
       }
   }
-  
-  def caseCase: BiTransformation = {
+
+  // restricted means the inner case should scrutinize a variable
+  def caseCase(restricted: Boolean = false): BiTransformation = {
     def helper: PartialFunction[(Hyperedge, Hyperedge), Unit] = {
       case (h1@Hyperedge(CaseOf(cases1), src1, e1 :: fs1),
-            h2@Hyperedge(CaseOf(cases2), src2, e2 :: fs2)) if e1.plain == src2 =>
+            h2@Hyperedge(CaseOf(cases2), src2, e2 :: fs2))
+          if e1.plain == src2 && (!restricted || e2.node.isVar) =>
         if(!e1.isPlain)
           helper((
             Hyperedge(CaseOf(cases1), src1, e1.plain :: fs1),
@@ -650,7 +656,7 @@ trait Transformations extends Hypergraph {
             drive(c.dests(0).node, n :: hist) match {
               case Some(childdef) =>
                 if(childdef.label.isInstanceOf[CaseOf])
-                  applyTransformation(caseCase, c, childdef)
+                  applyTransformation(caseCase(), c, childdef)
                 else if(childdef.label.isInstanceOf[Var])
                   applyTransformation(caseVar, c, childdef)
                 else if(childdef.label.isInstanceOf[Tick])
